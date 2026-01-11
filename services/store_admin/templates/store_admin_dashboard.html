@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>매장 관리자 대시보드 - {{ store_id }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/store_admin.css') }}">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="text-white mb-0">⛳ {{ store_id }} 관리 시스템</h1>
+                <a href="{{ url_for('store_admin_logout') }}" class="admin-btn admin-btn-danger">로그아웃</a>
+            </div>
+        </div>
+        
+        <div class="admin-main-content">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h4>🖥️ 타석 현황</h4>
+                <div>
+                    <a href="{{ url_for('manage_pcs') }}" class="admin-btn admin-btn-primary me-2">PC 관리</a>
+                    <button class="admin-btn admin-btn-danger" onclick="clearAllSessions()">모든 세션 삭제</button>
+                </div>
+            </div>
+            
+            <div class="admin-bay-grid">
+                {% for bay in bays %}
+                <div class="admin-bay-card {{ 'active' if bay.active_user else '' }}">
+                    <div class="admin-bay-card-header">
+                        <div class="admin-bay-number">{{ bay.bay_id }}번 타석</div>
+                        <div class="admin-bay-status {{ 'active' if bay.active_user else 'ready' }}">
+                            {{ '로그인 중' if bay.active_user else '비어 있음' }}
+                        </div>
+                    </div>
+                    
+                    {% if bay.bay_code %}
+                    <div class="admin-bay-code">{{ bay.bay_code }}</div>
+                    {% endif %}
+                    
+                    {% if bay.active_user %}
+                    <div class="mt-2">
+                        <strong>{{ bay.active_user }} 님</strong><br>
+                        <small class="text-muted">로그인: {{ bay.login_time.split(' ')[1] if bay.login_time else '' }}</small>
+                        <br>
+                        <button class="admin-btn admin-btn-danger btn-sm mt-2" 
+                                onclick="clearSession('{{ store_id }}', '{{ bay.bay_id }}')">
+                            세션 삭제
+                        </button>
+                    </div>
+                    {% else %}
+                    <div class="mt-2 text-muted">대기 중...</div>
+                    {% endif %}
+                    
+                    <div class="mt-2">
+                        <a href="{{ url_for('bay_shots', store_id=store_id, bay_id=bay.bay_id) }}" 
+                           class="admin-btn admin-btn-primary btn-sm">
+                            샷 기록 보기
+                        </a>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+            
+            <div class="mt-4">
+                <h4>📊 전체 샷 기록</h4>
+                {% if shots %}
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>시간</th>
+                                <th>타석</th>
+                                <th>사용자</th>
+                                <th>클럽</th>
+                                <th>총거리</th>
+                                <th>캐리</th>
+                                <th>스매시팩터</th>
+                                <th>볼스피드</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for s in shots[:20] %}
+                            <tr>
+                                <td>{{ s.timestamp.split(' ')[1] if s.timestamp else "" }}</td>
+                                <td>{{ s.bay_id }}</td>
+                                <td>{{ s.user_id }}</td>
+                                <td>{{ s.club_id }}</td>
+                                <td>{{ "%.1f"|format(s.total_distance) if s.total_distance is not none else "" }}</td>
+                                <td>{{ "%.1f"|format(s.carry) if s.carry is not none else "" }}</td>
+                                <td>{{ "%.2f"|format(s.smash_factor) if s.smash_factor is not none else "" }}</td>
+                                <td>{{ "%.2f"|format(s.ball_speed) if s.ball_speed is not none else "" }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <p class="text-muted">아직 샷 기록이 없습니다.</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function clearSession(storeId, bayId) {
+            if (confirm('세션을 삭제하시겠습니까?')) {
+                fetch('{{ url_for("clear_session") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({store_id: storeId, bay_id: bayId})
+                })
+                .then(() => location.reload());
+            }
+        }
+        
+        function clearAllSessions() {
+            if (confirm('모든 세션을 삭제하시겠습니까?')) {
+                fetch('{{ url_for("clear_all_sessions") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                })
+                .then(() => location.reload());
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유저 메인 - Golf Trainer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/user.css') }}">
+</head>
+<body>
+    <div class="user-container">
+        <div class="user-header">
+            <div class="user-dashboard-header">
+                <h1 class="user-dashboard-title">🏌️ {{ user.user_id }}님의 연습 기록</h1>
+                <a href="{{ url_for('logout') }}" class="user-btn user-btn-danger">로그아웃</a>
+            </div>
+        </div>
+        
+        <div class="user-main-content">
+            {% if last_shot %}
+            <div class="user-dashboard-stats">
+                <div class="user-stat-card">
+                    <div class="user-stat-label">최근 샷 - 총거리</div>
+                    <div class="user-stat-value">
+                        {{ "%.1f"|format(last_shot.total_distance) if last_shot.total_distance is not none else "-" }}m
+                    </div>
+                </div>
+                <div class="user-stat-card">
+                    <div class="user-stat-label">최근 샷 - 캐리</div>
+                    <div class="user-stat-value">
+                        {{ "%.1f"|format(last_shot.carry) if last_shot.carry is not none else "-" }}m
+                    </div>
+                </div>
+                <div class="user-stat-card">
+                    <div class="user-stat-label">최근 샷 - 스매시팩터</div>
+                    <div class="user-stat-value">
+                        {{ "%.2f"|format(last_shot.smash_factor) if last_shot.smash_factor is not none else "-" }}
+                    </div>
+                </div>
+                <div class="user-stat-card">
+                    <div class="user-stat-label">최근 샷 - 볼스피드</div>
+                    <div class="user-stat-value">
+                        {{ "%.2f"|format(last_shot.ball_speed) if last_shot.ball_speed is not none else "-" }} m/s
+                    </div>
+                </div>
+            </div>
+            {% else %}
+            <div class="user-text-center user-mb-4">
+                <p>아직 기록이 없습니다</p>
+            </div>
+            {% endif %}
+            
+            <h3 class="user-mb-3">연습 날짜</h3>
+            
+            {% if dates and dates|length > 0 %}
+            <ul>
+                {% for d in dates %}
+                <li>{{ d.d }}</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p>연습 기록 없음</p>
+            {% endif %}
+            
+            <div class="user-mt-4">
+                <a href="{{ url_for('user_shots') }}" class="user-btn user-btn-primary">📊 전체 샷 기록 보기</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ store_id }} - 관리자 대시보드</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #121212; color: #e0e0e0; font-family: 'Pretendard', sans-serif; }
+        .navbar { background-color: #1f1f1f; border-bottom: 1px solid #333; }
+        .card { background-color: #1f1f1f; border: 1px solid #333; color: white; border-radius: 12px; }
+        
+        /* 타석 박스 스타일 */
+        .bay-card { transition: transform 0.2s; }
+        .bay-active { border: 2px solid #28a745; background: linear-gradient(145deg, #1f1f1f, #1a3a23); }
+        .bay-empty { border: 1px solid #444; opacity: 0.7; }
+        
+        /* 랭킹 및 리스트 스타일 */
+        .rank-table { color: #e0e0e0; }
+        .list-group-item { background-color: #262626; border-color: #333; color: white; margin-bottom: 5px; border-radius: 8px !important; }
+        .list-group-item:hover { background-color: #333; }
+        
+        .badge-speed { background-color: #ffc107; color: #000; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<nav class="navbar navbar-dark px-4 py-3 mb-4">
+    <span class="navbar-brand mb-0 h1">⛳ {{ store_id }} 관리 시스템</span>
+    <div class="d-flex align-items-center">
+        <span class="me-3 text-secondary">IP: {{ server_ip }}</span>
+        <a href="/admin/logout" class="btn btn-outline-danger btn-sm">로그아웃</a>
+    </div>
+</nav>
+
+<div class="container-fluid px-4">
+    <div class="row">
+        
+        <div class="col-lg-8">
+           <div class="col-lg-8">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="mb-0">🖥️ 타석 현황</h4>
+                <button class="btn btn-sm btn-danger" onclick="clearAllSessions('{{ store_id }}')">모든 세션 삭제</button>
+            </div>
+            <div class="row g-3">
+                {% for bay in bays %}
+                <div class="col-md-4 col-sm-6">
+                    <a href="/admin/bay/{{ store_id }}/{{ bay.bay_id }}" style="text-decoration: none; color: inherit;">
+                        <div class="card h-100 bay-card {{ 'bay-active' if bay.active_user else 'bay-empty' }}" style="cursor: pointer;">
+                            <div class="card-body text-center py-4">
+                                <h3 class="card-title mb-3">{{ bay.bay_id }}번 타석</h3>
+                                
+                                {% if bay.active_user %}
+                                    <div class="badge bg-success mb-2">로그인 중</div>
+                                    <h5 class="text-info">{{ bay.active_user }} 님</h5>
+                                    <small class="text-secondary">로그인: {{ bay.login_time.split(' ')[1] if bay.login_time else '' }}</small>
+                                    {% if bay.last_update %}
+                                        <br><small class="text-secondary">마지막 샷: {{ bay.last_update.split(' ')[1] }}</small>
+                                    {% endif %}
+                                    <br><button class="btn btn-sm btn-danger mt-2" onclick="clearSession('{{ store_id }}', '{{ bay.bay_id }}', '{{ bay.active_user }}')" style="font-size: 11px;">세션 삭제</button>
+                                {% else %}
+                                    <div class="badge bg-secondary mb-2">비어 있음</div>
+                                    <p class="text-muted small">대기 중...</p>
+                                    {% if bay.last_update %}
+                                        <small class="text-secondary">마지막 샷: {{ bay.last_update.split(' ')[1] }}</small>
+                                    {% endif %}
+                                {% endif %}
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                {% endfor %} 
+            </div>
+        </div>
+        
+        <div class="col-lg-12 mt-4">
+            <h4 class="mb-3">📊 전체 샷 기록</h4>
+            <div class="card">
+                <div class="card-body p-0">
+                    {% if shots %}
+                    <div class="table-responsive" style="max-height: 500px; overflow-y: auto;">
+                        <table class="table table-dark table-hover mb-0" style="font-size: 12px;">
+                            <thead style="position: sticky; top: 0; background-color: #1f1f1f; z-index: 10;">
+                                <tr>
+                                    <th>시간</th>
+                                    <th>타석</th>
+                                    <th>사용자</th>
+                                    <th>클럽</th>
+                                    <th>총거리</th>
+                                    <th>캐리</th>
+                                    <th>스매시팩터</th>
+                                    <th>볼스피드</th>
+                                    <th>클럽스피드</th>
+                                    <th>발사각</th>
+                                    <th>백스핀</th>
+                                    <th>클럽패스</th>
+                                    <th>좌우이격</th>
+                                    <th>방향각</th>
+                                    <th>사이드스핀</th>
+                                    <th>페이스각</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for s in shots %}
+                                <tr>
+                                    <td>{{ s.timestamp.split(' ')[1] if s.timestamp else "" }}</td>
+                                    <td>{{ s.bay_id }}</td>
+                                    <td>{{ s.user_id }}</td>
+                                    <td>{{ s.club_id }}</td>
+                                    <td>{{ "%.1f"|format(s.total_distance) if s.total_distance is not none else "" }}</td>
+                                    <td>{{ "%.1f"|format(s.carry) if s.carry is not none else "" }}</td>
+                                    <td><span class="badge {{ s.smash_class }}">{{ "%.2f"|format(s.smash_factor) if s.smash_factor is not none else "" }}</span></td>
+                                    <td><span class="badge {{ s.ball_speed_class }}">{{ "%.2f"|format(s.ball_speed) if s.ball_speed is not none else "" }}</span></td>
+                                    <td>{{ "%.2f"|format(s.club_speed) if s.club_speed is not none else "" }}</td>
+                                    <td>{{ "%.1f"|format(s.launch_angle) if s.launch_angle is not none else "" }}</td>
+                                    <td><span class="badge {{ s.back_spin_class }}">{{ "%d"|format(s.back_spin) if s.back_spin is not none else "" }}</span></td>
+                                    <td><span class="badge {{ s.path_class }}">{{ "%.1f"|format(s.club_path) if s.club_path is not none else "" }}</span></td>
+                                    <td><span class="badge {{ s.lateral_class }}">{{ "%.2f"|format(s.lateral_offset) if s.lateral_offset is not none else "" }}</span></td>
+                                    <td><span class="badge {{ s.direction_class }}">{{ "%.2f"|format(s.direction_angle) if s.direction_angle is not none else "" }}</span></td>
+                                    <td><span class="badge {{ s.side_spin_class }}">{{ "%d"|format(s.side_spin) if s.side_spin is not none else "" }}</span></td>
+                                    <td><span class="badge {{ s.face_class }}">{{ "%.1f"|format(s.face_angle) if s.face_angle is not none else "" }}</span></td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-4 text-muted">아직 샷 기록이 없습니다.</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        </div>
+
+        <div class="col-lg-4">
+            
+            <div class="card mb-4">
+                <div class="card-header border-bottom border-secondary bg-transparent">
+                    <h5 class="mb-0 text-warning">🏆 이달의 장타왕 (Driver)</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-dark table-hover rank-table mb-0">
+                        <thead>
+                            <tr>
+                                <th>순위</th>
+                                <th>아이디</th>
+                                <th class="text-end">최고속도</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for row in male_rank %}
+                            <tr>
+                                <td>{{ loop.index }}</td>
+                                <td>{{ row.user_id }}</td>
+                                <td class="text-end text-warning fw-bold">{{ row.max_speed }} m/s</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="card mb-4">
+                <div class="card-header border-bottom border-secondary bg-transparent">
+                    <h5 class="mb-0 text-info">👥 오늘 방문 손님</h5>
+                </div>
+                <div class="card-body p-2">
+                    <div class="list-group list-group-flush">
+                        {% for user in today_users %}
+                        <a href="/admin/user/{{ user.user_id }}" class="list-group-item list-group-item-action d-flex justify-content-between align-items-center">
+                            <div>
+                                <strong>{{ user.user_id }}</strong>
+                                <div class="small text-secondary">{{ user.last_shot_time.split(' ')[1] }}</div>
+                            </div>
+                            <span class="btn btn-sm btn-primary">상세보기</span>
+                        </a>
+                        {% endfor %}
+                        
+                        {% if not today_users %}
+                        <div class="text-center py-4 text-muted">아직 방문객이 없습니다.</div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div class="card border-info">
+                <div class="card-body text-center">
+                    <h6 class="text-info">📱 내 기록 확인 주소</h6>
+                    <code class="d-block bg-black p-2 mt-2" style="color: #0dcaf0;">
+                        http://{{ server_ip }}:5000/mydata/[아이디]
+                    </code>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script>
+    setTimeout(function(){
+        location.reload();
+    }, 5000);
+    
+    function clearSession(store_id, bay_id, user_id) {
+        if (!confirm(`${bay_id}번 타석의 ${user_id}님 세션을 삭제하시겠습니까?`)) {
+            return;
+        }
+        
+        fetch(`/api/clear_session?store_id=${store_id}&bay_id=${bay_id}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert('세션이 삭제되었습니다.');
+                location.reload();
+            } else {
+                alert('세션 삭제 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('세션 삭제 중 오류가 발생했습니다.');
+        });
+    }
+    
+    function clearAllSessions(store_id) {
+        if (!confirm('모든 활성 세션을 삭제하시겠습니까?')) {
+            return;
+        }
+        
+        fetch(`/api/clear_all_sessions?store_id=${store_id}`, {
+            method: 'POST'
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.status === 'success') {
+                alert(`모든 세션이 삭제되었습니다. (${data.deleted_count}개)`);
+                location.reload();
+            } else {
+                alert('세션 삭제 실패: ' + (data.error || '알 수 없는 오류'));
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('세션 삭제 중 오류가 발생했습니다.');
+        });
+    }
+</script>
+
+</body>
+</html>

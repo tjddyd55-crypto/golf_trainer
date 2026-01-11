@@ -1,0 +1,20 @@
+<h3>{{ date }} 샷 기록</h3>
+
+<table border="1">
+<tr>
+  <th>시간</th><th>볼스피드</th><th>클럽스피드</th>
+  <th>스매시</th><th>페이스</th><th>패스</th>
+</tr>
+{% for s in shots %}
+<tr>
+  <td>{{ s.timestamp }}</td>
+  <td>{{ s.ball_speed }}</td>
+  <td>{{ s.club_speed }}</td>
+  <td>{{ s.smash_factor }}</td>
+  <td>{{ s.face_angle }}</td>
+  <td>{{ s.club_path }}</td>
+</tr>
+{% endfor %}
+</table>
+
+<a href="/user/main">← 돌아가기</a>

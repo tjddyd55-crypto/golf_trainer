@@ -1,0 +1,30 @@
+<h2>{{ user.user_id }} ({{ "남" if user.gender=="M" else "여" }})</h2>
+
+{% if last_shot %}
+  <p>
+    최근 샷 :
+    총거리 {{ "%.1f"|format(last_shot.total_distance) if last_shot.total_distance is not none else "-" }}m /
+    캐리 {{ "%.1f"|format(last_shot.carry) if last_shot.carry is not none else "-" }}m /
+    스매시 {{ "%.2f"|format(last_shot.smash_factor) if last_shot.smash_factor is not none else "-" }} /
+    볼스피드 {{ "%.2f"|format(last_shot.ball_speed) if last_shot.ball_speed is not none else "-" }} m/s
+  </p>
+{% else %}
+  <p>아직 기록이 없습니다</p>
+{% endif %}
+
+<h3>연습 날짜</h3>
+
+{% if dates and dates|length > 0 %}
+<ul>
+  {% for d in dates %}
+    <li>{{ d.d }}</li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>연습 기록 없음</p>
+{% endif %}
+
+<br>
+<a href="/user/shots">📊 전체 샷 기록 보기</a><br>
+<br>
+<a href="/logout" style="display: inline-block; padding: 10px 20px; background-color: #dc3545; color: white; text-decoration: none; border-radius: 5px; font-weight: bold;">🚪 로그아웃</a>

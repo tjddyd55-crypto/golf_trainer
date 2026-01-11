@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>총책임자 대시보드 - Golf Trainer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/super_admin.css') }}">
+</head>
+<body>
+    <div class="super-container">
+        <div class="super-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="text-white mb-0">👑 총책임자 대시보드</h1>
+                <a href="{{ url_for('super_admin_logout') }}" class="super-btn super-btn-primary">로그아웃</a>
+            </div>
+        </div>
+        
+        <div class="super-main-content">
+            <!-- 통계 카드 -->
+            <div class="super-stats-grid">
+                <div class="super-stat-card">
+                    <div class="super-stat-label">전체 매장</div>
+                    <div class="super-stat-value">{{ stats.total_stores }}</div>
+                </div>
+                <div class="super-stat-card">
+                    <div class="super-stat-label">활성 매장</div>
+                    <div class="super-stat-value">{{ stats.active_stores }}</div>
+                </div>
+                <div class="super-stat-card">
+                    <div class="super-stat-label">만료 매장</div>
+                    <div class="super-stat-value">{{ stats.expired_stores }}</div>
+                </div>
+            </div>
+            
+            <!-- 메뉴 -->
+            <div class="d-flex gap-2 mb-4">
+                <a href="{{ url_for('manage_stores') }}" class="super-btn super-btn-primary">매장 관리</a>
+                <a href="{{ url_for('manage_payments') }}" class="super-btn super-btn-primary">결제 관리</a>
+                <a href="{{ url_for('manage_subscriptions') }}" class="super-btn super-btn-primary">사용기간 관리</a>
+                <a href="{{ url_for('manage_all_pcs') }}" class="super-btn super-btn-primary">PC 관리</a>
+            </div>
+            
+            <!-- 매장 목록 -->
+            <h4 class="mb-3">매장 목록</h4>
+            <div class="super-store-grid">
+                {% for store in stores %}
+                <div class="super-store-card">
+                    <div class="super-store-header">
+                        <div class="super-store-name">{{ store.store_name or store.store_id }}</div>
+                        <div class="super-store-status {{ store.subscription_status or 'active' }}">
+                            {{ '활성' if (store.subscription_status or 'active') == 'active' else '만료' }}
+                        </div>
+                    </div>
+                    <div class="super-store-info">
+                        <div>매장 코드: <strong>{{ store.store_id }}</strong></div>
+                        <div>타석 수: {{ store.bays_count }}개</div>
+                        {% if store.subscription_end_date %}
+                        <div>사용기간: {{ store.subscription_end_date }}까지</div>
+                        {% endif %}
+                    </div>
+                    <div class="mt-2">
+                        <button class="super-btn super-btn-success btn-sm" 
+                                onclick="extendSubscription('{{ store.store_id }}', 1)">
+                            1개월 연장
+                        </button>
+                        <button class="super-btn super-btn-success btn-sm" 
+                                onclick="extendSubscription('{{ store.store_id }}', 3)">
+                            3개월 연장
+                        </button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        function extendSubscription(storeId, months) {
+            if (confirm(`${months}개월 구독을 연장하시겠습니까?`)) {
+                fetch('{{ url_for("extend_subscription") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({store_id: storeId, months: months})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert(`구독이 ${data.new_end_date}까지 연장되었습니다.`);
+                        location.reload();
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>

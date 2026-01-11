@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ store_id }} {{ bay_id }}번 타석 샷 기록</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/store_admin.css') }}">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1 class="text-white mb-0">{{ store_id }} {{ bay_id }}번 타석 샷 기록</h1>
+        </div>
+        
+        <div class="admin-main-content">
+            {% if shots %}
+            <div class="table-responsive">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>시간</th>
+                            <th>사용자</th>
+                            <th>클럽</th>
+                            <th>총거리</th>
+                            <th>캐리</th>
+                            <th>스매시팩터</th>
+                            <th>볼스피드</th>
+                            <th>클럽스피드</th>
+                            <th>발사각</th>
+                            <th>백스핀</th>
+                            <th>클럽패스</th>
+                            <th>좌우이격</th>
+                            <th>방향각</th>
+                            <th>사이드스핀</th>
+                            <th>페이스각</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for s in shots %}
+                        <tr>
+                            <td>{{ s.timestamp.split(' ')[1] if s.timestamp else "" }}</td>
+                            <td>{{ s.user_id }}</td>
+                            <td>{{ s.club_id }}</td>
+                            <td>{{ "%.1f"|format(s.total_distance) if s.total_distance is not none else "" }}</td>
+                            <td>{{ "%.1f"|format(s.carry) if s.carry is not none else "" }}</td>
+                            <td><span class="badge {{ s.smash_class }}">{{ "%.2f"|format(s.smash_factor) if s.smash_factor is not none else "" }}</span></td>
+                            <td><span class="badge {{ s.ball_speed_class }}">{{ "%.2f"|format(s.ball_speed) if s.ball_speed is not none else "" }}</span></td>
+                            <td>{{ "%.2f"|format(s.club_speed) if s.club_speed is not none else "" }}</td>
+                            <td>{{ "%.1f"|format(s.launch_angle) if s.launch_angle is not none else "" }}</td>
+                            <td><span class="badge {{ s.back_spin_class }}">{{ "%d"|format(s.back_spin) if s.back_spin is not none else "" }}</span></td>
+                            <td><span class="badge {{ s.path_class }}">{{ "%.1f"|format(s.club_path) if s.club_path is not none else "" }}</span></td>
+                            <td><span class="badge {{ s.lateral_class }}">{{ "%.2f"|format(s.lateral_offset) if s.lateral_offset is not none else "" }}</span></td>
+                            <td><span class="badge {{ s.direction_class }}">{{ "%.2f"|format(s.direction_angle) if s.direction_angle is not none else "" }}</span></td>
+                            <td><span class="badge {{ s.side_spin_class }}">{{ "%d"|format(s.side_spin) if s.side_spin is not none else "" }}</span></td>
+                            <td><span class="badge {{ s.face_class }}">{{ "%.1f"|format(s.face_angle) if s.face_angle is not none else "" }}</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">아직 샷 기록이 없습니다.</p>
+            {% endif %}
+            
+            <div class="mt-4">
+                <a href="{{ url_for('store_admin_dashboard') }}" class="admin-btn admin-btn-secondary">← 관리자 대시보드로 돌아가기</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

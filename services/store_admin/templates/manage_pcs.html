@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>매장 PC 관리 - {{ store_name }}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/store_admin.css') }}">
+</head>
+<body>
+    <div class="admin-container">
+        <div class="admin-header">
+            <h1 class="text-white mb-0">💻 매장 PC 관리 - {{ store_name }}</h1>
+        </div>
+        
+        <div class="admin-main-content">
+            <div class="mb-3">
+                <a href="{{ url_for('store_admin_dashboard') }}" class="admin-btn admin-btn-secondary">← 대시보드로 돌아가기</a>
+            </div>
+            
+            <div class="alert alert-info">
+                <strong>PC 등록 방법:</strong><br>
+                1. 각 타석 PC에서 <code>register_pc.py</code> 실행<br>
+                2. 매장명, 타석명, PC 이름 입력<br>
+                3. 서버에 자동 등록
+            </div>
+            
+            {% if pcs %}
+            <div class="table-responsive">
+                <table class="admin-table">
+                    <thead>
+                        <tr>
+                            <th>타석번호</th>
+                            <th>PC 이름</th>
+                            <th>등록일</th>
+                            <th>사용기간</th>
+                            <th>마지막 접속</th>
+                            <th>상태</th>
+                            <th>상세정보</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pc in pcs %}
+                        <tr>
+                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_name }}</strong></td>
+                            <td><strong>{{ pc.pc_name }}</strong></td>
+                            <td>{{ pc.registered_at.split(' ')[0] if pc.registered_at else "-" }}</td>
+                            <td>
+                                {% if pc.usage_start_date and pc.usage_end_date %}
+                                    {{ pc.usage_start_date }} ~ {{ pc.usage_end_date }}
+                                {% elif pc.usage_end_date %}
+                                    ~ {{ pc.usage_end_date }}
+                                {% else %}
+                                    <span class="text-muted">미설정</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ pc.last_seen_at.split(' ')[0] if pc.last_seen_at else "-" }}</td>
+                            <td>
+                                <span class="badge {{ 'bg-success' if pc.status == 'active' else 'bg-warning' if pc.status == 'pending' else 'bg-danger' }}">
+                                    {% if pc.status == 'pending' %}대기
+                                    {% elif pc.status == 'active' %}활성
+                                    {% elif pc.status == 'rejected' %}거부
+                                    {% else %}{{ pc.status or '대기' }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}')">상세</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+                등록된 PC가 없습니다. 각 타석 PC에서 <code>register_pc.py</code>를 실행하여 등록하세요.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 상세 정보 모달 -->
+    <div class="modal fade" id="detailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">PC 상세 정보</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-bordered">
+                        <tr>
+                            <th width="30%">타석번호</th>
+                            <td id="detail-bay-name"></td>
+                        </tr>
+                        <tr>
+                            <th>PC 이름</th>
+                            <td id="detail-pc-name"></td>
+                        </tr>
+                        <tr>
+                            <th>호스트명</th>
+                            <td id="detail-hostname"></td>
+                        </tr>
+                        <tr>
+                            <th>플랫폼</th>
+                            <td id="detail-platform"></td>
+                        </tr>
+                        <tr>
+                            <th>PC 고유번호</th>
+                            <td><code id="detail-unique-id" style="font-size: 0.85rem; word-break: break-all;"></code></td>
+                        </tr>
+                        <tr>
+                            <th>등록일</th>
+                            <td id="detail-registered-at"></td>
+                        </tr>
+                        <tr>
+                            <th>승인일</th>
+                            <td id="detail-approved-at"></td>
+                        </tr>
+                        <tr>
+                            <th>사용기간</th>
+                            <td id="detail-usage-period"></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function showDetailModal(pcUniqueId, bayName, pcName, hostname, platform, registeredAt, approvedAt, usageStartDate, usageEndDate) {
+            document.getElementById('detail-bay-name').textContent = bayName || '-';
+            document.getElementById('detail-pc-name').textContent = pcName || '-';
+            document.getElementById('detail-hostname').textContent = hostname || '-';
+            document.getElementById('detail-platform').textContent = platform || '-';
+            document.getElementById('detail-unique-id').textContent = pcUniqueId || '-';
+            document.getElementById('detail-registered-at').textContent = registeredAt ? registeredAt.split(' ')[0] : '-';
+            document.getElementById('detail-approved-at').textContent = approvedAt ? approvedAt.split(' ')[0] : '-';
+            
+            let usagePeriod = '-';
+            if (usageStartDate && usageEndDate) {
+                usagePeriod = usageStartDate + ' ~ ' + usageEndDate;
+            } else if (usageEndDate) {
+                usagePeriod = '~ ' + usageEndDate;
+            }
+            document.getElementById('detail-usage-period').textContent = usagePeriod;
+            
+            new bootstrap.Modal(document.getElementById('detailModal')).show();
+        }
+    </script>
+</body>
+</html>

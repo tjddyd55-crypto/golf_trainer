@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>사용기간 관리 - Golf Trainer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/super_admin.css') }}">
+</head>
+<body>
+    <div class="super-container">
+        <div class="super-header">
+            <h1 class="text-white mb-0">📅 사용기간 관리</h1>
+        </div>
+        
+        <div class="super-main-content">
+            <div class="mb-3">
+                <a href="{{ url_for('super_admin_dashboard') }}" class="super-btn super-btn-secondary">← 대시보드로 돌아가기</a>
+            </div>
+            
+            {% if subscriptions %}
+            <div class="table-responsive">
+                <table class="super-table">
+                    <thead>
+                        <tr>
+                            <th>매장</th>
+                            <th>시작일</th>
+                            <th>종료일</th>
+                            <th>플랜</th>
+                            <th>상태</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sub in subscriptions %}
+                        <tr>
+                            <td>{{ sub.store_id }}</td>
+                            <td>{{ sub.start_date }}</td>
+                            <td>{{ sub.end_date }}</td>
+                            <td>{{ sub.plan_type or "-" }}</td>
+                            <td>
+                                <span class="super-store-status {{ sub.status }}">
+                                    {{ sub.status }}
+                                </span>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-muted">구독 내역이 없습니다.</p>
+            {% endif %}
+        </div>
+    </div>
+</body>
+</html>

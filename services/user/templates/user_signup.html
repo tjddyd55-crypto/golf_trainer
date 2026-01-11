@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유저 회원가입 - Golf Trainer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/user.css') }}">
+</head>
+<body>
+    <div class="user-login-container">
+        <div class="user-login-card">
+            <h2 class="user-login-title">⛳ 회원가입</h2>
+            
+            <form method="POST" action="{{ url_for('signup') }}">
+                <div class="user-login-form-group">
+                    <label class="user-login-label">아이디 (휴대폰 번호 추천)</label>
+                    <input type="text" name="user_id" class="user-login-input" placeholder="ID 입력" required>
+                </div>
+                
+                <div class="user-login-form-group">
+                    <label class="user-login-label">이름</label>
+                    <input type="text" name="name" class="user-login-input" placeholder="이름 입력" required>
+                </div>
+                
+                <div class="user-login-form-group">
+                    <label class="user-login-label">연락처</label>
+                    <input type="text" name="phone" class="user-login-input" placeholder="010-1234-5678" required>
+                </div>
+                
+                <div class="user-login-form-group">
+                    <label class="user-login-label">비밀번호</label>
+                    <input type="password" name="password" class="user-login-input" placeholder="비밀번호 입력" required>
+                </div>
+                
+                <div class="user-login-form-group">
+                    <label class="user-login-label">성별</label>
+                    <select name="gender" class="user-login-input">
+                        <option value="남">남성</option>
+                        <option value="여">여성</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="user-login-button">가입하기</button>
+            </form>
+            
+            <div class="user-text-center user-mt-3">
+                <a href="{{ url_for('user_login') }}" class="user-btn user-btn-secondary">이미 계정이 있으신가요? 로그인</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

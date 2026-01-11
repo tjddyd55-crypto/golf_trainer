@@ -1,0 +1,19 @@
+{
+  "good": {
+    "smash_factor": "스매시팩터 좋습니다",
+    "face_angle": "페이스각도 좋습니다",
+    "club_path": "클럽패스 좋습니다"
+  },
+  "bad": {
+    "smash_factor_low": "스매시팩터 {value}, 낮습니다. {target} 이상이 좋습니다",
+    "smash_factor_high": "스매시팩터 {value}, 높습니다. {target} 이하가 좋습니다",
+    "face_angle_low": "페이스각도 {value}도, 낮습니다. {target}도 이상이 좋습니다",
+    "face_angle_high": "페이스각도 {value}도, 높습니다. {target}도 이하가 좋습니다",
+    "club_path_low": "클럽패스 {value}도, 낮습니다. {target}도 이상이 좋습니다",
+    "club_path_high": "클럽패스 {value}도, 높습니다. {target}도 이하가 좋습니다"
+  },
+  "combined": {
+    "good_and_bad": "{good_metric} 좋습니다. {bad_message}",
+    "all_bad": "{bad_message}"
+  }
+}

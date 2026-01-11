@@ -1,0 +1,72 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+golf_data.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build files
+build/
+dist/
+*.spec
+GolfShotTracker.exe
+
+# Debug files
+debug_*.png
+*.log
+
+# Test files
+test/
+
+# Sensitive files
+GPT키값.txt
+*.txt
+!requirements.txt
+!README*.txt
+!SERVER_SETUP.md
+
+# Temporary folders
+골프컴퓨터에 복사할 파일/
+
+# PPT/DOC files (사업 구조 문서 등)
+*.pptx
+*.docx
+*.doc
+
+# Local database (로컬 개발용)
+golf_data.db

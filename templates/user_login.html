@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>유저 로그인</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #121212; color: white; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .login-card { background-color: #1f1f1f; padding: 30px; border-radius: 15px; width: 100%; max-width: 500px; border: 1px solid #333; }
+        .bay-status { font-size: 0.85em; margin-top: 5px; }
+        .bay-available { color: #28a745; }
+        .bay-occupied { color: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <h3 class="text-center mb-4">🏌️‍♂️ 내 기록 확인</h3>
+        <form method="POST">
+            <div class="mb-3">
+                <label class="form-label text-secondary small">아이디</label>
+                <input type="text" name="user_id" class="form-control bg-secondary text-white border-0" placeholder="아이디" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-secondary small">비밀번호</label>
+                <input type="password" name="password" class="form-control bg-secondary text-white border-0" placeholder="비밀번호" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-secondary small">매장코드</label>
+                <input type="text" name="store_id" class="form-control bg-secondary text-white border-0" placeholder="매장코드" value="{{ store_id or 'gaja' }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label text-secondary small">타석번호</label>
+                <select name="bay_id" class="form-select bg-secondary text-white border-0" required>
+                    {% if bays %}
+                        {% for bay in bays %}
+                        <option value="{{ bay.bay_id }}" {% if bay.bay_id == '01' %}selected{% endif %}>
+                            {{ bay.bay_id }}번 타석
+                            {% if bay_status and bay.bay_id in bay_status %}
+                                ({{ bay_status[bay.bay_id] }}님 사용 중)
+                            {% else %}
+                                (사용 가능)
+                            {% endif %}
+                        </option>
+                        {% endfor %}
+                    {% else %}
+                        <option value="01">01번 타석</option>
+                    {% endif %}
+                </select>
+                {% if bays %}
+                <div class="mt-2">
+                    <small class="text-secondary">💡 타석 현황:</small>
+                    {% for bay in bays %}
+                    <div class="bay-status {% if bay_status and bay.bay_id in bay_status %}bay-occupied{% else %}bay-available{% endif %}">
+                        {{ bay.bay_id }}번: {% if bay_status and bay.bay_id in bay_status %}🔴 {{ bay_status[bay.bay_id] }}님 사용 중{% else %}🟢 사용 가능{% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+            <button type="submit" class="btn btn-primary w-100">로그인</button>
+        </form>
+        <div class="mt-3 text-center">
+            <small><a href="/signup" class="text-secondary text-decoration-none">아직 회원이 아니신가요?</a></small>
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>전체 샷 기록</title>
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #111827;
+            --card2: #0b1224;
+            --text: #e5e7eb;
+            --muted: #94a3b8;
+            --border: #1f2937;
+            --good: #22c55e33;
+            --warn: #f59e0b33;
+            --bad:  #ef444433;
+            --none: #1e293b;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: "Noto Sans", "Segoe UI", sans-serif;
+        }
+        .page {
+            max-width: 1200px;
+            margin: 32px auto;
+            padding: 0 20px 40px;
+        }
+        h1 {
+            margin: 0 0 16px;
+            font-size: 24px;
+            font-weight: 700;
+            letter-spacing: -0.2px;
+        }
+        .sub {
+            color: var(--muted);
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .card {
+            background: linear-gradient(145deg, var(--card), var(--card2));
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px 16px 8px;
+            box-shadow: 0 12px 32px #00000033;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        th, td {
+            padding: 8px 10px;
+            text-align: center;
+            border-bottom: 1px solid var(--border);
+        }
+        th {
+            color: var(--muted);
+            font-weight: 600;
+            letter-spacing: -0.1px;
+        }
+        tr:hover td {
+            background: rgba(255,255,255,0.02);
+        }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 56px;
+            padding: 4px 8px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        .bg-good { background: var(--good); }
+        .bg-warn { background: var(--warn); }
+        .bg-bad  { background: var(--bad); }
+        .bg-none { background: var(--none); color: var(--muted); }
+        a {
+            color: #60a5fa;
+            text-decoration: none;
+        }
+        a:hover { text-decoration: underline; }
+        .footer-link {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 12px;
+            color: var(--muted);
+        }
+    </style>
+</head>
+<body>
+<div class="page">
+    <h1>📊 {% if title %}{{ title }}{% else %}전체 샷 기록{% endif %}</h1>
+    <div class="sub">최근 샷부터 역순으로 표시됩니다.</div>
+    {% if active_user %}
+    <div class="sub" style="color: #22c55e; margin-top: 8px;">
+        현재 로그인 중: <strong>{{ active_user }}</strong>
+        {% if login_time %}
+        (로그인 시간: {{ login_time.split(' ')[1] if login_time else '' }})
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {% if shots %}
+    <div class="card">
+        <table>
+            <tr>
+                <th>시간</th>
+                <th>매장</th>
+                <th>클럽</th>
+                <th>총거리</th>
+                <th>캐리</th>
+                <th>스매시팩터</th>
+                <th>볼스피드</th>
+                <th>클럽스피드</th>
+                <th>발사각</th>
+                <th>백스핀</th>
+                <th>클럽패스</th>
+                <th>좌우이격</th>
+                <th>방향각</th>
+                <th>사이드스핀</th>
+                <th>페이스각</th>
+            </tr>
+
+            {% for s in shots %}
+            <tr>
+                <td>{{ s.timestamp }}</td>
+                <td>{{ s.store_id }}</td>
+                <td>{{ s.club_id }}</td>
+                <td>{{ "%.1f"|format(s.total_distance) if s.total_distance is not none else "" }}</td>
+                <td>{{ "%.1f"|format(s.carry) if s.carry is not none else "" }}</td>
+                <td><span class="badge {{ s.smash_class }}">{{ "%.2f"|format(s.smash_factor) if s.smash_factor is not none else "" }}</span></td>
+                <td><span class="badge {{ s.ball_speed_class }}">{{ "%.2f"|format(s.ball_speed) if s.ball_speed is not none else "" }}</span></td>
+                <td>{{ "%.2f"|format(s.club_speed) if s.club_speed is not none else "" }}</td>
+                <td>{{ "%.1f"|format(s.launch_angle) if s.launch_angle is not none else "" }}</td>
+                <td><span class="badge {{ s.back_spin_class }}">{{ "%d"|format(s.back_spin) if s.back_spin is not none else "" }}</span></td>
+                <td><span class="badge {{ s.path_class }}">{{ "%.1f"|format(s.club_path) if s.club_path is not none else "" }}</span></td>
+                <td><span class="badge {{ s.lateral_class }}">{{ "%.2f"|format(s.lateral_offset) if s.lateral_offset is not none else "" }}</span></td>
+                <td><span class="badge {{ s.direction_class }}">{{ "%.2f"|format(s.direction_angle) if s.direction_angle is not none else "" }}</span></td>
+                <td><span class="badge {{ s.side_spin_class }}">{{ "%d"|format(s.side_spin) if s.side_spin is not none else "" }}</span></td>
+                <td><span class="badge {{ s.face_class }}">{{ "%.1f"|format(s.face_angle) if s.face_angle is not none else "" }}</span></td>
+            </tr>
+            {% endfor %}
+        </table>
+    </div>
+    {% else %}
+    <div class="card">샷 기록이 없습니다.</div>
+    {% endif %}
+
+    {% if title and "타석" in title %}
+    <a class="footer-link" href="/admin">← 관리자 대시보드로 돌아가기</a>
+    {% else %}
+    <a class="footer-link" href="/user/main">← 유저 메인으로 돌아가기</a>
+    {% endif %}
+</div>
+</body>
+</html>

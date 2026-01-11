@@ -1,0 +1,32 @@
+{
+  "iron": {
+    "smash_factor":    { "good": 1.35, "bad": 1.25 },
+    "launch_angle":    { "good": [18, 24] },
+    "face_angle":      { "good": [-2, 2] },
+    "club_path":       { "good": [-3, 3] },
+    "lateral_offset":  { "good": 3, "warn": 6 },
+    "direction_angle": { "good": 3, "warn": 6 },
+    "side_spin":       { "good": 300, "warn": 600 },
+    "back_spin":       { "good": [2000, 3500] }
+  },
+  "driver": {
+    "smash_factor":    { "good": 1.48, "bad": 1.35 },
+    "launch_angle":    { "good": [12, 16] },
+    "face_angle":      { "good": [-1.5, 1.5] },
+    "club_path":       { "good": [-3, 3] },
+    "lateral_offset":  { "good": 4, "warn": 8 },
+    "direction_angle": { "good": 4, "warn": 8 },
+    "side_spin":       { "good": 250, "warn": 500 },
+    "back_spin":       { "good": [2200, 3200] }
+  },
+  "default": {
+    "ball_speed":      { "good": 60 },
+    "smash_factor":    { "good": 1.45 },
+    "face_angle":      { "good": [-2, 2] },
+    "club_path":       { "good": [-3, 3] },
+    "lateral_offset":  { "good": 3, "warn": 6 },
+    "direction_angle": { "good": 3, "warn": 6 },
+    "side_spin":       { "good": 300, "warn": 600 },
+    "back_spin":       { "good": [2000, 3500] }
+  }
+}

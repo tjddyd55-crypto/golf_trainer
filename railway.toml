@@ -1,0 +1,12 @@
+# Railway 프로젝트 설정 파일
+# 이 파일은 Railway CLI를 사용할 때 참조됩니다
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "gunicorn app:app --bind 0.0.0.0:$PORT"
+healthcheckPath = "/"
+healthcheckTimeout = 100
+restartPolicyType = "on_failure"
+restartPolicyMaxRetries = 10

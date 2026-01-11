@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전체 매장 PC 관리 - Golf Trainer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/super_admin.css') }}">
+    <style>
+        .status-pending { background-color: #ffc107; color: #000; }
+        .status-active { background-color: #28a745; color: #fff; }
+        .status-rejected { background-color: #dc3545; color: #fff; }
+        .status-expired { background-color: #6c757d; color: #fff; }
+        .modal-body input, .modal-body textarea { margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+    <div class="super-container">
+        <div class="super-header">
+            <h1 class="text-white mb-0">💻 전체 매장 PC 관리</h1>
+        </div>
+        
+        <div class="super-main-content">
+            <div class="mb-3">
+                <a href="{{ url_for('super_admin_dashboard') }}" class="super-btn super-btn-secondary">← 대시보드로 돌아가기</a>
+            </div>
+            
+            {% if pcs %}
+            <div class="table-responsive">
+                <table class="super-table">
+                    <thead>
+                        <tr>
+                            <th>매장명</th>
+                            <th>타석번호</th>
+                            <th>PC 이름</th>
+                            <th>등록일</th>
+                            <th>사용기간</th>
+                            <th>마지막 접속</th>
+                            <th>상태</th>
+                            <th>작업</th>
+                            <th>상세정보</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for pc in pcs %}
+                        <tr>
+                            <td><strong style="font-size: 1.1em;">{{ pc.store_name }}</strong></td>
+                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_name }}</strong></td>
+                            <td>{{ pc.pc_name }}</td>
+                            <td>{{ pc.registered_at.split(' ')[0] if pc.registered_at else "-" }}</td>
+                            <td>
+                                {% if pc.usage_start_date and pc.usage_end_date %}
+                                    {{ pc.usage_start_date }} ~ {{ pc.usage_end_date }}
+                                {% elif pc.usage_end_date %}
+                                    ~ {{ pc.usage_end_date }}
+                                {% else %}
+                                    <span class="text-muted">미설정</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ pc.last_seen_at.split(' ')[0] if pc.last_seen_at else "-" }}</td>
+                            <td>
+                                <span class="badge status-{{ pc.status or 'pending' }}">
+                                    {% if pc.status == 'pending' %}대기
+                                    {% elif pc.status == 'active' %}활성
+                                    {% elif pc.status == 'rejected' %}거부
+                                    {% else %}{{ pc.status }}
+                                    {% endif %}
+                                </span>
+                            </td>
+                            <td>
+                                {% if pc.status == 'pending' %}
+                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}')">승인</button>
+                                    <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}')">거부</button>
+                                {% elif pc.status == 'active' %}
+                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}')">수정</button>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.pc_unique_id }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.approved_by or '' }}', '{{ pc.notes or '' }}')">상세</button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+                등록된 PC가 없습니다.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 승인 모달 -->
+    <div class="modal fade" id="approveModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">PC 승인</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>매장:</strong> <span id="approve-store-name"></span></p>
+                    <p><strong>타석:</strong> <span id="approve-bay-name"></span></p>
+                    <p><strong>PC 이름:</strong> <span id="approve-pc-name"></span></p>
+                    <hr>
+                    <label>사용 시작일:</label>
+                    <input type="date" id="approve-start-date" class="form-control" required>
+                    <label>사용 종료일:</label>
+                    <input type="date" id="approve-end-date" class="form-control" required>
+                    <label>메모 (선택):</label>
+                    <textarea id="approve-notes" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-success" onclick="approvePC()">승인</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 거부 모달 -->
+    <div class="modal fade" id="rejectModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">PC 거부</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong>매장:</strong> <span id="reject-store-name"></span></p>
+                    <p><strong>타석:</strong> <span id="reject-bay-name"></span></p>
+                    <p><strong>PC 이름:</strong> <span id="reject-pc-name"></span></p>
+                    <hr>
+                    <label>거부 사유 (선택):</label>
+                    <textarea id="reject-notes" class="form-control" rows="3"></textarea>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-danger" onclick="rejectPC()">거부</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 상세 정보 모달 -->
+    <div class="modal fade" id="detailModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">PC 상세 정보</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <table class="table table-bordered">
+                        <tr>
+                            <th width="30%">매장명</th>
+                            <td id="detail-store-name"></td>
+                        </tr>
+                        <tr>
+                            <th>타석번호</th>
+                            <td id="detail-bay-name"></td>
+                        </tr>
+                        <tr>
+                            <th>PC 이름</th>
+                            <td id="detail-pc-name"></td>
+                        </tr>
+                        <tr>
+                            <th>호스트명</th>
+                            <td id="detail-hostname"></td>
+                        </tr>
+                        <tr>
+                            <th>플랫폼</th>
+                            <td id="detail-platform"></td>
+                        </tr>
+                        <tr>
+                            <th>PC 고유번호</th>
+                            <td><code id="detail-unique-id" style="font-size: 0.85rem; word-break: break-all;"></code></td>
+                        </tr>
+                        <tr>
+                            <th>등록일</th>
+                            <td id="detail-registered-at"></td>
+                        </tr>
+                        <tr>
+                            <th>승인일</th>
+                            <td id="detail-approved-at"></td>
+                        </tr>
+                        <tr>
+                            <th>승인자</th>
+                            <td id="detail-approved-by"></td>
+                        </tr>
+                        <tr>
+                            <th>메모</th>
+                            <td id="detail-notes"></td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">닫기</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let currentPcUniqueId = null;
+
+        function showApproveModal(pcUniqueId, storeName, bayName, pcName, startDate = '', endDate = '') {
+            currentPcUniqueId = pcUniqueId;
+            document.getElementById('approve-store-name').textContent = storeName;
+            document.getElementById('approve-bay-name').textContent = bayName;
+            document.getElementById('approve-pc-name').textContent = pcName;
+            
+            const today = new Date().toISOString().split('T')[0];
+            const oneYearLater = new Date();
+            oneYearLater.setFullYear(oneYearLater.getFullYear() + 1);
+            const oneYearLaterStr = oneYearLater.toISOString().split('T')[0];
+            
+            document.getElementById('approve-start-date').value = startDate || today;
+            document.getElementById('approve-end-date').value = endDate || oneYearLaterStr;
+            document.getElementById('approve-notes').value = '';
+            
+            new bootstrap.Modal(document.getElementById('approveModal')).show();
+        }
+
+        function showRejectModal(pcUniqueId, storeName, bayName, pcName) {
+            currentPcUniqueId = pcUniqueId;
+            document.getElementById('reject-store-name').textContent = storeName;
+            document.getElementById('reject-bay-name').textContent = bayName;
+            document.getElementById('reject-pc-name').textContent = pcName;
+            document.getElementById('reject-notes').value = '';
+            
+            new bootstrap.Modal(document.getElementById('rejectModal')).show();
+        }
+
+        function approvePC() {
+            const startDate = document.getElementById('approve-start-date').value;
+            const endDate = document.getElementById('approve-end-date').value;
+            const notes = document.getElementById('approve-notes').value;
+            
+            if (!startDate || !endDate) {
+                alert('사용 시작일과 종료일을 모두 입력해주세요.');
+                return;
+            }
+            
+            fetch('{{ url_for("approve_pc") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    pc_unique_id: currentPcUniqueId,
+                    usage_start_date: startDate,
+                    usage_end_date: endDate,
+                    notes: notes
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('PC 승인 완료');
+                    location.reload();
+                } else {
+                    alert('승인 실패: ' + data.message);
+                }
+            });
+        }
+
+        function rejectPC() {
+            const notes = document.getElementById('reject-notes').value;
+            
+            fetch('{{ url_for("reject_pc") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    pc_unique_id: currentPcUniqueId,
+                    notes: notes
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('PC 거부 완료');
+                    location.reload();
+                } else {
+                    alert('거부 실패: ' + data.message);
+                }
+            });
+        }
+
+        function showDetailModal(pcUniqueId, storeName, bayName, pcName, hostname, platform, uniqueId, registeredAt, approvedAt, approvedBy, notes) {
+            document.getElementById('detail-store-name').textContent = storeName || '-';
+            document.getElementById('detail-bay-name').textContent = bayName || '-';
+            document.getElementById('detail-pc-name').textContent = pcName || '-';
+            document.getElementById('detail-hostname').textContent = hostname || '-';
+            document.getElementById('detail-platform').textContent = platform || '-';
+            document.getElementById('detail-unique-id').textContent = uniqueId || '-';
+            document.getElementById('detail-registered-at').textContent = registeredAt ? registeredAt.split(' ')[0] : '-';
+            document.getElementById('detail-approved-at').textContent = approvedAt ? approvedAt.split(' ')[0] : '-';
+            document.getElementById('detail-approved-by').textContent = approvedBy || '-';
+            document.getElementById('detail-notes').textContent = notes || '-';
+            
+            new bootstrap.Modal(document.getElementById('detailModal')).show();
+        }
+    </script>
+</body>
+</html>
