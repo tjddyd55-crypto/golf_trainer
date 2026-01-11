@@ -6,12 +6,12 @@ from datetime import datetime
 
 # 공유 모듈 경로 추가
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, '../../'))
-shared_path = os.path.join(project_root, 'shared')
-if os.path.exists(shared_path):
-    sys.path.insert(0, project_root)
+local_shared = os.path.join(current_dir, 'shared')
+if os.path.exists(local_shared):
+    sys.path.insert(0, current_dir)
 else:
-    sys.path.insert(0, os.path.join(current_dir, '../../'))
+    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+    sys.path.insert(0, project_root)
 from shared import database
 from shared.auth import require_role
 

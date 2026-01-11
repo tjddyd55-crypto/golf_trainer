@@ -4,15 +4,16 @@ import sys
 import os
 
 # 공유 모듈 경로 추가
-# Railway에서 Root Directory가 루트일 때를 대비
+# Railway에서 Root Directory가 services/api일 때를 대비
 current_dir = os.path.dirname(os.path.abspath(__file__))
-project_root = os.path.abspath(os.path.join(current_dir, '../../'))
-shared_path = os.path.join(project_root, 'shared')
-if os.path.exists(shared_path):
-    sys.path.insert(0, project_root)
+# 같은 디렉토리의 shared 폴더 우선 확인
+local_shared = os.path.join(current_dir, 'shared')
+if os.path.exists(local_shared):
+    sys.path.insert(0, current_dir)
 else:
-    # Root Directory가 services/api일 때
-    sys.path.insert(0, os.path.join(current_dir, '../../'))
+    # 루트의 shared 폴더 확인
+    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
+    sys.path.insert(0, project_root)
 from shared import database
 
 app = Flask(__name__)
