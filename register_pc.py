@@ -202,7 +202,7 @@ def main():
     
     # 서버 URL 가져오기 (환경 변수 또는 기본값)
     # 환경 변수가 없으면 Railway 기본 URL 사용 (운영 시 환경 변수로 오버라이드)
-    server_url = os.environ.get("SERVER_URL", "https://golf-api-production.up.railway.app")
+    server_url = os.environ.get("SERVER_URL", "https://golf-api-production-e675.up.railway.app")
     
     # URL 정규화 (끝의 / 제거)
     server_url = server_url.rstrip('/')
