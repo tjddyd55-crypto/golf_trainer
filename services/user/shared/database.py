@@ -49,6 +49,27 @@ def init_db():
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT")
     except Exception:
         pass
+    
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date TEXT")
+    except Exception:
+        pass
+    
+    # phone 컬럼에 UNIQUE 제약조건 추가 (중복 가입 방지)
+    try:
+        cur.execute("""
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint 
+                    WHERE conname = 'users_phone_unique'
+                ) THEN
+                    ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone);
+                END IF;
+            END $$;
+        """)
+    except Exception:
+        pass
 
     # 2️⃣ 샷 테이블
     cur.execute("""
@@ -386,16 +407,36 @@ def get_user(user_id):
     conn.close()
     return dict(user) if user else None
 
-def create_user(user_id, password, name=None, phone=None, gender=None):
+def create_user(user_id, password, name=None, phone=None, gender=None, birth_date=None):
+    """유저 생성 (휴대폰번호 중복 체크 포함)"""
+    import psycopg2
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO users (user_id, password, name, phone, gender) VALUES (%s, %s, %s, %s, %s)",
-        (user_id, password, name, phone, gender)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    
+    try:
+        # 휴대폰번호 중복 체크
+        if phone:
+            cur.execute("SELECT user_id FROM users WHERE phone = %s", (phone,))
+            existing = cur.fetchone()
+            if existing:
+                cur.close()
+                conn.close()
+                raise ValueError(f"이미 등록된 휴대폰번호입니다: {phone}")
+        
+        cur.execute(
+            "INSERT INTO users (user_id, password, name, phone, gender, birth_date) VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, password, name, phone, gender, birth_date)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except psycopg2.IntegrityError as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        if "users_phone_unique" in str(e):
+            raise ValueError(f"이미 등록된 휴대폰번호입니다: {phone}")
+        raise
 
 def check_user(user_id, password):
     conn = get_db_connection()
