@@ -145,10 +145,16 @@ class PCRegistrationGUI:
         filtered = re.sub(r'[^A-Za-z0-9]', '', value)
         return filtered.upper()
     
+    def filter_registration_code(self, value):
+        """등록코드 입력 필터링 (영문/숫자/하이픈 허용, 대문자 변환, 공백 제거)"""
+        # 하이픈을 제외한 특수문자와 공백 제거, 대문자 변환
+        filtered = re.sub(r'[^A-Za-z0-9-]', '', value)
+        return filtered.upper()
+    
     def on_code_entry_change(self, event=None):
         """PC 등록 코드 입력 필터링"""
         current = self.code_entry.get()
-        filtered = self.filter_alphanumeric_upper(current)
+        filtered = self.filter_registration_code(current)
         if current != filtered:
             cursor_pos = self.code_entry.index(tk.INSERT)
             self.code_entry.delete(0, tk.END)
