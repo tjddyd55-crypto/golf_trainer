@@ -23,11 +23,25 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_
 database.init_db()
 
 # =========================
-# 루트 경로 (헬스체크용)
+# 루트 경로 및 메인 페이지
 # =========================
 @app.route("/")
 def index():
-    return redirect(url_for("login"))
+    return redirect(url_for("main_page"))
+
+@app.route("/main")
+def main_page():
+    """메인 페이지 (로그인 전/후 모두 접근 가능)"""
+    # 로그인된 경우 매장/타석 선택 페이지로 리다이렉트
+    if "user_id" in session:
+        # 매장/타석이 선택되지 않은 경우 선택 페이지로
+        if not session.get("store_id") or not session.get("bay_id"):
+            return redirect(url_for("select_store_bay"))
+        # 이미 선택된 경우 메인 대시보드로
+        return redirect(url_for("user_main"))
+    
+    # 로그인 안 된 경우 메인 페이지 표시
+    return render_template("main_page.html")
 
 # =========================
 # 유저 회원가입
@@ -118,7 +132,7 @@ def select_store_bay():
         # 활성 세션 등록
         database.set_active_session(store_id, bay_id, uid)
         
-        # 메인 페이지로 이동
+        # 메인 대시보드로 이동
         return redirect(url_for("user_main"))
     
     # GET 요청 시 매장/타석 선택 페이지 표시
@@ -126,9 +140,9 @@ def select_store_bay():
     return render_template("select_store_bay.html", stores=stores)
 
 # =========================
-# 유저 메인
+# 유저 메인 대시보드
 # =========================
-@app.route("/main")
+@app.route("/dashboard")
 @require_login
 def user_main():
     uid = session["user_id"]

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>매장/타석 선택 - Golf Trainer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/user.css') }}">
+</head>
+<body>
+    <div class="user-login-container">
+        <div class="user-login-card">
+            <h2 class="user-login-title">🏌️ 매장/타석 선택</h2>
+            
+            {% if error %}
+            <div class="user-login-error">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" id="selectForm">
+                <div class="user-login-form-group">
+                    <label class="user-login-label">매장 선택</label>
+                    <select name="store_id" id="storeSelect" class="user-login-input" required>
+                        <option value="">매장을 선택하세요</option>
+                        {% for store in stores %}
+                        <option value="{{ store.store_id }}" {% if selected_store_id == store.store_id %}selected{% endif %}>
+                            {{ store.store_name or store.store_id }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                
+                <div class="user-login-form-group">
+                    <label class="user-login-label">타석 선택</label>
+                    <select name="bay_id" id="baySelect" class="user-login-input" required>
+                        <option value="">먼저 매장을 선택하세요</option>
+                    </select>
+                </div>
+                
+                <button type="submit" class="user-login-button">확인</button>
+            </form>
+            
+            <div id="statusMessage" class="user-mt-3">
+                <div class="alert alert-info" id="statusBox" style="display: none;">
+                    <strong id="statusText"></strong>
+                </div>
+            </div>
+            
+            <!-- 현재 상황 표시 영역 -->
+            <div id="currentStatus" class="user-mt-3" style="display: none;">
+                <div class="alert alert-success">
+                    <strong>📍 현재 상황:</strong>
+                    <div id="currentStatusText"></div>
+                </div>
+            </div>
+            
+            <div class="user-text-center user-mt-3">
+                <a href="{{ url_for('logout') }}" class="user-btn user-btn-secondary">로그아웃</a>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const storeSelect = document.getElementById('storeSelect');
+        const baySelect = document.getElementById('baySelect');
+        const statusMessage = document.getElementById('statusMessage');
+        const statusText = document.getElementById('statusText');
+        
+        // 매장 선택 시 타석 목록 로드
+        storeSelect.addEventListener('change', function() {
+            const storeId = this.value;
+            baySelect.innerHTML = '<option value="">로딩 중...</option>';
+            
+            if (!storeId) {
+                baySelect.innerHTML = '<option value="">먼저 매장을 선택하세요</option>';
+                return;
+            }
+            
+            // 타석 목록 가져오기 (간단하게 1~5번 타석)
+            fetch(`/api/get_bays?store_id=${storeId}`)
+                .then(response => response.json())
+                .then(data => {
+                    baySelect.innerHTML = '<option value="">타석을 선택하세요</option>';
+                    if (data.bays && data.bays.length > 0) {
+                        data.bays.forEach(bay => {
+                            const option = document.createElement('option');
+                            option.value = bay.bay_id;
+                            option.textContent = `${bay.bay_id}번 타석`;
+                            baySelect.appendChild(option);
+                        });
+                    } else {
+                        // 기본 타석 생성 (1~5번)
+                        for (let i = 1; i <= 5; i++) {
+                            const option = document.createElement('option');
+                            option.value = String(i).padStart(2, '0');
+                            option.textContent = `${i}번 타석`;
+                            baySelect.appendChild(option);
+                        }
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    // 기본 타석 생성
+                    baySelect.innerHTML = '<option value="">타석을 선택하세요</option>';
+                    for (let i = 1; i <= 5; i++) {
+                        const option = document.createElement('option');
+                        option.value = String(i).padStart(2, '0');
+                        option.textContent = `${i}번 타석`;
+                        baySelect.appendChild(option);
+                    }
+                });
+        });
+        
+        // 현재 상황 확인 함수
+        function checkCurrentStatus() {
+            const storeId = storeSelect.value;
+            const bayId = baySelect.value;
+            
+            if (storeId && bayId) {
+                fetch(`/api/active_user?store_id=${storeId}&bay_id=${bayId}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        const currentStatusDiv = document.getElementById('currentStatus');
+                        const currentStatusText = document.getElementById('currentStatusText');
+                        const storeName = storeSelect.options[storeSelect.selectedIndex].text;
+                        const bayName = baySelect.options[baySelect.selectedIndex].text;
+                        
+                        if (data.user_id) {
+                            currentStatusText.innerHTML = `
+                                <strong>${storeName} ${bayName}</strong><br>
+                                현재 사용자: ${data.user_id}<br>
+                                로그인 시간: ${new Date(data.login_time).toLocaleString('ko-KR')}
+                            `;
+                        } else {
+                            currentStatusText.innerHTML = `
+                                <strong>${storeName} ${bayName}</strong><br>
+                                현재 사용 가능 (사용자 없음)
+                            `;
+                        }
+                        currentStatusDiv.style.display = 'block';
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                    });
+            } else {
+                document.getElementById('currentStatus').style.display = 'none';
+            }
+        }
+        
+        // 매장/타석 선택 변경 시 현재 상황 확인
+        storeSelect.addEventListener('change', function() {
+            checkCurrentStatus();
+        });
+        
+        baySelect.addEventListener('change', function() {
+            checkCurrentStatus();
+        });
+        
+        // 폼 제출 시 상태 메시지 표시
+        document.getElementById('selectForm').addEventListener('submit', function(e) {
+            const storeId = storeSelect.value;
+            const bayId = baySelect.value;
+            const storeName = storeSelect.options[storeSelect.selectedIndex].text;
+            const bayName = baySelect.options[baySelect.selectedIndex].text;
+            
+            if (storeId && bayId) {
+                statusText.textContent = `${storeName} ${bayName} 이용중`;
+                document.getElementById('statusBox').style.display = 'block';
+            }
+        });
+        
+        // 초기 선택값이 있으면 타석 목록 로드
+        {% if selected_store_id %}
+        storeSelect.dispatchEvent(new Event('change'));
+        {% endif %}
+    </script>
+</body>
+</html>
