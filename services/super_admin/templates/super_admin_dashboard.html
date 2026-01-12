@@ -35,6 +35,13 @@
             
             <!-- 메뉴 -->
             <div class="d-flex gap-2 mb-4">
+                <a href="{{ url_for('store_requests') }}" class="super-btn super-btn-warning">
+                    📋 매장 등록 요청
+                    {% set pending_count = stores|selectattr('status', 'equalto', 'pending')|list|length %}
+                    {% if pending_count > 0 %}
+                    <span class="badge bg-danger">{{ pending_count }}</span>
+                    {% endif %}
+                </a>
                 <a href="{{ url_for('manage_stores') }}" class="super-btn super-btn-primary">매장 관리</a>
                 <a href="{{ url_for('manage_payments') }}" class="super-btn super-btn-primary">결제 관리</a>
                 <a href="{{ url_for('manage_subscriptions') }}" class="super-btn super-btn-primary">사용기간 관리</a>

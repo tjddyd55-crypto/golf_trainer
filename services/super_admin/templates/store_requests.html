@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>매장 등록 요청 승인 - Golf Trainer</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/super_admin.css') }}">
+</head>
+<body>
+    <div class="super-container">
+        <div class="super-header">
+            <div class="d-flex justify-content-between align-items-center">
+                <h1 class="text-white mb-0">📋 매장 등록 요청 승인</h1>
+                <a href="{{ url_for('super_admin_dashboard') }}" class="super-btn super-btn-secondary">← 대시보드</a>
+            </div>
+        </div>
+        
+        <div class="super-main-content">
+            {% if stores and stores|length > 0 %}
+            <div class="table-responsive">
+                <table class="super-table">
+                    <thead>
+                        <tr>
+                            <th>매장 코드</th>
+                            <th>매장 이름</th>
+                            <th>타석 수</th>
+                            <th>요청일</th>
+                            <th>작업</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for store in stores %}
+                        <tr>
+                            <td><strong>{{ store.store_id }}</strong></td>
+                            <td>{{ store.store_name or '-' }}</td>
+                            <td>{{ store.bays_count }}개</td>
+                            <td>{{ store.requested_at.split(' ')[0] if store.requested_at else '-' }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-success" onclick="approveStore('{{ store.store_id }}')">
+                                    승인
+                                </button>
+                                <button class="btn btn-sm btn-danger" onclick="rejectStore('{{ store.store_id }}')">
+                                    거부
+                                </button>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+                승인 대기 중인 매장 등록 요청이 없습니다.
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    
+    <script>
+        function approveStore(storeId) {
+            if (confirm(`매장 '${storeId}'를 승인하시겠습니까?`)) {
+                fetch('{{ url_for("approve_store") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({store_id: storeId})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('매장이 승인되었습니다.');
+                        location.reload();
+                    } else {
+                        alert('승인 실패: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('오류 발생: ' + error);
+                });
+            }
+        }
+        
+        function rejectStore(storeId) {
+            if (confirm(`매장 '${storeId}'를 거부하시겠습니까?`)) {
+                fetch('{{ url_for("reject_store") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({store_id: storeId})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('매장이 거부되었습니다.');
+                        location.reload();
+                    } else {
+                        alert('거부 실패: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('오류 발생: ' + error);
+                });
+            }
+        }
+    </script>
+</body>
+</html>

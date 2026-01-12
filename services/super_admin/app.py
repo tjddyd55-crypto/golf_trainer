@@ -54,7 +54,7 @@ def super_admin_dashboard():
     # 모든 매장 조회
     conn = database.get_db_connection()
     cur = conn.cursor(cursor_factory=database.RealDictCursor)
-    cur.execute("SELECT * FROM stores ORDER BY created_at DESC")
+    cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
     stores = [dict(row) for row in cur.fetchall()]
     cur.close()
     conn.close()
@@ -64,6 +64,7 @@ def super_admin_dashboard():
         "total_stores": len(stores),
         "active_stores": len([s for s in stores if s.get("subscription_status") == "active"]),
         "expired_stores": len([s for s in stores if s.get("subscription_status") == "expired"]),
+        "pending_stores": len([s for s in stores if s.get("status") == "pending"]),
     }
     
     return render_template("super_admin_dashboard.html",
@@ -78,12 +79,54 @@ def super_admin_dashboard():
 def manage_stores():
     conn = database.get_db_connection()
     cur = conn.cursor(cursor_factory=database.RealDictCursor)
-    cur.execute("SELECT * FROM stores ORDER BY created_at DESC")
+    cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
     stores = [dict(row) for row in cur.fetchall()]
     cur.close()
     conn.close()
     
     return render_template("manage_stores.html", stores=stores)
+
+# =========================
+# 매장 등록 요청 승인
+# =========================
+@app.route("/store-requests")
+@require_role("super_admin")
+def store_requests():
+    """승인 대기 중인 매장 등록 요청 목록"""
+    pending_stores = database.get_pending_stores()
+    return render_template("store_requests.html", stores=pending_stores)
+
+@app.route("/api/approve_store", methods=["POST"])
+@require_role("super_admin")
+def approve_store():
+    """매장 승인"""
+    data = request.get_json()
+    store_id = data.get("store_id")
+    approved_by = session.get("user_id", "super_admin")
+    
+    if not store_id:
+        return jsonify({"success": False, "message": "store_id 필요"}), 400
+    
+    if database.approve_store(store_id, approved_by):
+        return jsonify({"success": True, "message": "매장이 승인되었습니다."})
+    else:
+        return jsonify({"success": False, "message": "매장 승인 실패"}), 500
+
+@app.route("/api/reject_store", methods=["POST"])
+@require_role("super_admin")
+def reject_store():
+    """매장 거부"""
+    data = request.get_json()
+    store_id = data.get("store_id")
+    approved_by = session.get("user_id", "super_admin")
+    
+    if not store_id:
+        return jsonify({"success": False, "message": "store_id 필요"}), 400
+    
+    if database.reject_store(store_id, approved_by):
+        return jsonify({"success": True, "message": "매장이 거부되었습니다."})
+    else:
+        return jsonify({"success": False, "message": "매장 거부 실패"}), 500
 
 # =========================
 # 결제 관리
@@ -244,56 +287,93 @@ def reject_pc():
         conn.close()
         return jsonify({"success": False, "message": f"PC 거부 실패: {str(e)}"}), 400
 
+# =========================
+# 등록 코드 생성 (golf-api로 프록시)
+# =========================
 @app.route("/api/create_registration_code", methods=["POST"])
 @app.route("/api/create_registration_key", methods=["POST"])  # 하위 호환성
 @require_role("super_admin")
 def create_registration_code():
-    """PC 등록 코드 생성 (기존 ACTIVE 코드는 REVOKED 처리)"""
+    """PC 등록 코드 생성 (golf-api로 프록시)"""
+    import requests
+    
+    # golf-api URL 가져오기
+    api_url = os.environ.get("API_URL", "https://golf-api-production-e675.up.railway.app")
+    if not api_url.startswith("http"):
+        api_url = f"https://{api_url}"
+    
+    # 슈퍼 관리자 인증 정보
+    super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "admin123")
+    
+    # 요청 데이터 준비
     data = request.get_json() or {}
-    notes = data.get("notes", "")
-    issued_by = session.get("user_id", "super_admin")
+    data["username"] = super_admin_username
+    data["password"] = super_admin_password
     
     try:
-        code_data = database.create_registration_code(
-            issued_by=issued_by,
-            notes=notes
+        # golf-api 호출
+        response = requests.post(
+            f"{api_url}/api/admin/pc-registration-codes",
+            json=data,
+            timeout=10
         )
         
-        if code_data:
-            return jsonify({
-                "success": True,
-                "registration_code": code_data.get("code"),
-                "registration_key": code_data.get("code"),  # 하위 호환성
-                "status": code_data.get("status"),
-                "message": "등록 코드가 생성되었습니다. 기존 코드는 자동으로 폐기되었습니다."
-            })
+        if response.status_code == 200:
+            return jsonify(response.json())
         else:
             return jsonify({
                 "success": False,
-                "message": "등록 코드 생성에 실패했습니다."
-            }), 500
-    except Exception as e:
+                "message": f"API 호출 실패: {response.status_code}",
+                "error": response.text
+            }), response.status_code
+            
+    except requests.exceptions.RequestException as e:
         return jsonify({
             "success": False,
-            "message": f"등록 코드 생성 오류: {str(e)}"
+            "message": f"API 호출 오류: {str(e)}"
         }), 500
 
 @app.route("/api/registration_codes", methods=["GET"])
 @app.route("/api/registration_keys", methods=["GET"])  # 하위 호환성
 @require_role("super_admin")
 def get_registration_codes():
-    """등록 코드 목록 조회"""
+    """등록 코드 목록 조회 (golf-api로 프록시)"""
+    import requests
+    
+    # golf-api URL 가져오기
+    api_url = os.environ.get("API_URL", "https://golf-api-production-e675.up.railway.app")
+    if not api_url.startswith("http"):
+        api_url = f"https://{api_url}"
+    
+    # 슈퍼 관리자 인증 정보
+    super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "admin123")
+    
     try:
-        codes = database.get_all_registration_codes()
-        return jsonify({
-            "success": True,
-            "codes": codes,
-            "keys": codes  # 하위 호환성
-        })
-    except Exception as e:
+        # golf-api 호출
+        response = requests.get(
+            f"{api_url}/api/admin/pc-registration-codes",
+            params={
+                "username": super_admin_username,
+                "password": super_admin_password
+            },
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return jsonify(response.json())
+        else:
+            return jsonify({
+                "success": False,
+                "message": f"API 호출 실패: {response.status_code}",
+                "error": response.text
+            }), response.status_code
+            
+    except requests.exceptions.RequestException as e:
         return jsonify({
             "success": False,
-            "message": f"등록 코드 조회 오류: {str(e)}"
+            "message": f"API 호출 오류: {str(e)}"
         }), 500
 
 @app.route("/logout")

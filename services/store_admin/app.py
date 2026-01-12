@@ -33,10 +33,16 @@ def store_admin_signup():
         password = request.form.get("password")
         bays_count = int(request.form.get("bays_count", 5))
 
-        if database.create_store(store_id, store_name, password, bays_count):
-            return redirect(url_for("store_admin_login"))
-        else:
-            return "매장 등록 실패"
+        try:
+            if database.create_store(store_id, store_name, password, bays_count):
+                return render_template("store_admin_signup.html", 
+                                     success="매장 등록 요청이 완료되었습니다. 승인 대기 중입니다.")
+            else:
+                return render_template("store_admin_signup.html", 
+                                     error="매장 등록 실패. 다시 시도해주세요.")
+        except Exception as e:
+            return render_template("store_admin_signup.html", 
+                                 error=f"매장 등록 실패: {str(e)}")
 
     return render_template("store_admin_signup.html")
 
@@ -52,6 +58,15 @@ def store_admin_login():
         store = database.check_store(store_id, password)
         if not store:
             return render_template("store_admin_login.html", error="매장 코드 또는 비밀번호가 틀렸습니다.")
+        
+        # 매장 승인 상태 확인
+        store_status = store.get("status", "pending")
+        if store_status == "pending":
+            return render_template("store_admin_login.html", 
+                                 error="매장 등록 요청이 승인 대기 중입니다. 승인 후 로그인할 수 있습니다.")
+        elif store_status == "rejected":
+            return render_template("store_admin_login.html", 
+                                 error="매장 등록이 거부되었습니다. 관리자에게 문의하세요.")
 
         # 세션 설정
         session["store_id"] = store_id

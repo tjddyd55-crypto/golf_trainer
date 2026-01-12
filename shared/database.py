@@ -49,6 +49,27 @@ def init_db():
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone TEXT")
     except Exception:
         pass
+    
+    try:
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS birth_date TEXT")
+    except Exception:
+        pass
+    
+    # phone 컬럼에 UNIQUE 제약조건 추가 (중복 가입 방지)
+    try:
+        cur.execute("""
+            DO $$ 
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_constraint 
+                    WHERE conname = 'users_phone_unique'
+                ) THEN
+                    ALTER TABLE users ADD CONSTRAINT users_phone_unique UNIQUE (phone);
+                END IF;
+            END $$;
+        """)
+    except Exception:
+        pass
 
     # 2️⃣ 샷 테이블
     cur.execute("""
@@ -104,6 +125,27 @@ def init_db():
     for col in ["subscription_status", "subscription_start_date", "subscription_end_date", "payment_plan", "created_at"]:
         try:
             cur.execute(f"ALTER TABLE stores ADD COLUMN IF NOT EXISTS {col} TEXT")
+    
+    # stores 테이블에 status, requested_at, approved_at, approved_by 컬럼 추가
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS requested_at TEXT DEFAULT CURRENT_TIMESTAMP")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS approved_at TEXT")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS approved_by TEXT")
+    except Exception:
+        pass
         except Exception:
             pass
 
@@ -386,16 +428,36 @@ def get_user(user_id):
     conn.close()
     return dict(user) if user else None
 
-def create_user(user_id, password, name=None, phone=None, gender=None):
+def create_user(user_id, password, name=None, phone=None, gender=None, birth_date=None):
+    """유저 생성 (휴대폰번호 중복 체크 포함)"""
+    import psycopg2
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute(
-        "INSERT INTO users (user_id, password, name, phone, gender) VALUES (%s, %s, %s, %s, %s)",
-        (user_id, password, name, phone, gender)
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    
+    try:
+        # 휴대폰번호 중복 체크
+        if phone:
+            cur.execute("SELECT user_id FROM users WHERE phone = %s", (phone,))
+            existing = cur.fetchone()
+            if existing:
+                cur.close()
+                conn.close()
+                raise ValueError(f"이미 등록된 휴대폰번호입니다: {phone}")
+        
+        cur.execute(
+            "INSERT INTO users (user_id, password, name, phone, gender, birth_date) VALUES (%s, %s, %s, %s, %s, %s)",
+            (user_id, password, name, phone, gender, birth_date)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except psycopg2.IntegrityError as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        if "users_phone_unique" in str(e):
+            raise ValueError(f"이미 등록된 휴대폰번호입니다: {phone}")
+        raise
 
 def check_user(user_id, password):
     conn = get_db_connection()
@@ -533,6 +595,93 @@ def check_store(store_id, password):
     conn.close()
     return dict(store) if store else None
 
+def get_all_stores():
+    """모든 매장 목록 조회"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM stores ORDER BY store_id")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_pending_stores():
+    """승인 대기 중인 매장 목록 조회"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM stores WHERE status = 'pending' ORDER BY requested_at DESC")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def approve_store(store_id, approved_by):
+    """매장 승인 (타석 생성 포함)"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # 매장 정보 조회
+        cur.execute("SELECT * FROM stores WHERE store_id = %s", (store_id,))
+        store = cur.fetchone()
+        if not store:
+            return False
+        
+        store = dict(store)
+        bays_count = store.get("bays_count", 5)
+        
+        # 매장 상태를 approved로 변경
+        cur.execute("""
+            UPDATE stores 
+            SET status = 'approved',
+                approved_at = CURRENT_TIMESTAMP,
+                approved_by = %s
+            WHERE store_id = %s
+        """, (approved_by, store_id))
+        
+        # 타석 생성
+        cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
+        for i in range(1, bays_count + 1):
+            bay_id = f"{i:02d}"
+            bay_code = generate_bay_code(store_id, bay_id, cur)
+            cur.execute(
+                "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s)",
+                (store_id, bay_id, bay_code)
+            )
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"매장 승인 오류: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+def reject_store(store_id, approved_by):
+    """매장 거부"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("""
+            UPDATE stores 
+            SET status = 'rejected',
+                approved_at = CURRENT_TIMESTAMP,
+                approved_by = %s
+            WHERE store_id = %s
+        """, (approved_by, store_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"매장 거부 오류: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
 def get_bays(store_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -577,17 +726,23 @@ def get_shots_by_bay(store_id, bay_id):
     return [dict(row) for row in rows]
 
 def create_store(store_id, store_name, password, bays_count):
+    """매장 등록 요청 (승인 대기 상태)"""
     conn = get_db_connection()
     cur = conn.cursor()
     try:
-        cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
+        # 기존 bays는 유지 (승인 시 생성)
         cur.execute("""
-            INSERT INTO stores (store_id, store_name, admin_pw, bays_count) 
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO stores (store_id, store_name, admin_pw, bays_count, status, requested_at) 
+            VALUES (%s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP)
             ON CONFLICT (store_id) DO UPDATE SET
                 store_name = EXCLUDED.store_name,
                 admin_pw = EXCLUDED.admin_pw,
-                bays_count = EXCLUDED.bays_count
+                bays_count = EXCLUDED.bays_count,
+                status = CASE 
+                    WHEN stores.status = 'approved' THEN 'approved'  -- 이미 승인된 경우 유지
+                    ELSE 'pending'  -- 새 요청이면 pending
+                END,
+                requested_at = CURRENT_TIMESTAMP
         """, (store_id, store_name, password, bays_count))
         for i in range(1, bays_count + 1):
             bay_id = f"{i:02d}"
