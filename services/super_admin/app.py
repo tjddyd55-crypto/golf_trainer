@@ -51,26 +51,31 @@ def super_admin_login():
 @app.route("/")
 @require_role("super_admin")
 def super_admin_dashboard():
-    # 모든 매장 조회
-    from psycopg2.extras import RealDictCursor
-    conn = database.get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
-    stores = [dict(row) for row in cur.fetchall()]
-    cur.close()
-    conn.close()
-    
-    # 통계 정보
-    stats = {
-        "total_stores": len(stores),
-        "active_stores": len([s for s in stores if s.get("subscription_status") == "active"]),
-        "expired_stores": len([s for s in stores if s.get("subscription_status") == "expired"]),
-        "pending_stores": len([s for s in stores if s.get("status") == "pending"]),
-    }
-    
-    return render_template("super_admin_dashboard.html",
-                         stores=stores,
-                         stats=stats)
+    try:
+        # 모든 매장 조회
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
+        stores = [dict(row) for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        
+        # 통계 정보
+        stats = {
+            "total_stores": len(stores),
+            "active_stores": len([s for s in stores if s.get("subscription_status") == "active"]),
+            "expired_stores": len([s for s in stores if s.get("subscription_status") == "expired"]),
+            "pending_stores": len([s for s in stores if s.get("status") == "pending"]),
+        }
+        
+        return render_template("super_admin_dashboard.html",
+                             stores=stores,
+                             stats=stats)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 # =========================
 # 매장 관리
@@ -78,15 +83,20 @@ def super_admin_dashboard():
 @app.route("/stores")
 @require_role("super_admin")
 def manage_stores():
-    from psycopg2.extras import RealDictCursor
-    conn = database.get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
-    stores = [dict(row) for row in cur.fetchall()]
-    cur.close()
-    conn.close()
-    
-    return render_template("manage_stores.html", stores=stores)
+    try:
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
+        stores = [dict(row) for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        
+        return render_template("manage_stores.html", stores=stores)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 # =========================
 # 매장 등록 요청 승인
@@ -95,8 +105,13 @@ def manage_stores():
 @require_role("super_admin")
 def store_requests():
     """승인 대기 중인 매장 등록 요청 목록"""
-    pending_stores = database.get_pending_stores()
-    return render_template("store_requests.html", stores=pending_stores)
+    try:
+        pending_stores = database.get_pending_stores()
+        return render_template("store_requests.html", stores=pending_stores)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 @app.route("/api/approve_store", methods=["POST"])
 @require_role("super_admin")
@@ -136,15 +151,20 @@ def reject_store():
 @app.route("/payments")
 @require_role("super_admin")
 def manage_payments():
-    from psycopg2.extras import RealDictCursor
-    conn = database.get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM payments ORDER BY payment_date DESC LIMIT 100")
-    payments = [dict(row) for row in cur.fetchall()]
-    cur.close()
-    conn.close()
-    
-    return render_template("manage_payments.html", payments=payments)
+    try:
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM payments ORDER BY payment_date DESC LIMIT 100")
+        payments = [dict(row) for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        
+        return render_template("manage_payments.html", payments=payments)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 # =========================
 # 사용기간 관리
@@ -152,15 +172,20 @@ def manage_payments():
 @app.route("/subscriptions")
 @require_role("super_admin")
 def manage_subscriptions():
-    from psycopg2.extras import RealDictCursor
-    conn = database.get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM subscriptions ORDER BY end_date DESC")
-    subscriptions = [dict(row) for row in cur.fetchall()]
-    cur.close()
-    conn.close()
-    
-    return render_template("manage_subscriptions.html", subscriptions=subscriptions)
+    try:
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM subscriptions ORDER BY end_date DESC")
+        subscriptions = [dict(row) for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        
+        return render_template("manage_subscriptions.html", subscriptions=subscriptions)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 # =========================
 # 매장 구독 연장

@@ -81,12 +81,13 @@ def store_admin_login():
 @app.route("/")
 @require_role("store_admin")
 def store_admin_dashboard():
-    from .utils import classify_by_criteria
-    
-    store_id = session.get("store_id")
-    bays = database.get_bays(store_id)
-    active_sessions = database.get_all_active_sessions(store_id)
-    rows = database.get_all_shots_by_store(store_id)
+    try:
+        from .utils import classify_by_criteria
+        
+        store_id = session.get("store_id")
+        bays = database.get_bays(store_id)
+        active_sessions = database.get_all_active_sessions(store_id)
+        rows = database.get_all_shots_by_store(store_id)
     
     # 샷 데이터에 색상 클래스 추가
     shots = []

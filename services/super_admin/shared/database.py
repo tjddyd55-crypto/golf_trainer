@@ -966,3 +966,90 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
         cur.close()
         conn.close()
         return None, str(e)
+
+def get_all_stores():
+    """모든 매장 목록 조회"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM stores ORDER BY store_id")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def get_pending_stores():
+    """승인 대기 중인 매장 목록 조회"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM stores WHERE status = 'pending' ORDER BY requested_at DESC")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(row) for row in rows]
+
+def approve_store(store_id, approved_by):
+    """매장 승인 (타석 생성 포함)"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # 매장 정보 조회
+        cur.execute("SELECT * FROM stores WHERE store_id = %s", (store_id,))
+        store = cur.fetchone()
+        if not store:
+            return False
+        
+        store = dict(store)
+        bays_count = store.get("bays_count", 5)
+        
+        # 매장 상태를 approved로 변경
+        cur.execute("""
+            UPDATE stores 
+            SET status = 'approved',
+                approved_at = CURRENT_TIMESTAMP,
+                approved_by = %s
+            WHERE store_id = %s
+        """, (approved_by, store_id))
+        
+        # 타석 생성
+        cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
+        for i in range(1, bays_count + 1):
+            bay_id = f"{i:02d}"
+            bay_code = generate_bay_code(store_id, bay_id, cur)
+            cur.execute(
+                "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s)",
+                (store_id, bay_id, bay_code)
+            )
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"매장 승인 오류: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+def reject_store(store_id, approved_by):
+    """매장 거부"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("""
+            UPDATE stores 
+            SET status = 'rejected',
+                approved_at = CURRENT_TIMESTAMP,
+                approved_by = %s
+            WHERE store_id = %s
+        """, (approved_by, store_id))
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"매장 거부 오류: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cur.close()
+        conn.close()

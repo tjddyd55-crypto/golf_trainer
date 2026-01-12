@@ -102,42 +102,47 @@ def user_login():
 @app.route("/select-store-bay", methods=["GET", "POST"])
 @require_login
 def select_store_bay():
-    if request.method == "POST":
-        store_id = request.form.get("store_id")
-        bay_id = request.form.get("bay_id")
+    try:
+        if request.method == "POST":
+            store_id = request.form.get("store_id")
+            bay_id = request.form.get("bay_id")
+            
+            if not store_id or not bay_id:
+                stores = database.get_all_stores()
+                return render_template("select_store_bay.html", 
+                                     stores=stores, 
+                                     error="매장과 타석을 선택해주세요.")
+            
+            # 타석 사용 가능 여부 확인
+            active_user = database.get_bay_active_user_info(store_id, bay_id)
+            uid = session["user_id"]
+            
+            if active_user and active_user["user_id"] != uid:
+                # 다른 사용자가 사용 중
+                stores = database.get_all_stores()
+                return render_template("select_store_bay.html", 
+                                     stores=stores,
+                                     selected_store_id=store_id,
+                                     selected_bay_id=bay_id,
+                                     error=f"{bay_id}번 타석은 현재 사용 중입니다.")
+            
+            # 매장/타석 선택 완료 - 세션에 저장
+            session["store_id"] = store_id
+            session["bay_id"] = bay_id
+            
+            # 활성 세션 등록
+            database.set_active_session(store_id, bay_id, uid)
+            
+            # 메인 대시보드로 이동
+            return redirect(url_for("user_main"))
         
-        if not store_id or not bay_id:
-            stores = database.get_all_stores()
-            return render_template("select_store_bay.html", 
-                                 stores=stores, 
-                                 error="매장과 타석을 선택해주세요.")
-        
-        # 타석 사용 가능 여부 확인
-        active_user = database.get_bay_active_user_info(store_id, bay_id)
-        uid = session["user_id"]
-        
-        if active_user and active_user["user_id"] != uid:
-            # 다른 사용자가 사용 중
-            stores = database.get_all_stores()
-            return render_template("select_store_bay.html", 
-                                 stores=stores,
-                                 selected_store_id=store_id,
-                                 selected_bay_id=bay_id,
-                                 error=f"{bay_id}번 타석은 현재 사용 중입니다.")
-        
-        # 매장/타석 선택 완료 - 세션에 저장
-        session["store_id"] = store_id
-        session["bay_id"] = bay_id
-        
-        # 활성 세션 등록
-        database.set_active_session(store_id, bay_id, uid)
-        
-        # 메인 대시보드로 이동
-        return redirect(url_for("user_main"))
-    
-    # GET 요청 시 매장/타석 선택 페이지 표시
-    stores = database.get_all_stores()
-    return render_template("select_store_bay.html", stores=stores)
+        # GET 요청 시 매장/타석 선택 페이지 표시
+        stores = database.get_all_stores()
+        return render_template("select_store_bay.html", stores=stores)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 # =========================
 # 유저 메인 대시보드
@@ -145,17 +150,22 @@ def select_store_bay():
 @app.route("/dashboard")
 @require_login
 def user_main():
-    uid = session["user_id"]
-    user = database.get_user(uid)
-    last_shot = database.get_last_shot(uid)
-    dates = database.get_user_practice_dates(uid)
-    stores = database.get_all_stores()
+    try:
+        uid = session["user_id"]
+        user = database.get_user(uid)
+        last_shot = database.get_last_shot(uid)
+        dates = database.get_user_practice_dates(uid)
+        stores = database.get_all_stores()
 
-    return render_template("user_main.html",
-                         user=user,
-                         last_shot=last_shot,
-                         dates=dates,
-                         stores=stores)
+        return render_template("user_main.html",
+                             user=user,
+                             last_shot=last_shot,
+                             dates=dates,
+                             stores=stores)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 # =========================
 # 유저 전체 샷 리스트
