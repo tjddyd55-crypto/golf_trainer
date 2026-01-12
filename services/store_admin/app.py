@@ -88,30 +88,34 @@ def store_admin_dashboard():
         bays = database.get_bays(store_id)
         active_sessions = database.get_all_active_sessions(store_id)
         rows = database.get_all_shots_by_store(store_id)
-    
-    # 샷 데이터에 색상 클래스 추가
-    shots = []
-    for r in rows[:20]:  # 최근 20개만
-        s = dict(r)
-        club_id = s.get("club_id") or ""
-        bs = s.get("ball_speed")
-        sf = s.get("smash_factor")
-        s["ball_speed_class"] = classify_by_criteria(bs, club_id, "ball_speed", fallback_good=60)
-        s["smash_class"] = classify_by_criteria(sf, club_id, "smash_factor", fallback_good=1.45)
-        shots.append(s)
+        
+        # 샷 데이터에 색상 클래스 추가
+        shots = []
+        for r in rows[:20]:  # 최근 20개만
+            s = dict(r)
+            club_id = s.get("club_id") or ""
+            bs = s.get("ball_speed")
+            sf = s.get("smash_factor")
+            s["ball_speed_class"] = classify_by_criteria(bs, club_id, "ball_speed", fallback_good=60)
+            s["smash_class"] = classify_by_criteria(sf, club_id, "smash_factor", fallback_good=1.45)
+            shots.append(s)
 
-    # 타석별 활성 사용자 매핑
-    bay_active_users = {}
-    for session_info in active_sessions:
-        key = f"{session_info['store_id']}_{session_info['bay_id']}"
-        bay_active_users[key] = session_info
+        # 타석별 활성 사용자 매핑
+        bay_active_users = {}
+        for session_info in active_sessions:
+            key = f"{session_info['store_id']}_{session_info['bay_id']}"
+            bay_active_users[key] = session_info
 
-    return render_template("store_admin_dashboard.html",
-                         store_id=store_id,
-                         bays=bays,
-                         active_sessions=active_sessions,
-                         bay_active_users=bay_active_users,
-                         shots=shots)
+        return render_template("store_admin_dashboard.html",
+                             store_id=store_id,
+                             bays=bays,
+                             active_sessions=active_sessions,
+                             bay_active_users=bay_active_users,
+                             shots=shots)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 # =========================
 # 타석별 샷 기록
