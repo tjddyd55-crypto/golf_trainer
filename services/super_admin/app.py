@@ -239,8 +239,20 @@ def extend_subscription():
 @require_role("super_admin")
 def manage_all_pcs():
     """전체 매장 PC 관리"""
-    pcs = database.get_all_store_pcs()
-    return render_template("manage_all_pcs.html", pcs=pcs)
+    try:
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT * FROM store_pcs ORDER BY registered_at DESC")
+        pcs = [dict(row) for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        
+        return render_template("manage_all_pcs.html", pcs=pcs)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 @app.route("/api/approve_pc", methods=["POST"])
 @require_role("super_admin")
