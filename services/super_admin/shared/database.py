@@ -107,6 +107,34 @@ def init_db():
         except Exception:
             pass
 
+    # stores 테이블 컬럼 추가
+    for col in ["subscription_status", "subscription_start_date", "subscription_end_date", "payment_plan", "created_at"]:
+        try:
+            cur.execute(f"ALTER TABLE stores ADD COLUMN IF NOT EXISTS {col} TEXT")
+        except Exception:
+            pass
+    
+    # stores 테이블에 status, requested_at, approved_at, approved_by 컬럼 추가
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS status TEXT DEFAULT 'pending'")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS requested_at TEXT DEFAULT CURRENT_TIMESTAMP")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS approved_at TEXT")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS approved_by TEXT")
+    except Exception:
+        pass
+
     # 4️⃣ 타석 테이블 (코드 필드 추가)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS bays (
