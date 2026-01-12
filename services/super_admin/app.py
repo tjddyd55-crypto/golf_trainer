@@ -175,17 +175,46 @@ def manage_all_pcs():
 @app.route("/api/approve_pc", methods=["POST"])
 @require_role("super_admin")
 def approve_pc():
-    """PC 승인"""
+    """PC 승인 및 토큰 발급"""
     data = request.get_json()
     pc_unique_id = data.get("pc_unique_id")
+    store_id = data.get("store_id")
+    bay_id = data.get("bay_id")
+    approved_by = session.get("user_id", "super_admin")
     usage_start_date = data.get("usage_start_date")
     usage_end_date = data.get("usage_end_date")
     notes = data.get("notes", "")
     
-    approved_by = session.get("user_id", "super_admin")
+    if not pc_unique_id or not store_id or not bay_id:
+        return jsonify({"success": False, "message": "pc_unique_id, store_id, bay_id are required"}), 400
     
-    if database.approve_store_pc(pc_unique_id, approved_by, usage_start_date, usage_end_date, notes):
-        return jsonify({"success": True, "message": "PC 승인 완료"})
+    # PC 승인 및 토큰 발급
+    pc_data = database.approve_pc(pc_unique_id, store_id, bay_id, approved_by)
+    
+    if pc_data:
+        # 사용 기간 업데이트 (선택사항)
+        if usage_start_date or usage_end_date or notes:
+            conn = database.get_db_connection()
+            cur = conn.cursor()
+            if usage_start_date:
+                cur.execute("UPDATE store_pcs SET usage_start_date = %s WHERE pc_unique_id = %s", 
+                           (usage_start_date, pc_unique_id))
+            if usage_end_date:
+                cur.execute("UPDATE store_pcs SET usage_end_date = %s WHERE pc_unique_id = %s", 
+                           (usage_end_date, pc_unique_id))
+            if notes:
+                cur.execute("UPDATE store_pcs SET notes = %s WHERE pc_unique_id = %s", 
+                           (notes, pc_unique_id))
+            conn.commit()
+            cur.close()
+            conn.close()
+        
+        return jsonify({
+            "success": True, 
+            "message": "PC 승인 완료",
+            "pc_token": pc_data.get("pc_token"),
+            "pc": pc_data
+        })
     else:
         return jsonify({"success": False, "message": "PC 승인 실패"}), 400
 
@@ -197,10 +226,23 @@ def reject_pc():
     pc_unique_id = data.get("pc_unique_id")
     notes = data.get("notes", "")
     
-    if database.reject_store_pc(pc_unique_id, notes):
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            UPDATE store_pcs 
+            SET status = 'blocked', notes = %s
+            WHERE pc_unique_id = %s
+        """, (notes, pc_unique_id))
+        conn.commit()
+        cur.close()
+        conn.close()
         return jsonify({"success": True, "message": "PC 거부 완료"})
-    else:
-        return jsonify({"success": False, "message": "PC 거부 실패"}), 400
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"success": False, "message": f"PC 거부 실패: {str(e)}"}), 400
 
 @app.route("/logout")
 def super_admin_logout():

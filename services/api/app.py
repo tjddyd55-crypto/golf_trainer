@@ -73,7 +73,7 @@ def clear_session():
 # =========================
 @app.route("/api/register_pc", methods=["POST"])
 def register_pc():
-    """매장 PC 등록 API"""
+    """매장 PC 등록 API (승인 대기 상태)"""
     try:
         data = request.get_json()
         
@@ -88,13 +88,35 @@ def register_pc():
                 "error": "store_name, bay_name, pc_name, pc_info are required"
             }), 400
         
+        # 필수 정보 확인 (MAC Address, UUID)
+        mac_address = pc_info.get("mac_address")
+        pc_uuid = pc_info.get("system_uuid") or pc_info.get("machine_guid")
+        
+        if not mac_address:
+            return jsonify({
+                "success": False,
+                "error": "MAC Address is required"
+            }), 400
+        
+        if not pc_uuid:
+            return jsonify({
+                "success": False,
+                "error": "PC UUID is required"
+            }), 400
+        
         # 데이터베이스에 PC 등록
         success = database.register_store_pc(store_name, bay_name, pc_name, pc_info)
         
         if success:
+            # 등록된 PC 정보 반환
+            pc_unique_id = pc_info.get("unique_id")
+            pc_data = database.get_store_pc_by_unique_id(pc_unique_id)
+            
             return jsonify({
                 "success": True,
-                "message": "PC 등록 요청이 접수되었습니다. 슈퍼 관리자의 승인을 기다려주세요."
+                "message": "PC 등록 요청이 접수되었습니다. 슈퍼 관리자의 승인을 기다려주세요.",
+                "pc_code": pc_unique_id[:8].upper(),  # 표시용 짧은 코드
+                "status": "pending"
             })
         else:
             return jsonify({
@@ -104,6 +126,105 @@ def register_pc():
             
     except Exception as e:
         print(f"PC 등록 오류: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# =========================
+# PC 인증 API (main.py에서 사용)
+# =========================
+@app.route("/api/verify_pc", methods=["POST"])
+def verify_pc():
+    """PC 토큰 검증 API"""
+    try:
+        data = request.get_json() or {}
+        pc_token = data.get("pc_token") or request.headers.get("Authorization", "").replace("Bearer ", "")
+        
+        if not pc_token:
+            return jsonify({
+                "success": False,
+                "error": "PC token is required"
+            }), 401
+        
+        # 토큰 검증
+        pc_data = database.verify_pc_token(pc_token)
+        
+        if pc_data:
+            return jsonify({
+                "success": True,
+                "pc": {
+                    "store_id": pc_data.get("store_id"),
+                    "bay_id": pc_data.get("bay_id"),
+                    "store_name": pc_data.get("store_name"),
+                    "bay_name": pc_data.get("bay_name"),
+                    "pc_name": pc_data.get("pc_name")
+                }
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "Invalid or inactive PC token"
+            }), 401
+            
+    except Exception as e:
+        print(f"PC 인증 오류: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# =========================
+# PC 등록 상태 확인 API (register_pc.py에서 사용)
+# =========================
+@app.route("/api/check_pc_status", methods=["GET", "POST"])
+def check_pc_status():
+    """PC 등록 상태 확인 API"""
+    try:
+        data = request.get_json() or {}
+        pc_unique_id = data.get("pc_unique_id") or request.args.get("pc_unique_id")
+        
+        if not pc_unique_id:
+            return jsonify({
+                "success": False,
+                "error": "pc_unique_id is required"
+            }), 400
+        
+        pc_data = database.get_store_pc_by_unique_id(pc_unique_id)
+        
+        if not pc_data:
+            return jsonify({
+                "success": False,
+                "status": "not_registered",
+                "message": "PC가 등록되지 않았습니다."
+            })
+        
+        status = pc_data.get("status", "pending")
+        
+        if status == "active":
+            return jsonify({
+                "success": True,
+                "status": "active",
+                "pc_token": pc_data.get("pc_token"),
+                "store_id": pc_data.get("store_id"),
+                "bay_id": pc_data.get("bay_id"),
+                "message": "PC가 승인되었습니다."
+            })
+        elif status == "pending":
+            return jsonify({
+                "success": True,
+                "status": "pending",
+                "message": "승인 대기 중입니다."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "status": status,
+                "message": f"PC 상태: {status}"
+            })
+            
+    except Exception as e:
+        print(f"PC 상태 확인 오류: {e}")
         return jsonify({
             "success": False,
             "error": str(e)

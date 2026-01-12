@@ -6,6 +6,8 @@ from datetime import datetime
 from urllib.parse import urlparse
 import random
 import string
+import secrets
+import hashlib
 
 # PostgreSQL 연결 정보 (Railway 환경 변수 또는 로컬 설정)
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5432/golf_data")
@@ -165,13 +167,18 @@ def init_db():
     cur.execute("""
     CREATE TABLE IF NOT EXISTS store_pcs (
         id SERIAL PRIMARY KEY,
+        store_id TEXT,
         store_name TEXT NOT NULL,
+        bay_id TEXT,
         bay_name TEXT NOT NULL,
         pc_name TEXT NOT NULL,
         pc_unique_id TEXT UNIQUE NOT NULL,
+        pc_uuid TEXT,
+        mac_address TEXT,
         pc_hostname TEXT,
         pc_platform TEXT,
         pc_info JSONB,
+        pc_token TEXT UNIQUE,
         registered_at TEXT DEFAULT CURRENT_TIMESTAMP,
         last_seen_at TEXT,
         status TEXT DEFAULT 'pending',
@@ -183,8 +190,16 @@ def init_db():
     )
     """)
     
+    # 기존 테이블에 새 컬럼 추가 (마이그레이션)
+    for col in ["store_id", "bay_id", "pc_uuid", "mac_address", "pc_token"]:
+        try:
+            cur.execute(f"ALTER TABLE store_pcs ADD COLUMN IF NOT EXISTS {col} TEXT")
+        except Exception:
+            pass
+    
     try:
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pc_unique_id ON store_pcs(pc_unique_id)")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pc_token ON store_pcs(pc_token) WHERE pc_token IS NOT NULL")
     except Exception:
         pass
 
@@ -575,13 +590,22 @@ def clear_all_active_sessions(store_id):
 # ------------------------------------------------
 # 매장 PC 관리
 # ------------------------------------------------
+def generate_pc_token(pc_unique_id, mac_address):
+    """PC 전용 토큰 생성 (pc_live_xxxxx 형식)"""
+    # PC 고유 ID와 MAC 주소를 조합하여 토큰 생성
+    token_data = f"{pc_unique_id}:{mac_address}:{datetime.now().isoformat()}"
+    token_hash = hashlib.sha256(token_data.encode()).hexdigest()[:16]
+    return f"pc_live_{token_hash}"
+
 def register_store_pc(store_name, bay_name, pc_name, pc_info):
-    """매장 PC 등록"""
+    """매장 PC 등록 (승인 대기 상태)"""
     conn = get_db_connection()
     cur = conn.cursor()
     
     try:
         pc_unique_id = pc_info.get("unique_id")
+        pc_uuid = pc_info.get("system_uuid") or pc_info.get("machine_guid")
+        mac_address = pc_info.get("mac_address")
         pc_hostname = pc_info.get("hostname")
         pc_platform = pc_info.get("platform")
         
@@ -592,18 +616,22 @@ def register_store_pc(store_name, bay_name, pc_name, pc_info):
         cur.execute("""
             INSERT INTO store_pcs (
                 store_name, bay_name, pc_name, pc_unique_id,
-                pc_hostname, pc_platform, pc_info, last_seen_at, status
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 'pending')
+                pc_uuid, mac_address, pc_hostname, pc_platform, 
+                pc_info, last_seen_at, status
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, CURRENT_TIMESTAMP, 'pending')
             ON CONFLICT (pc_unique_id) DO UPDATE SET
                 store_name = EXCLUDED.store_name,
                 bay_name = EXCLUDED.bay_name,
                 pc_name = EXCLUDED.pc_name,
+                pc_uuid = EXCLUDED.pc_uuid,
+                mac_address = EXCLUDED.mac_address,
                 pc_hostname = EXCLUDED.pc_hostname,
                 pc_platform = EXCLUDED.pc_platform,
                 pc_info = EXCLUDED.pc_info,
                 last_seen_at = CURRENT_TIMESTAMP
                 -- 상태는 승인된 경우에만 유지, 대기 상태면 그대로 유지
-        """, (store_name, bay_name, pc_name, pc_unique_id, pc_hostname, pc_platform, pc_info_json))
+        """, (store_name, bay_name, pc_name, pc_unique_id, pc_uuid, mac_address, 
+              pc_hostname, pc_platform, pc_info_json))
         
         conn.commit()
         cur.close()
@@ -615,6 +643,86 @@ def register_store_pc(store_name, bay_name, pc_name, pc_info):
         cur.close()
         conn.close()
         return False
+
+def approve_pc(pc_unique_id, store_id, bay_id, approved_by):
+    """PC 승인 및 토큰 발급"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # PC 정보 조회
+        cur.execute("SELECT * FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
+        pc = cur.fetchone()
+        
+        if not pc:
+            return None
+        
+        pc_dict = dict(pc)
+        mac_address = pc_dict.get("mac_address", "")
+        
+        # 토큰 생성
+        pc_token = generate_pc_token(pc_unique_id, mac_address)
+        
+        # 승인 및 토큰 발급
+        cur.execute("""
+            UPDATE store_pcs 
+            SET status = 'active',
+                store_id = %s,
+                bay_id = %s,
+                pc_token = %s,
+                approved_at = CURRENT_TIMESTAMP,
+                approved_by = %s
+            WHERE pc_unique_id = %s
+        """, (store_id, bay_id, pc_token, approved_by, pc_unique_id))
+        
+        conn.commit()
+        
+        # 업데이트된 정보 반환
+        cur.execute("SELECT * FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
+        updated_pc = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        return dict(updated_pc) if updated_pc else None
+    except Exception as e:
+        print(f"PC 승인 오류: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return None
+
+def verify_pc_token(pc_token):
+    """PC 토큰 검증"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        cur.execute("""
+            SELECT * FROM store_pcs 
+            WHERE pc_token = %s AND status = 'active'
+        """, (pc_token,))
+        pc = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if pc:
+            # last_seen_at 업데이트
+            conn = get_db_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                UPDATE store_pcs 
+                SET last_seen_at = CURRENT_TIMESTAMP 
+                WHERE pc_token = %s
+            """, (pc_token,))
+            conn.commit()
+            cur.close()
+            conn.close()
+            
+            return dict(pc)
+        return None
+    except Exception as e:
+        print(f"토큰 검증 오류: {e}")
+        return None
 
 def get_store_pc_by_unique_id(pc_unique_id):
     """PC 고유번호로 PC 정보 조회"""

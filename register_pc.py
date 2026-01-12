@@ -2,11 +2,13 @@
 """
 매장 PC 등록 스크립트
 PC 고유번호를 수집하여 서비스에 등록 요청
+승인 후 토큰을 저장하여 자동 인증
 """
 
 import requests
 import sys
 import os
+import json
 
 # pc_identifier 모듈 import
 try:
@@ -15,6 +17,50 @@ except ImportError:
     print("❌ 오류: pc_identifier.py 파일을 찾을 수 없습니다.")
     print("   register_pc.py와 같은 디렉토리에 pc_identifier.py가 있어야 합니다.")
     sys.exit(1)
+
+# 토큰 저장 파일 경로
+TOKEN_FILE = os.path.join(os.path.dirname(__file__), "pc_token.json")
+
+def load_pc_token():
+    """저장된 PC 토큰 로드"""
+    if os.path.exists(TOKEN_FILE):
+        try:
+            with open(TOKEN_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get("pc_token"), data.get("server_url")
+        except Exception:
+            pass
+    return None, None
+
+def save_pc_token(pc_token, server_url):
+    """PC 토큰 저장"""
+    try:
+        data = {
+            "pc_token": pc_token,
+            "server_url": server_url
+        }
+        with open(TOKEN_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"토큰 저장 실패: {e}")
+        return False
+
+def check_pc_status(server_url, pc_unique_id):
+    """PC 등록 상태 확인"""
+    try:
+        response = requests.post(
+            f"{server_url}/api/check_pc_status",
+            json={"pc_unique_id": pc_unique_id},
+            timeout=10
+        )
+        
+        if response.status_code == 200:
+            return response.json()
+        return None
+    except Exception as e:
+        print(f"상태 확인 실패: {e}")
+        return None
 
 def register_pc_to_server(server_url, store_name, bay_name, pc_name, pc_info):
     """서버에 PC 등록 요청"""
@@ -35,11 +81,12 @@ def register_pc_to_server(server_url, store_name, bay_name, pc_name, pc_info):
         if response.status_code == 200:
             data = response.json()
             if data.get("success"):
+                pc_code = data.get("pc_code", pc_info['unique_id'][:8].upper())
                 print(f"✅ PC 등록 성공!")
                 print(f"   매장: {store_name}")
                 print(f"   타석: {bay_name}")
                 print(f"   PC 이름: {pc_name}")
-                print(f"   PC 고유번호: {pc_info['unique_id']}")
+                print(f"   PC 코드: {pc_code}")
                 print()
                 print("=" * 60)
                 print("⚠️ 중요: 슈퍼 관리자의 승인을 기다려야 합니다.")
@@ -47,7 +94,7 @@ def register_pc_to_server(server_url, store_name, bay_name, pc_name, pc_info):
                 print("=" * 60)
                 return True
             else:
-                print(f"❌ 등록 실패: {data.get('error', data.get('message', '알 수 없는 오류'))}")
+                print(f"❌ 등록 실패: {data.get('error', '알 수 없는 오류')}")
                 return False
         else:
             print(f"❌ 서버 오류: {response.status_code}")
@@ -74,6 +121,17 @@ def main():
     print("=" * 60)
     print()
     
+    # 저장된 토큰 확인
+    saved_token, saved_url = load_pc_token()
+    if saved_token:
+        print("⚠️ 이미 등록된 PC가 감지되었습니다.")
+        print(f"   토큰: {saved_token[:20]}...")
+        print()
+        choice = input("재등록하시겠습니까? (y/N): ").strip().lower()
+        if choice != 'y' and choice != 'yes':
+            print("등록이 취소되었습니다.")
+            return 0
+    
     # PC 정보 수집
     print("PC 정보 수집 중...")
     try:
@@ -82,7 +140,21 @@ def main():
         print(f"❌ PC 정보 수집 실패: {e}")
         return 1
     
+    # 필수 정보 확인
+    mac_address = pc_info.get("mac_address")
+    pc_uuid = pc_info.get("system_uuid") or pc_info.get("machine_guid")
+    
+    if not mac_address:
+        print("❌ MAC Address를 수집할 수 없습니다.")
+        return 1
+    
+    if not pc_uuid:
+        print("❌ PC UUID를 수집할 수 없습니다.")
+        return 1
+    
     print(f"✅ PC 고유번호: {pc_info['unique_id']}")
+    print(f"   MAC 주소: {mac_address}")
+    print(f"   PC UUID: {pc_uuid}")
     print(f"   호스트명: {pc_info['hostname']}")
     print(f"   플랫폼: {pc_info['platform']}")
     print()
@@ -149,6 +221,12 @@ def main():
         print()
         print("=" * 60)
         print("등록 완료!")
+        print("=" * 60)
+        print()
+        print("💡 다음 단계:")
+        print("   1. 슈퍼 관리자에게 승인 요청")
+        print("   2. 승인 후 이 프로그램을 다시 실행하면 자동으로 토큰이 저장됩니다")
+        print("   3. 샷 수집 프로그램(main.py)이 자동으로 인증됩니다")
         print("=" * 60)
         return 0
     else:

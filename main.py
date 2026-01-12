@@ -21,6 +21,42 @@ from openai import OpenAI
 DEFAULT_SERVER_URL = os.environ.get("SERVER_URL", "http://127.0.0.1:5000")
 SERVER_URL = f"{DEFAULT_SERVER_URL}/api/save_shot"
 
+# PC 토큰 파일 경로 (register_pc.py와 동일한 위치)
+PC_TOKEN_FILE = os.path.join(os.path.dirname(__file__), "pc_token.json")
+
+def load_pc_token():
+    """PC 토큰 로드"""
+    if os.path.exists(PC_TOKEN_FILE):
+        try:
+            with open(PC_TOKEN_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get("pc_token")
+        except Exception:
+            pass
+    return None
+
+def save_pc_token(pc_token, server_url):
+    """PC 토큰 저장"""
+    try:
+        data = {
+            "pc_token": pc_token,
+            "server_url": server_url
+        }
+        with open(PC_TOKEN_FILE, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2)
+        return True
+    except Exception as e:
+        print(f"토큰 저장 실패: {e}")
+        return False
+
+def get_auth_headers():
+    """인증 헤더 생성 (PC 토큰 포함)"""
+    pc_token = load_pc_token()
+    headers = {}
+    if pc_token:
+        headers["Authorization"] = f"Bearer {pc_token}"
+    return headers
+
 POLL_INTERVAL = 0.20
 COOLDOWN_SEC  = 2.0
 SPEED_TOL     = 0.25
@@ -1049,7 +1085,8 @@ def generate_voice_feedback(evaluations):
 # =========================
 def send_to_server(payload):
     try:
-        r = requests.post(SERVER_URL, json=payload, timeout=2)
+        headers = get_auth_headers()
+        r = requests.post(SERVER_URL, json=payload, headers=headers, timeout=2)
         print("✅ 서버:", r.status_code, r.text[:200])
     except Exception as e:
         print("❌ 서버 전송 실패:", e)
@@ -1083,9 +1120,11 @@ def clear_active_session(store_id, bay_id):
     활성 세션 삭제 (자동 로그아웃)
     """
     try:
+        headers = get_auth_headers()
         r = requests.post(
             f"{DEFAULT_SERVER_URL}/api/clear_session",
             json={"store_id": store_id, "bay_id": bay_id},
+            headers=headers,
             timeout=1
         )
         if r.status_code == 200:
@@ -1105,9 +1144,11 @@ def check_pc_approval():
         pc_info = get_pc_info()
         pc_unique_id = pc_info.get("unique_id")
         
+        headers = get_auth_headers()
         response = requests.get(
-            f"{DEFAULT_SERVER_URL}/api/check_pc_approval",
-            params={"pc_unique_id": pc_unique_id},
+            f"{DEFAULT_SERVER_URL}/api/check_pc_status",
+            json={"pc_unique_id": pc_unique_id},
+            headers=headers,
             timeout=10
         )
         
@@ -1136,9 +1177,11 @@ def update_pc_last_seen():
         pc_info = get_pc_info()
         pc_unique_id = pc_info.get("unique_id")
         
+        headers = get_auth_headers()
         response = requests.post(
             f"{DEFAULT_SERVER_URL}/api/update_pc_last_seen",
             json={"pc_unique_id": pc_unique_id},
+            headers=headers,
             timeout=5
         )
     except Exception:
