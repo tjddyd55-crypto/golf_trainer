@@ -1081,3 +1081,28 @@ def reject_store(store_id, approved_by):
     finally:
         cur.close()
         conn.close()
+
+def delete_store(store_id):
+    """매장 삭제 (모든 관련 데이터 포함)"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        # 관련 데이터 삭제 (순서 중요: 외래키 참조 제거)
+        cur.execute("DELETE FROM active_sessions WHERE store_id = %s", (store_id,))
+        cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
+        cur.execute("DELETE FROM shots WHERE store_id = %s", (store_id,))
+        cur.execute("DELETE FROM store_pcs WHERE store_id = %s", (store_id,))
+        
+        # 매장 삭제
+        cur.execute("DELETE FROM stores WHERE store_id = %s", (store_id,))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"매장 삭제 오류: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cur.close()
+        conn.close()

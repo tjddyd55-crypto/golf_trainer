@@ -162,6 +162,21 @@ def reject_store():
     else:
         return jsonify({"success": False, "message": "매장 거부 실패"}), 500
 
+@app.route("/api/delete_store", methods=["POST"])
+@require_role("super_admin")
+def delete_store():
+    """매장 삭제"""
+    data = request.get_json()
+    store_id = data.get("store_id")
+    
+    if not store_id:
+        return jsonify({"success": False, "message": "store_id 필요"}), 400
+    
+    if database.delete_store(store_id):
+        return jsonify({"success": True, "message": "매장이 삭제되었습니다."})
+    else:
+        return jsonify({"success": False, "message": "매장 삭제 실패"}), 500
+
 # =========================
 # 결제 관리
 # =========================

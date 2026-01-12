@@ -47,6 +47,24 @@
             border-radius: 12px;
             font-size: 14px;
         }
+        .super-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .super-table th,
+        .super-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid #dee2e6;
+        }
+        .super-table th {
+            background-color: #f8f9fa;
+            font-weight: 600;
+            white-space: nowrap;
+        }
+        .super-table tbody tr:hover {
+            background-color: #f8f9fa;
+        }
     </style>
 </head>
 <body>
@@ -116,11 +134,11 @@
                         <table class="super-table">
                             <thead>
                                 <tr>
-                                    <th>매장 코드</th>
-                                    <th>매장 이름</th>
-                                    <th>타석 수</th>
-                                    <th>요청일</th>
-                                    <th>작업</th>
+                                    <th style="min-width: 120px;">매장 코드</th>
+                                    <th style="min-width: 150px;">매장 이름</th>
+                                    <th style="min-width: 80px;">타석 수</th>
+                                    <th style="min-width: 100px;">요청일</th>
+                                    <th style="min-width: 150px;">작업</th>
                                 </tr>
                             </thead>
                             <tbody id="pendingStoresBody">
@@ -163,12 +181,13 @@
                         <table class="super-table">
                             <thead>
                                 <tr>
-                                    <th>매장 코드</th>
-                                    <th>매장 이름</th>
-                                    <th>타석 수</th>
-                                    <th>요청일</th>
-                                    <th>승인일</th>
-                                    <th>승인자</th>
+                                    <th style="min-width: 120px;">매장 코드</th>
+                                    <th style="min-width: 150px;">매장 이름</th>
+                                    <th style="min-width: 80px;">타석 수</th>
+                                    <th style="min-width: 100px;">요청일</th>
+                                    <th style="min-width: 100px;">승인일</th>
+                                    <th style="min-width: 100px;">승인자</th>
+                                    <th style="min-width: 100px;">작업</th>
                                 </tr>
                             </thead>
                             <tbody id="approvedStoresBody">
@@ -180,6 +199,11 @@
                                     <td>{{ store.requested_at.split(' ')[0] if store.requested_at else '-' }}</td>
                                     <td>{{ store.approved_at.split(' ')[0] if store.approved_at else '-' }}</td>
                                     <td>{{ store.approved_by or '-' }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-danger" onclick="deleteStore('{{ store.store_id }}')">
+                                            삭제
+                                        </button>
+                                    </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
@@ -363,6 +387,29 @@
                         location.reload();
                     } else {
                         alert('거부 실패: ' + (data.message || '알 수 없는 오류'));
+                    }
+                })
+                .catch(error => {
+                    alert('오류 발생: ' + error);
+                });
+            }
+        }
+        
+        // 매장 삭제
+        function deleteStore(storeId) {
+            if (confirm(`매장 '${storeId}'를 삭제하시겠습니까?\n\n경고: 이 작업은 되돌릴 수 없으며, 매장의 모든 데이터(타석, 샷 기록 등)가 삭제됩니다.`)) {
+                fetch('{{ url_for("delete_store") }}', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({store_id: storeId})
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        alert('매장이 삭제되었습니다.');
+                        location.reload();
+                    } else {
+                        alert('삭제 실패: ' + (data.message || '알 수 없는 오류'));
                     }
                 })
                 .catch(error => {

@@ -19,7 +19,7 @@
             <form method="POST">
                 <div class="mb-3">
                     <label class="form-label">매장 코드</label>
-                    <input type="text" name="store_id" class="form-control" placeholder="매장 코드(영문)" required>
+                    <input type="text" name="store_id" id="store_id" class="form-control" placeholder="매장 코드(영문)" required oninput="this.value = this.value.replace(/[^A-Z0-9]/gi, '').toUpperCase()">
                 </div>
                 <div class="mb-3">
                     <label class="form-label">비밀번호</label>
