@@ -3,61 +3,329 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>매장 등록 요청 승인 - Golf Trainer</title>
+    <title>매장 등록 요청 관리 - Golf Trainer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/super_admin.css') }}">
+    <style>
+        .search-filter-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .code-generator-section {
+            background: #e7f3ff;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            border: 2px solid #0d6efd;
+        }
+        .code-display {
+            font-size: 24px;
+            font-weight: bold;
+            color: #0d6efd;
+            padding: 10px;
+            background: white;
+            border-radius: 4px;
+            text-align: center;
+            margin: 10px 0;
+        }
+        .store-list-section {
+            margin-bottom: 30px;
+        }
+        .store-list-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #0d6efd;
+        }
+        .badge-count {
+            background: #0d6efd;
+            color: white;
+            padding: 5px 10px;
+            border-radius: 12px;
+            font-size: 14px;
+        }
+    </style>
 </head>
 <body>
     <div class="super-container">
         <div class="super-header">
             <div class="d-flex justify-content-between align-items-center">
-                <h1 class="text-white mb-0">📋 매장 등록 요청 승인</h1>
+                <h1 class="text-white mb-0">📋 매장 등록 요청 관리</h1>
                 <a href="{{ url_for('super_admin_dashboard') }}" class="super-btn super-btn-secondary">← 대시보드</a>
             </div>
         </div>
         
         <div class="super-main-content">
-            {% if stores and stores|length > 0 %}
-            <div class="table-responsive">
-                <table class="super-table">
-                    <thead>
-                        <tr>
-                            <th>매장 코드</th>
-                            <th>매장 이름</th>
-                            <th>타석 수</th>
-                            <th>요청일</th>
-                            <th>작업</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for store in stores %}
-                        <tr>
-                            <td><strong>{{ store.store_id }}</strong></td>
-                            <td>{{ store.store_name or '-' }}</td>
-                            <td>{{ store.bays_count }}개</td>
-                            <td>{{ store.requested_at.split(' ')[0] if store.requested_at else '-' }}</td>
-                            <td>
-                                <button class="btn btn-sm btn-success" onclick="approveStore('{{ store.store_id }}')">
-                                    승인
-                                </button>
-                                <button class="btn btn-sm btn-danger" onclick="rejectStore('{{ store.store_id }}')">
-                                    거부
-                                </button>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <!-- 등록 코드 생성기 -->
+            <div class="code-generator-section">
+                <h3>🔑 PC 등록 코드 생성기</h3>
+                <div class="row">
+                    <div class="col-md-6">
+                        <button class="btn btn-primary btn-lg w-100" onclick="generateCode()">
+                            새 등록 코드 생성
+                        </button>
+                    </div>
+                    <div class="col-md-6">
+                        <div id="codeDisplay" class="code-display" style="display:none;">
+                            <span id="generatedCode"></span>
+                        </div>
+                    </div>
+                </div>
+                <div id="codeMessage" class="mt-2"></div>
             </div>
-            {% else %}
-            <div class="alert alert-info">
-                승인 대기 중인 매장 등록 요청이 없습니다.
+
+            <!-- 검색 및 필터 -->
+            <div class="search-filter-section">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label class="form-label">매장 검색</label>
+                        <input type="text" id="searchInput" class="form-control" placeholder="매장명 또는 코드로 검색..." onkeyup="filterStores()">
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">정렬 기준</label>
+                        <select id="sortSelect" class="form-select" onchange="sortStores()">
+                            <option value="requested_at_desc">요청일 (최신순)</option>
+                            <option value="requested_at_asc">요청일 (오래된순)</option>
+                            <option value="store_name_asc">매장명 (가나다순)</option>
+                            <option value="store_id_asc">매장 코드 (오름차순)</option>
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">상태 필터</label>
+                        <select id="statusFilter" class="form-select" onchange="filterStores()">
+                            <option value="all">전체</option>
+                            <option value="pending">승인 대기</option>
+                            <option value="approved">승인 완료</option>
+                        </select>
+                    </div>
+                </div>
             </div>
-            {% endif %}
+
+            <!-- 승인 대기 중인 매장 -->
+            <div class="store-list-section">
+                <h3 class="store-list-title">
+                    ⏳ 등록 대기중 리스트 
+                    <span class="badge-count">{{ pending_stores|length }}건</span>
+                </h3>
+                <div id="pendingStoresTable">
+                    {% if pending_stores and pending_stores|length > 0 %}
+                    <div class="table-responsive">
+                        <table class="super-table">
+                            <thead>
+                                <tr>
+                                    <th>매장 코드</th>
+                                    <th>매장 이름</th>
+                                    <th>타석 수</th>
+                                    <th>요청일</th>
+                                    <th>작업</th>
+                                </tr>
+                            </thead>
+                            <tbody id="pendingStoresBody">
+                                {% for store in pending_stores %}
+                                <tr data-store-id="{{ store.store_id }}" data-store-name="{{ store.store_name or '' }}" data-requested-at="{{ store.requested_at or '' }}">
+                                    <td><strong>{{ store.store_id }}</strong></td>
+                                    <td>{{ store.store_name or '-' }}</td>
+                                    <td>{{ store.bays_count }}개</td>
+                                    <td>{{ store.requested_at.split(' ')[0] if store.requested_at else '-' }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-success" onclick="approveStore('{{ store.store_id }}')">
+                                            승인
+                                        </button>
+                                        <button class="btn btn-sm btn-danger" onclick="rejectStore('{{ store.store_id }}')">
+                                            거부
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        승인 대기 중인 매장 등록 요청이 없습니다.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- 승인 완료된 매장 -->
+            <div class="store-list-section">
+                <h3 class="store-list-title">
+                    ✅ 등록된 리스트 
+                    <span class="badge-count">{{ approved_stores|length }}건</span>
+                </h3>
+                <div id="approvedStoresTable">
+                    {% if approved_stores and approved_stores|length > 0 %}
+                    <div class="table-responsive">
+                        <table class="super-table">
+                            <thead>
+                                <tr>
+                                    <th>매장 코드</th>
+                                    <th>매장 이름</th>
+                                    <th>타석 수</th>
+                                    <th>요청일</th>
+                                    <th>승인일</th>
+                                    <th>승인자</th>
+                                </tr>
+                            </thead>
+                            <tbody id="approvedStoresBody">
+                                {% for store in approved_stores %}
+                                <tr data-store-id="{{ store.store_id }}" data-store-name="{{ store.store_name or '' }}" data-requested-at="{{ store.requested_at or '' }}" data-approved-at="{{ store.approved_at or '' }}">
+                                    <td><strong>{{ store.store_id }}</strong></td>
+                                    <td>{{ store.store_name or '-' }}</td>
+                                    <td>{{ store.bays_count }}개</td>
+                                    <td>{{ store.requested_at.split(' ')[0] if store.requested_at else '-' }}</td>
+                                    <td>{{ store.approved_at.split(' ')[0] if store.approved_at else '-' }}</td>
+                                    <td>{{ store.approved_by or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-info">
+                        승인 완료된 매장이 없습니다.
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
         </div>
     </div>
     
     <script>
+        // 등록 코드 생성
+        function generateCode() {
+            const btn = event.target;
+            btn.disabled = true;
+            btn.textContent = '생성 중...';
+            
+            fetch('{{ url_for("create_registration_code") }}', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({})
+            })
+            .then(response => response.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.textContent = '새 등록 코드 생성';
+                
+                if (data.success) {
+                    document.getElementById('generatedCode').textContent = data.registration_code;
+                    document.getElementById('codeDisplay').style.display = 'block';
+                    document.getElementById('codeMessage').innerHTML = 
+                        '<div class="alert alert-success">등록 코드가 생성되었습니다!</div>';
+                    
+                    // 5초 후 메시지 제거
+                    setTimeout(() => {
+                        document.getElementById('codeMessage').innerHTML = '';
+                    }, 5000);
+                } else {
+                    document.getElementById('codeMessage').innerHTML = 
+                        '<div class="alert alert-danger">오류: ' + (data.message || '코드 생성 실패') + '</div>';
+                }
+            })
+            .catch(error => {
+                btn.disabled = false;
+                btn.textContent = '새 등록 코드 생성';
+                document.getElementById('codeMessage').innerHTML = 
+                    '<div class="alert alert-danger">오류 발생: ' + error + '</div>';
+            });
+        }
+
+        // 매장 필터링
+        function filterStores() {
+            const searchText = document.getElementById('searchInput').value.toLowerCase();
+            const statusFilter = document.getElementById('statusFilter').value;
+            
+            // 승인 대기 목록 필터링
+            const pendingRows = document.querySelectorAll('#pendingStoresBody tr');
+            pendingRows.forEach(row => {
+                const storeId = row.getAttribute('data-store-id').toLowerCase();
+                const storeName = (row.getAttribute('data-store-name') || '').toLowerCase();
+                const matchesSearch = !searchText || storeId.includes(searchText) || storeName.includes(searchText);
+                const matchesStatus = statusFilter === 'all' || statusFilter === 'pending';
+                
+                row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+            });
+            
+            // 승인 완료 목록 필터링
+            const approvedRows = document.querySelectorAll('#approvedStoresBody tr');
+            approvedRows.forEach(row => {
+                const storeId = row.getAttribute('data-store-id').toLowerCase();
+                const storeName = (row.getAttribute('data-store-name') || '').toLowerCase();
+                const matchesSearch = !searchText || storeId.includes(searchText) || storeName.includes(searchText);
+                const matchesStatus = statusFilter === 'all' || statusFilter === 'approved';
+                
+                row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
+            });
+        }
+
+        // 매장 정렬
+        function sortStores() {
+            const sortValue = document.getElementById('sortSelect').value;
+            const [field, order] = sortValue.split('_');
+            
+            // 승인 대기 목록 정렬
+            const pendingBody = document.getElementById('pendingStoresBody');
+            if (pendingBody) {
+                const rows = Array.from(pendingBody.querySelectorAll('tr'));
+                rows.sort((a, b) => {
+                    let aVal, bVal;
+                    
+                    if (field === 'requested_at') {
+                        aVal = a.getAttribute('data-requested-at') || '';
+                        bVal = b.getAttribute('data-requested-at') || '';
+                    } else if (field === 'store_name') {
+                        aVal = (a.getAttribute('data-store-name') || '').toLowerCase();
+                        bVal = (b.getAttribute('data-store-name') || '').toLowerCase();
+                    } else if (field === 'store_id') {
+                        aVal = a.getAttribute('data-store-id').toLowerCase();
+                        bVal = b.getAttribute('data-store-id').toLowerCase();
+                    }
+                    
+                    if (order === 'asc') {
+                        return aVal > bVal ? 1 : (aVal < bVal ? -1 : 0);
+                    } else {
+                        return aVal < bVal ? 1 : (aVal > bVal ? -1 : 0);
+                    }
+                });
+                
+                rows.forEach(row => pendingBody.appendChild(row));
+            }
+            
+            // 승인 완료 목록 정렬
+            const approvedBody = document.getElementById('approvedStoresBody');
+            if (approvedBody) {
+                const rows = Array.from(approvedBody.querySelectorAll('tr'));
+                rows.sort((a, b) => {
+                    let aVal, bVal;
+                    
+                    if (field === 'requested_at') {
+                        aVal = a.getAttribute('data-requested-at') || '';
+                        bVal = b.getAttribute('data-requested-at') || '';
+                    } else if (field === 'store_name') {
+                        aVal = (a.getAttribute('data-store-name') || '').toLowerCase();
+                        bVal = (b.getAttribute('data-store-name') || '').toLowerCase();
+                    } else if (field === 'store_id') {
+                        aVal = a.getAttribute('data-store-id').toLowerCase();
+                        bVal = b.getAttribute('data-store-id').toLowerCase();
+                    }
+                    
+                    if (order === 'asc') {
+                        return aVal > bVal ? 1 : (aVal < bVal ? -1 : 0);
+                    } else {
+                        return aVal < bVal ? 1 : (aVal > bVal ? -1 : 0);
+                    }
+                });
+                
+                rows.forEach(row => approvedBody.appendChild(row));
+            }
+        }
+
+        // 매장 승인
         function approveStore(storeId) {
             if (confirm(`매장 '${storeId}'를 승인하시겠습니까?`)) {
                 fetch('{{ url_for("approve_store") }}', {
@@ -71,7 +339,7 @@
                         alert('매장이 승인되었습니다.');
                         location.reload();
                     } else {
-                        alert('승인 실패: ' + data.message);
+                        alert('승인 실패: ' + (data.message || '알 수 없는 오류'));
                     }
                 })
                 .catch(error => {
@@ -80,6 +348,7 @@
             }
         }
         
+        // 매장 거부
         function rejectStore(storeId) {
             if (confirm(`매장 '${storeId}'를 거부하시겠습니까?`)) {
                 fetch('{{ url_for("reject_store") }}', {
@@ -93,7 +362,7 @@
                         alert('매장이 거부되었습니다.');
                         location.reload();
                     } else {
-                        alert('거부 실패: ' + data.message);
+                        alert('거부 실패: ' + (data.message || '알 수 없는 오류'));
                     }
                 })
                 .catch(error => {

@@ -104,10 +104,27 @@ def manage_stores():
 @app.route("/store-requests")
 @require_role("super_admin")
 def store_requests():
-    """승인 대기 중인 매장 등록 요청 목록"""
+    """매장 등록 요청 관리 (승인 대기 + 승인 완료)"""
     try:
+        # 승인 대기 중인 매장
         pending_stores = database.get_pending_stores()
-        return render_template("store_requests.html", stores=pending_stores)
+        
+        # 승인 완료된 매장
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT * FROM stores 
+            WHERE status = 'approved' 
+            ORDER BY approved_at DESC NULLS LAST, store_id
+        """)
+        approved_stores = [dict(row) for row in cur.fetchall()]
+        cur.close()
+        conn.close()
+        
+        return render_template("store_requests.html", 
+                             pending_stores=pending_stores,
+                             approved_stores=approved_stores)
     except Exception as e:
         import traceback
         traceback.print_exc()
