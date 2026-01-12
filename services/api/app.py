@@ -68,6 +68,47 @@ def clear_session():
         return jsonify({"success": True, "deleted": deleted})
     return jsonify({"success": False, "error": "store_id and bay_id required"}), 400
 
+# =========================
+# PC 등록 API (register_pc.py에서 사용)
+# =========================
+@app.route("/api/register_pc", methods=["POST"])
+def register_pc():
+    """매장 PC 등록 API"""
+    try:
+        data = request.get_json()
+        
+        store_name = data.get("store_name")
+        bay_name = data.get("bay_name")
+        pc_name = data.get("pc_name")
+        pc_info = data.get("pc_info")
+        
+        if not store_name or not bay_name or not pc_name or not pc_info:
+            return jsonify({
+                "success": False,
+                "error": "store_name, bay_name, pc_name, pc_info are required"
+            }), 400
+        
+        # 데이터베이스에 PC 등록
+        success = database.register_store_pc(store_name, bay_name, pc_name, pc_info)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "PC 등록 요청이 접수되었습니다. 슈퍼 관리자의 승인을 기다려주세요."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "PC 등록에 실패했습니다."
+            }), 500
+            
+    except Exception as e:
+        print(f"PC 등록 오류: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5003))
     app.run(host="0.0.0.0", port=port, debug=True)

@@ -20,12 +20,8 @@ build_options = [
     "--console",
     "--clean",
     "--noconfirm",
+    "--hidden-import", "pc_identifier",  # pc_identifier 모듈 명시적 포함
 ]
-
-# 추가 파일 포함
-build_options.extend([
-    "--add-data", f"pc_identifier.py;.",
-])
 
 # 아이콘 파일이 있으면 추가
 if ICON_FILE and os.path.exists(ICON_FILE):
