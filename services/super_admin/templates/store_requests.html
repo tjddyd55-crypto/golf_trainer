@@ -231,7 +231,14 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({})
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => {
+                        throw new Error(data.message || `API 호출 실패: ${response.status}`);
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 btn.disabled = false;
                 btn.textContent = '새 등록 코드 생성';
@@ -247,30 +254,20 @@
                         document.getElementById('codeMessage').innerHTML = '';
                     }, 5000);
                 } else {
+                    let errorMsg = data.message || data.error || '코드 생성 실패';
+                    if (errorMsg.includes('401') || errorMsg.includes('인증')) {
+                        errorMsg = '인증 오류: Railway 환경 변수(SUPER_ADMIN_USERNAME, SUPER_ADMIN_PASSWORD)를 golf-api와 golf-super-admin 서비스에 모두 동일하게 설정하세요.';
+                    }
                     document.getElementById('codeMessage').innerHTML = 
-                        '<div class="alert alert-danger">오류: ' + (data.message || '코드 생성 실패') + '</div>';
+                        '<div class="alert alert-danger">오류: ' + errorMsg + '</div>';
                 }
             })
             .catch(error => {
                 btn.disabled = false;
                 btn.textContent = '새 등록 코드 생성';
-                document.getElementById('codeMessage').innerHTML = 
-                    '<div class="alert alert-danger">오류 발생: ' + error + '</div>';
-            })
-            .then(response => {
-                if (!response.ok) {
-                    return response.json().then(data => {
-                        throw new Error(data.message || `API 호출 실패: ${response.status}`);
-                    });
-                }
-                return response.json();
-            })
-            .catch(error => {
-                btn.disabled = false;
-                btn.textContent = '새 등록 코드 생성';
-                let errorMsg = error.message || error;
-                if (errorMsg.includes('401')) {
-                    errorMsg = '인증 오류: 슈퍼 관리자 환경 변수가 설정되지 않았거나 일치하지 않습니다. Railway 환경 변수를 확인하세요.';
+                let errorMsg = error.message || error.toString();
+                if (errorMsg.includes('401') || errorMsg.includes('인증')) {
+                    errorMsg = '인증 오류: Railway 환경 변수(SUPER_ADMIN_USERNAME, SUPER_ADMIN_PASSWORD)가 golf-api와 golf-super-admin 서비스에 모두 설정되어 있고 동일해야 합니다.';
                 }
                 document.getElementById('codeMessage').innerHTML = 
                     '<div class="alert alert-danger">오류: ' + errorMsg + '</div>';
