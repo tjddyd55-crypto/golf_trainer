@@ -19,33 +19,13 @@
             {% endif %}
             
             <form method="POST" id="loginForm">
-                <!-- 타석 코드 입력 영역 -->
-                <div class="user-bay-code-section">
-                    <label class="user-bay-code-label">타석 코드 입력</label>
-                    <input 
-                        type="text" 
-                        name="bay_code" 
-                        id="bayCodeInput"
-                        class="user-bay-code-input" 
-                        placeholder="A001" 
-                        maxlength="4"
-                        pattern="[A-Za-z][0-9]{3}"
-                        value="{{ bay_code if bay_code else '' }}"
-                        required
-                    >
-                    <div class="user-bay-code-hint">
-                        타석 앞에 표시된 4자리 코드를 입력하세요
-                    </div>
-                </div>
-                
-                <!-- 사용자 정보 입력 -->
                 <div class="user-login-form-group">
-                    <label class="user-login-label">아이디</label>
+                    <label class="user-login-label">아이디 (휴대폰번호)</label>
                     <input 
                         type="text" 
                         name="user_id" 
                         class="user-login-input" 
-                        placeholder="아이디를 입력하세요" 
+                        placeholder="01012345678 또는 010-1234-5678" 
                         required
                     >
                 </div>
@@ -69,44 +49,5 @@
             </div>
         </div>
     </div>
-    
-    <script>
-        // 타석 코드 입력 자동 포맷팅
-        document.getElementById('bayCodeInput').addEventListener('input', function(e) {
-            let value = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-            if (value.length > 0 && !/^[A-Z]/.test(value)) {
-                value = 'A' + value.replace(/[A-Z]/g, '');
-            }
-            if (value.length > 4) {
-                value = value.substring(0, 4);
-            }
-            e.target.value = value;
-        });
-        
-        // 타석 코드 실시간 확인 (선택사항)
-        document.getElementById('bayCodeInput').addEventListener('blur', function(e) {
-            const code = e.target.value.trim();
-            if (code.length === 4) {
-                fetch('{{ url_for("check_bay_code") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ bay_code: code })
-                })
-                .then(response => response.json())
-                .then(data => {
-                    if (data.valid) {
-                        e.target.style.borderColor = '#28a745';
-                    } else {
-                        e.target.style.borderColor = '#dc3545';
-                    }
-                })
-                .catch(error => {
-                    console.error('Error:', error);
-                });
-            }
-        });
-    </script>
 </body>
 </html>

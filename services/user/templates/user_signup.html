@@ -12,33 +12,48 @@
         <div class="user-login-card">
             <h2 class="user-login-title">⛳ 회원가입</h2>
             
-            <form method="POST" action="{{ url_for('signup') }}">
-                <div class="user-login-form-group">
-                    <label class="user-login-label">아이디 (휴대폰 번호 추천)</label>
-                    <input type="text" name="user_id" class="user-login-input" placeholder="ID 입력" required>
-                </div>
-                
+            {% if error %}
+            <div class="user-login-error">
+                {{ error }}
+            </div>
+            {% endif %}
+            
+            <form method="POST" action="{{ url_for('signup') }}" id="signupForm">
                 <div class="user-login-form-group">
                     <label class="user-login-label">이름</label>
                     <input type="text" name="name" class="user-login-input" placeholder="이름 입력" required>
                 </div>
                 
                 <div class="user-login-form-group">
-                    <label class="user-login-label">연락처</label>
-                    <input type="text" name="phone" class="user-login-input" placeholder="010-1234-5678" required>
+                    <label class="user-login-label">생년월일</label>
+                    <input type="date" name="birth_date" class="user-login-input" required>
+                </div>
+                
+                <div class="user-login-form-group">
+                    <label class="user-login-label">성별</label>
+                    <select name="gender" class="user-login-input" required>
+                        <option value="">선택하세요</option>
+                        <option value="남">남성</option>
+                        <option value="여">여성</option>
+                    </select>
+                </div>
+                
+                <div class="user-login-form-group">
+                    <label class="user-login-label">아이디 (휴대폰번호)</label>
+                    <input 
+                        type="tel" 
+                        name="phone" 
+                        class="user-login-input" 
+                        placeholder="010-1234-5678" 
+                        pattern="[0-9]{3}-[0-9]{4}-[0-9]{4}"
+                        required
+                    >
+                    <small class="form-text text-muted">하이픈은 자동으로 제거됩니다</small>
                 </div>
                 
                 <div class="user-login-form-group">
                     <label class="user-login-label">비밀번호</label>
                     <input type="password" name="password" class="user-login-input" placeholder="비밀번호 입력" required>
-                </div>
-                
-                <div class="user-login-form-group">
-                    <label class="user-login-label">성별</label>
-                    <select name="gender" class="user-login-input">
-                        <option value="남">남성</option>
-                        <option value="여">여성</option>
-                    </select>
                 </div>
                 
                 <button type="submit" class="user-login-button">가입하기</button>
@@ -49,5 +64,18 @@
             </div>
         </div>
     </div>
+    
+    <script>
+        // 연락처 자동 포맷팅
+        document.querySelector('input[name="phone"]').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/[^0-9]/g, '');
+            if (value.length > 3 && value.length <= 7) {
+                value = value.substring(0, 3) + '-' + value.substring(3);
+            } else if (value.length > 7) {
+                value = value.substring(0, 3) + '-' + value.substring(3, 7) + '-' + value.substring(7, 11);
+            }
+            e.target.value = value;
+        });
+    </script>
 </body>
 </html>

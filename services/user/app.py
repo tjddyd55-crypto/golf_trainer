@@ -27,7 +27,7 @@ database.init_db()
 # =========================
 @app.route("/")
 def index():
-    return redirect(url_for("user_login"))
+    return redirect(url_for("login"))
 
 # =========================
 # 유저 회원가입
@@ -35,69 +35,95 @@ def index():
 @app.route("/signup", methods=["GET", "POST"])
 def signup():
     if request.method == "POST":
-        uid = request.form.get("user_id")
-        pw = request.form.get("password")
         name = request.form.get("name")
         phone = request.form.get("phone")
+        birth_date = request.form.get("birth_date")
         gender = request.form.get("gender")
+        password = request.form.get("password")
 
+        # 필수 항목 확인
+        if not all([name, phone, birth_date, gender, password]):
+            return render_template("user_signup.html", error="모든 항목을 입력해주세요.")
+        
+        # 휴대폰번호를 아이디로 사용 (하이픈 제거)
+        user_id = phone.replace("-", "").replace(" ", "")
+        
         try:
-            database.create_user(uid, pw, name, phone, gender)
-            return redirect(url_for("user_login"))
+            database.create_user(user_id, password, name, phone, gender, birth_date)
+            return redirect(url_for("login"))
+        except ValueError as e:
+            return render_template("user_signup.html", error=str(e))
         except Exception as e:
-            return f"회원가입 실패: {str(e)}"
+            return render_template("user_signup.html", error=f"회원가입 실패: {str(e)}")
 
     return render_template("user_signup.html")
 
 # =========================
-# 유저 로그인 (코드 입력 방식)
+# 유저 로그인 (아이디/비밀번호만)
 # =========================
 @app.route("/login", methods=["GET", "POST"])
 def user_login():
     if request.method == "POST":
         uid = request.form.get("user_id")
         pw = request.form.get("password")
-        bay_code = request.form.get("bay_code", "").strip().upper()  # 타석 코드 입력
 
         # 사용자 인증
         user = database.check_user(uid, pw)
         if not user:
             return render_template("user_login.html", error="아이디 또는 비밀번호가 틀렸습니다.")
 
-        # 타석 코드로 매장/타석 조회
-        if bay_code:
-            store_bay = database.get_store_bay_by_code(bay_code)
-            if not store_bay:
-                return render_template("user_login.html", error=f"타석 코드 '{bay_code}'를 찾을 수 없습니다.")
-            
-            store_id = store_bay["store_id"]
-            bay_id = store_bay["bay_id"]
-        else:
-            # 코드가 없으면 기본값 사용 (기존 방식)
-            store_id = request.form.get("store_id", "gaja")
-            bay_id = request.form.get("bay_id", "01")
-
-        # 타석 사용 가능 여부 확인
-        active_user = database.get_bay_active_user_info(store_id, bay_id)
-        if active_user and active_user["user_id"] != uid:
-            force_login = request.form.get("force_login", "false") == "true"
-            if not force_login:
-                return render_template("user_login.html", 
-                                     error=f"{bay_id}번 타석은 현재 {active_user['user_id']}님이 사용 중입니다.",
-                                     bay_code=bay_code)
-
-        # 로그인 처리
+        # 로그인 성공 - 세션에 사용자 정보만 저장 (매장/타석은 아직 선택 안함)
         session["user_id"] = uid
-        session["store_id"] = store_id
-        session["bay_id"] = bay_id
         session["role"] = "user"
         
-        # 활성 세션 등록
-        database.set_active_session(store_id, bay_id, uid)
-        return redirect(url_for("user_main"))
+        # 매장/타석 선택 화면으로 이동
+        return redirect(url_for("select_store_bay"))
 
     # GET 요청 시 로그인 페이지 표시
     return render_template("user_login.html")
+
+# =========================
+# 매장/타석 선택 화면
+# =========================
+@app.route("/select-store-bay", methods=["GET", "POST"])
+@require_login
+def select_store_bay():
+    if request.method == "POST":
+        store_id = request.form.get("store_id")
+        bay_id = request.form.get("bay_id")
+        
+        if not store_id or not bay_id:
+            stores = database.get_all_stores()
+            return render_template("select_store_bay.html", 
+                                 stores=stores, 
+                                 error="매장과 타석을 선택해주세요.")
+        
+        # 타석 사용 가능 여부 확인
+        active_user = database.get_bay_active_user_info(store_id, bay_id)
+        uid = session["user_id"]
+        
+        if active_user and active_user["user_id"] != uid:
+            # 다른 사용자가 사용 중
+            stores = database.get_all_stores()
+            return render_template("select_store_bay.html", 
+                                 stores=stores,
+                                 selected_store_id=store_id,
+                                 selected_bay_id=bay_id,
+                                 error=f"{bay_id}번 타석은 현재 사용 중입니다.")
+        
+        # 매장/타석 선택 완료 - 세션에 저장
+        session["store_id"] = store_id
+        session["bay_id"] = bay_id
+        
+        # 활성 세션 등록
+        database.set_active_session(store_id, bay_id, uid)
+        
+        # 메인 페이지로 이동
+        return redirect(url_for("user_main"))
+    
+    # GET 요청 시 매장/타석 선택 페이지 표시
+    stores = database.get_all_stores()
+    return render_template("select_store_bay.html", stores=stores)
 
 # =========================
 # 유저 메인
@@ -109,11 +135,13 @@ def user_main():
     user = database.get_user(uid)
     last_shot = database.get_last_shot(uid)
     dates = database.get_user_practice_dates(uid)
+    stores = database.get_all_stores()
 
     return render_template("user_main.html",
                          user=user,
                          last_shot=last_shot,
-                         dates=dates)
+                         dates=dates,
+                         stores=stores)
 
 # =========================
 # 유저 전체 샷 리스트
@@ -167,7 +195,7 @@ def logout():
         database.clear_active_session(store_id, bay_id)
     
     session.clear()
-    return redirect(url_for("user_login"))
+    return redirect(url_for("login"))
 
 # =========================
 # API: 타석 코드 확인
@@ -191,6 +219,17 @@ def check_bay_code():
         })
     else:
         return jsonify({"valid": False, "message": "유효하지 않은 타석 코드입니다."})
+
+@app.route("/api/get_bays", methods=["GET"])
+@require_login
+def get_bays_api():
+    """매장의 타석 목록 조회 API"""
+    store_id = request.args.get("store_id")
+    if not store_id:
+        return jsonify({"bays": []}), 400
+    
+    bays = database.get_bays(store_id)
+    return jsonify({"bays": bays})
 
 # =========================
 # API: 샷 데이터 저장 (main.py에서 사용)
