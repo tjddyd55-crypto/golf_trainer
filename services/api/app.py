@@ -113,8 +113,8 @@ def register_pc():
                 "error": "PC UUID is required"
             }), 400
         
-        # 등록 키로 PC 등록 및 토큰 발급
-        pc_data, error = database.register_pc_with_key(
+        # 등록 코드로 PC 등록 및 토큰 발급
+        pc_data, error = database.register_pc_with_code(
             registration_key, store_name, bay_name, pc_name, pc_info
         )
         

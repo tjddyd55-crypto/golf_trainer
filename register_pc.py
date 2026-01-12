@@ -126,11 +126,14 @@ def main():
     print("=" * 60)
     print()
     
-    # 저장된 토큰 확인
+    # 저장된 토큰 확인 (토큰이 있으면 등록 코드 입력 불필요)
     saved_token, saved_url = load_pc_token()
     if saved_token:
-        print("[WARNING] 이미 등록된 PC가 감지되었습니다.")
+        print("[OK] 이미 등록된 PC입니다.")
         print(f"   토큰: {saved_token[:20]}...")
+        print()
+        print("이 PC는 이미 등록되어 있습니다.")
+        print("샷 수집 프로그램을 실행할 수 있습니다.")
         print()
         choice = input("재등록하시겠습니까? (y/N): ").strip().lower()
         if choice != 'y' and choice != 'yes':

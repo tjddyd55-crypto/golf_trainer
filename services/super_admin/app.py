@@ -244,57 +244,56 @@ def reject_pc():
         conn.close()
         return jsonify({"success": False, "message": f"PC 거부 실패: {str(e)}"}), 400
 
-@app.route("/api/create_registration_key", methods=["POST"])
+@app.route("/api/create_registration_code", methods=["POST"])
+@app.route("/api/create_registration_key", methods=["POST"])  # 하위 호환성
 @require_role("super_admin")
-def create_registration_key():
-    """PC 등록 키 생성"""
+def create_registration_code():
+    """PC 등록 코드 생성 (기존 ACTIVE 코드는 REVOKED 처리)"""
     data = request.get_json() or {}
-    max_uses = int(data.get("max_uses", 1))
-    expires_hours = int(data.get("expires_hours", 24))
     notes = data.get("notes", "")
-    created_by = session.get("user_id", "super_admin")
+    issued_by = session.get("user_id", "super_admin")
     
     try:
-        key_data = database.create_registration_key(
-            created_by=created_by,
-            max_uses=max_uses,
-            expires_hours=expires_hours,
+        code_data = database.create_registration_code(
+            issued_by=issued_by,
             notes=notes
         )
         
-        if key_data:
+        if code_data:
             return jsonify({
                 "success": True,
-                "registration_key": key_data.get("registration_key"),
-                "expires_at": key_data.get("expires_at"),
-                "max_uses": key_data.get("max_uses"),
-                "message": "등록 키가 생성되었습니다."
+                "registration_code": code_data.get("code"),
+                "registration_key": code_data.get("code"),  # 하위 호환성
+                "status": code_data.get("status"),
+                "message": "등록 코드가 생성되었습니다. 기존 코드는 자동으로 폐기되었습니다."
             })
         else:
             return jsonify({
                 "success": False,
-                "message": "등록 키 생성에 실패했습니다."
+                "message": "등록 코드 생성에 실패했습니다."
             }), 500
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"등록 키 생성 오류: {str(e)}"
+            "message": f"등록 코드 생성 오류: {str(e)}"
         }), 500
 
-@app.route("/api/registration_keys", methods=["GET"])
+@app.route("/api/registration_codes", methods=["GET"])
+@app.route("/api/registration_keys", methods=["GET"])  # 하위 호환성
 @require_role("super_admin")
-def get_registration_keys():
-    """등록 키 목록 조회"""
+def get_registration_codes():
+    """등록 코드 목록 조회"""
     try:
-        keys = database.get_all_registration_keys()
+        codes = database.get_all_registration_codes()
         return jsonify({
             "success": True,
-            "keys": keys
+            "codes": codes,
+            "keys": codes  # 하위 호환성
         })
     except Exception as e:
         return jsonify({
             "success": False,
-            "message": f"등록 키 조회 오류: {str(e)}"
+            "message": f"등록 코드 조회 오류: {str(e)}"
         }), 500
 
 @app.route("/logout")

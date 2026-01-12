@@ -203,26 +203,45 @@ def init_db():
     except Exception:
         pass
 
-    # 9️⃣ PC 등록 키 테이블 (신규)
+    # 9️⃣ PC 등록 코드 테이블 (신규)
     cur.execute("""
-    CREATE TABLE IF NOT EXISTS pc_registration_keys (
+    CREATE TABLE IF NOT EXISTS pc_registration_codes (
         id SERIAL PRIMARY KEY,
-        registration_key TEXT UNIQUE NOT NULL,
-        created_by TEXT,
+        code TEXT UNIQUE NOT NULL,
+        status TEXT DEFAULT 'ACTIVE',
+        issued_by TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        expires_at TEXT,
-        status TEXT DEFAULT 'active',
-        used_count INTEGER DEFAULT 0,
-        max_uses INTEGER DEFAULT 1,
-        last_used_at TEXT,
+        revoked_at TEXT,
         notes TEXT
     )
     """)
     
     try:
-        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_key ON pc_registration_keys(registration_key)")
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_registration_code ON pc_registration_codes(code)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_registration_code_status ON pc_registration_codes(status)")
     except Exception:
         pass
+    
+    # 기존 테이블 마이그레이션 (pc_registration_keys → pc_registration_codes)
+    try:
+        cur.execute("""
+            INSERT INTO pc_registration_codes (code, status, issued_by, created_at, notes)
+            SELECT registration_key, 
+                   CASE 
+                       WHEN status = 'active' THEN 'ACTIVE'
+                       ELSE 'REVOKED'
+                   END,
+                   created_by,
+                   created_at,
+                   notes
+            FROM pc_registration_keys
+            WHERE NOT EXISTS (
+                SELECT 1 FROM pc_registration_codes WHERE code = pc_registration_keys.registration_key
+            )
+        """)
+        conn.commit()
+    except Exception:
+        pass  # 테이블이 없으면 스킵
 
     # 기본 매장 생성
     cur.execute("SELECT COUNT(*) AS c FROM stores WHERE store_id = %s", ("gaja",))
@@ -794,153 +813,100 @@ def update_pc_last_seen(pc_unique_id):
     conn.close()
 
 # ------------------------------------------------
-# PC 등록 키 관리
+# PC 등록 코드 관리 (상태 기반: ACTIVE/REVOKED)
 # ------------------------------------------------
-def generate_registration_key(prefix="GOLF"):
-    """PC 등록 키 생성 (6-8자리: 접두사-숫자)"""
+def generate_registration_code(prefix="GOLF"):
+    """PC 등록 코드 생성 (예: GOLF-1234)"""
     # 4자리 숫자 생성
     random_num = secrets.randbelow(10000)
-    key = f"{prefix}-{random_num:04d}"
-    return key
+    code = f"{prefix}-{random_num:04d}"
+    return code
 
-def create_registration_key(created_by, max_uses=1, expires_hours=24, notes=""):
-    """PC 등록 키 생성 및 저장"""
+def create_registration_code(issued_by, notes=""):
+    """PC 등록 코드 생성 및 저장 (기존 ACTIVE 코드는 REVOKED 처리)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
-        # 고유한 키 생성 (중복 확인)
+        # 기존 ACTIVE 코드를 REVOKED로 변경
+        cur.execute("""
+            UPDATE pc_registration_codes 
+            SET status = 'REVOKED', 
+                revoked_at = CURRENT_TIMESTAMP
+            WHERE status = 'ACTIVE'
+        """)
+        
+        # 고유한 코드 생성 (중복 확인)
         max_attempts = 10
+        code = None
         for _ in range(max_attempts):
-            registration_key = generate_registration_key()
-            cur.execute("SELECT id FROM pc_registration_keys WHERE registration_key = %s", (registration_key,))
+            code = generate_registration_code()
+            cur.execute("SELECT id FROM pc_registration_codes WHERE code = %s", (code,))
             if not cur.fetchone():
                 break
         
-        # 만료 시간 계산
-        from datetime import timedelta
-        expires_at = (datetime.now() + timedelta(hours=expires_hours)).isoformat() if expires_hours else None
-        
+        # 새 코드 생성 (ACTIVE)
         cur.execute("""
-            INSERT INTO pc_registration_keys (
-                registration_key, created_by, expires_at, max_uses, notes, status
-            ) VALUES (%s, %s, %s, %s, %s, 'active')
+            INSERT INTO pc_registration_codes (
+                code, status, issued_by, notes
+            ) VALUES (%s, 'ACTIVE', %s, %s)
             RETURNING *
-        """, (registration_key, created_by, expires_at, max_uses, notes))
+        """, (code, issued_by, notes))
         
-        key_data = cur.fetchone()
+        code_data = cur.fetchone()
         conn.commit()
         
         cur.close()
         conn.close()
-        return dict(key_data) if key_data else None
+        return dict(code_data) if code_data else None
     except Exception as e:
-        print(f"등록 키 생성 오류: {e}")
+        print(f"등록 코드 생성 오류: {e}")
         conn.rollback()
         cur.close()
         conn.close()
         return None
 
-def verify_registration_key(registration_key):
-    """PC 등록 키 검증 (유효한 키인지 확인)"""
+def verify_registration_code(code):
+    """PC 등록 코드 검증 (ACTIVE 코드만 허용, 복수 사용 가능)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
         cur.execute("""
-            SELECT * FROM pc_registration_keys 
-            WHERE registration_key = %s AND status = 'active'
-        """, (registration_key,))
-        key_data = cur.fetchone()
-        
-        if not key_data:
-            cur.close()
-            conn.close()
-            return None
-        
-        key_dict = dict(key_data)
-        
-        # 만료 시간 확인
-        expires_at = key_dict.get("expires_at")
-        if expires_at:
-            try:
-                from datetime import datetime
-                exp_time = datetime.fromisoformat(expires_at.replace('Z', '+00:00'))
-                if datetime.now() > exp_time:
-                    # 만료 처리
-                    cur.execute("UPDATE pc_registration_keys SET status = 'expired' WHERE registration_key = %s", (registration_key,))
-                    conn.commit()
-                    cur.close()
-                    conn.close()
-                    return None
-            except Exception:
-                pass
-        
-        # 사용 횟수 확인
-        used_count = key_dict.get("used_count", 0)
-        max_uses = key_dict.get("max_uses", 1)
-        if used_count >= max_uses:
-            # 사용 횟수 초과 처리
-            cur.execute("UPDATE pc_registration_keys SET status = 'used' WHERE registration_key = %s", (registration_key,))
-            conn.commit()
-            cur.close()
-            conn.close()
-            return None
+            SELECT * FROM pc_registration_codes 
+            WHERE code = %s AND status = 'ACTIVE'
+        """, (code,))
+        code_data = cur.fetchone()
         
         cur.close()
         conn.close()
-        return key_dict
+        return dict(code_data) if code_data else None
     except Exception as e:
-        print(f"등록 키 검증 오류: {e}")
+        print(f"등록 코드 검증 오류: {e}")
         return None
 
-def use_registration_key(registration_key):
-    """등록 키 사용 처리 (사용 횟수 증가)"""
-    conn = get_db_connection()
-    cur = conn.cursor()
-    
-    try:
-        cur.execute("""
-            UPDATE pc_registration_keys 
-            SET used_count = used_count + 1,
-                last_used_at = CURRENT_TIMESTAMP,
-                status = CASE 
-                    WHEN used_count + 1 >= max_uses THEN 'used'
-                    ELSE status
-                END
-            WHERE registration_key = %s
-        """, (registration_key,))
-        conn.commit()
-        cur.close()
-        conn.close()
-        return True
-    except Exception as e:
-        print(f"등록 키 사용 처리 오류: {e}")
-        conn.rollback()
-        cur.close()
-        conn.close()
-        return False
-
-def get_all_registration_keys():
-    """모든 등록 키 목록 조회"""
+def get_all_registration_codes():
+    """모든 등록 코드 목록 조회"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT * FROM pc_registration_keys ORDER BY created_at DESC")
+    cur.execute("SELECT * FROM pc_registration_codes ORDER BY created_at DESC")
     rows = cur.fetchall()
     cur.close()
     conn.close()
     return [dict(row) for row in rows]
 
-def register_pc_with_key(registration_key, store_name, bay_name, pc_name, pc_info):
-    """등록 키로 PC 등록 및 토큰 발급"""
+def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_info):
+    """등록 코드로 PC 등록 및 토큰 발급 (복수 사용 허용)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
-        # 등록 키 검증
-        key_data = verify_registration_key(registration_key)
-        if not key_data:
-            return None, "유효하지 않거나 만료된 등록 키입니다."
+        # 등록 코드 검증 (ACTIVE만 허용)
+        code_data = verify_registration_code(registration_code)
+        if not code_data:
+            return None, "유효하지 않거나 폐기된 등록 코드입니다."
+        
+        code_id = code_data.get("id")
         
         # PC 정보 추출
         pc_unique_id = pc_info.get("unique_id")
@@ -957,12 +923,13 @@ def register_pc_with_key(registration_key, store_name, bay_name, pc_name, pc_inf
         pc_token = generate_pc_token(pc_unique_id, mac_address)
         
         # PC 등록 (바로 활성화, 토큰 발급)
+        # registered_code_id는 나중에 추가 가능 (현재는 코드 자체로 추적)
         cur.execute("""
             INSERT INTO store_pcs (
                 store_name, bay_name, pc_name, pc_unique_id,
                 pc_uuid, mac_address, pc_hostname, pc_platform,
                 pc_info, pc_token, status, registered_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', CURRENT_TIMESTAMP)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE', CURRENT_TIMESTAMP)
             ON CONFLICT (pc_unique_id) DO UPDATE SET
                 store_name = EXCLUDED.store_name,
                 bay_name = EXCLUDED.bay_name,
@@ -973,13 +940,10 @@ def register_pc_with_key(registration_key, store_name, bay_name, pc_name, pc_inf
                 pc_platform = EXCLUDED.pc_platform,
                 pc_info = EXCLUDED.pc_info,
                 pc_token = EXCLUDED.pc_token,
-                status = 'active',
+                status = 'ACTIVE',
                 last_seen_at = CURRENT_TIMESTAMP
         """, (store_name, bay_name, pc_name, pc_unique_id, pc_uuid, mac_address,
               pc_hostname, pc_platform, pc_info_json, pc_token))
-        
-        # 등록 키 사용 처리
-        use_registration_key(registration_key)
         
         conn.commit()
         
@@ -995,7 +959,9 @@ def register_pc_with_key(registration_key, store_name, bay_name, pc_name, pc_inf
         else:
             return None, "PC 등록에 실패했습니다."
     except Exception as e:
-        print(f"등록 키로 PC 등록 오류: {e}")
+        print(f"등록 코드로 PC 등록 오류: {e}")
+        import traceback
+        traceback.print_exc()
         conn.rollback()
         cur.close()
         conn.close()
