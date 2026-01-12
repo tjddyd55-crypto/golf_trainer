@@ -895,7 +895,7 @@ def get_all_registration_codes():
     conn.close()
     return [dict(row) for row in rows]
 
-def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_info):
+def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_info, store_id=None):
     """등록 코드로 PC 등록 및 토큰 발급 (복수 사용 허용)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -922,9 +922,17 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
         # PC 토큰 생성
         pc_token = generate_pc_token(pc_unique_id, mac_address)
         
-        # store_id와 bay_id 추출 (store_name으로 조회)
-        store_info = get_store_by_store_name(store_name)
-        store_id_from_name = store_info.get("store_id") if store_info else None
+        # store_id 처리: store_id가 제공되면 사용, 없으면 store_name으로 조회
+        if store_id:
+            store_id_from_name = store_id.strip().upper()
+        else:
+            # store_name으로 조회 (하위 호환성)
+            cur.execute("SELECT store_id FROM stores WHERE store_name = %s LIMIT 1", (store_name,))
+            store_row = cur.fetchone()
+            store_id_from_name = store_row.get("store_id") if store_row else None
+        
+        if not store_id_from_name:
+            return None, f"매장을 찾을 수 없습니다. (store_id: {store_id}, store_name: {store_name})"
         
         # bay_id는 bay_name에서 추출 (예: "01", "02" 등)
         bay_id_from_name = bay_name.strip()

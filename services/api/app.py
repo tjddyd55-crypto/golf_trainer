@@ -150,6 +150,7 @@ def register_pc():
         data = request.get_json()
         
         registration_key = data.get("registration_key")
+        store_id = data.get("store_id")
         store_name = data.get("store_name")
         bay_name = data.get("bay_name")
         pc_name = data.get("pc_name")
@@ -186,7 +187,7 @@ def register_pc():
         
         # 등록 코드로 PC 등록 및 토큰 발급
         pc_data, error = database.register_pc_with_code(
-            registration_key, store_name, bay_name, pc_name, pc_info
+            registration_key, store_name, bay_name, pc_name, pc_info, store_id=store_id
         )
         
         if pc_data:
