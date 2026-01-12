@@ -221,10 +221,18 @@
     
     <script>
         // 등록 코드 생성
+        let messageTimeout = null;
+        
         function generateCode() {
             const btn = event.target;
             btn.disabled = true;
             btn.textContent = '생성 중...';
+            
+            // 이전 메시지 타이머 취소
+            if (messageTimeout) {
+                clearTimeout(messageTimeout);
+                messageTimeout = null;
+            }
             
             fetch('{{ url_for("create_registration_code") }}', {
                 method: 'POST',
@@ -249,9 +257,10 @@
                     document.getElementById('codeMessage').innerHTML = 
                         '<div class="alert alert-success">등록 코드가 생성되었습니다!</div>';
                     
-                    // 5초 후 메시지 제거
-                    setTimeout(() => {
+                    // 5초 후 메시지 제거 (성공 메시지만)
+                    messageTimeout = setTimeout(() => {
                         document.getElementById('codeMessage').innerHTML = '';
+                        messageTimeout = null;
                     }, 5000);
                 } else {
                     let errorMsg = data.message || data.error || '코드 생성 실패';
@@ -260,6 +269,7 @@
                     }
                     document.getElementById('codeMessage').innerHTML = 
                         '<div class="alert alert-danger">오류: ' + errorMsg + '</div>';
+                    // 오류 메시지는 자동으로 사라지지 않음
                 }
             })
             .catch(error => {
@@ -271,6 +281,7 @@
                 }
                 document.getElementById('codeMessage').innerHTML = 
                     '<div class="alert alert-danger">오류: ' + errorMsg + '</div>';
+                // 오류 메시지는 자동으로 사라지지 않음
             });
         }
 
