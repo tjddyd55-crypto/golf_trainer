@@ -39,12 +39,16 @@ hidden_imports = [
     "numpy",
     "pytesseract",
     "PIL",
+    "PIL.Image",
+    "PIL.ImageDraw",
+    "pystray",
     "pyttsx3",
     "pyautogui",
     "requests",
     "openai",
     "psycopg2",
     "psycopg2.extras",
+    "pc_identifier",
 ]
 
 for imp in hidden_imports:
@@ -63,12 +67,13 @@ PyInstaller.__main__.run(build_options)
 # 빌드 완료 메시지
 print()
 print("=" * 60)
-print("✅ 빌드 완료!")
+print("[성공] 빌드 완료!")
 print("=" * 60)
 print(f"실행 파일 위치: dist/{APP_NAME}.exe")
 print()
-print("💡 배포 방법:")
+print("배포 방법:")
 print(f"   1. dist/{APP_NAME}.exe 파일을 매장 PC에 복사")
 print("   2. Windows 시작 프로그램에 등록하여 자동 실행 설정")
 print("   3. PC 등록 및 승인 후 실행 가능")
+print("   4. 최소화하면 시스템 트레이로 이동합니다")
 print("=" * 60)

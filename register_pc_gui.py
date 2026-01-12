@@ -76,15 +76,40 @@ class PCRegistrationGUI:
         self.code_entry = ttk.Entry(input_frame, width=30, font=("맑은 고딕", 10))
         self.code_entry.grid(row=0, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         
-        # 매장명
-        ttk.Label(input_frame, text="매장명:").grid(row=1, column=0, sticky=tk.W, pady=5)
-        self.store_entry = ttk.Entry(input_frame, width=30, font=("맑은 고딕", 10))
-        self.store_entry.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        # 매장아이디 (매장코드)
+        ttk.Label(input_frame, text="매장아이디:").grid(row=1, column=0, sticky=tk.W, pady=5)
+        store_frame = ttk.Frame(input_frame)
+        store_frame.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        self.store_id_entry = ttk.Entry(store_frame, width=20, font=("맑은 고딕", 10))
+        self.store_id_entry.pack(side=tk.LEFT)
+        self.lookup_button = ttk.Button(store_frame, text="조회", command=self.lookup_store, width=8)
+        self.lookup_button.pack(side=tk.LEFT, padx=(5, 0))
         
-        # 타석/룸명
-        ttk.Label(input_frame, text="타석 / 룸명:").grid(row=2, column=0, sticky=tk.W, pady=5)
-        self.bay_entry = ttk.Entry(input_frame, width=30, font=("맑은 고딕", 10))
-        self.bay_entry.grid(row=2, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        # 매장 정보 표시 영역
+        self.store_info_label = ttk.Label(input_frame, text="", foreground="blue", font=("맑은 고딕", 9))
+        self.store_info_label.grid(row=2, column=0, columnspan=2, sticky=tk.W, pady=(0, 5), padx=(10, 0))
+        
+        # 확인 버튼
+        self.confirm_button = ttk.Button(input_frame, text="확인", command=self.confirm_store, width=20, state=tk.DISABLED)
+        self.confirm_button.grid(row=3, column=0, columnspan=2, pady=5)
+        
+        # 타석번호
+        ttk.Label(input_frame, text="타석번호:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        self.bay_entry = ttk.Entry(input_frame, width=30, font=("맑은 고딕", 10), state=tk.DISABLED)
+        self.bay_entry.grid(row=4, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        self.bay_entry.bind("<KeyRelease>", self.on_bay_entry_change)
+        
+        # 선택된 매장 정보 저장
+        self.selected_store_id = None
+        self.selected_store_name = None
+    
+    def on_bay_entry_change(self, event=None):
+        """타석번호 입력 시 등록 요청 버튼 활성화"""
+        bay_name = self.bay_entry.get().strip()
+        if bay_name and self.selected_store_id:
+            self.register_button.config(state=tk.NORMAL)
+        else:
+            self.register_button.config(state=tk.DISABLED)
         
         # 버튼 영역
         button_frame = ttk.Frame(main_frame)
@@ -167,7 +192,9 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
                         
                         # 입력 필드 비활성화
                         self.code_entry.config(state=tk.DISABLED)
-                        self.store_entry.config(state=tk.DISABLED)
+                        self.store_id_entry.config(state=tk.DISABLED)
+                        self.lookup_button.config(state=tk.DISABLED)
+                        self.confirm_button.config(state=tk.DISABLED)
                         self.bay_entry.config(state=tk.DISABLED)
                         self.register_button.config(state=tk.DISABLED)
                         
@@ -181,9 +208,13 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
                         if response:
                             # 재등록 모드
                             self.code_entry.config(state=tk.NORMAL)
-                            self.store_entry.config(state=tk.NORMAL)
+                            self.store_id_entry.config(state=tk.NORMAL)
+                            self.lookup_button.config(state=tk.NORMAL)
                             self.bay_entry.config(state=tk.NORMAL)
                             self.register_button.config(state=tk.NORMAL)
+                            self.store_info_label.config(text="")
+                            self.selected_store_id = None
+                            self.selected_store_name = None
                             self.update_status("재등록 모드입니다.")
                         else:
                             self.root.quit()
@@ -252,7 +283,7 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
             return
         
         # PC 이름 자동 생성
-        pc_name = f"{store_name}-{bay_name}-PC"
+        pc_name = f"{self.selected_store_name}-{bay_name}-PC"
         
         # 등록 요청
         self.update_status("서버에 등록 요청 중...")
@@ -261,7 +292,7 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
         try:
             payload = {
                 "registration_key": registration_code,
-                "store_name": store_name,
+                "store_name": self.selected_store_name,
                 "bay_name": bay_name,
                 "pc_name": pc_name,
                 "pc_info": self.pc_info
@@ -294,7 +325,7 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
                             messagebox.showinfo(
                                 "등록 완료",
                                 f"PC 등록이 완료되었습니다.\n\n"
-                                f"매장: {store_name}\n"
+                                f"매장: {self.selected_store_name}\n"
                                 f"타석: {bay_name}\n\n"
                                 f"토큰이 자동으로 저장되었습니다."
                             )

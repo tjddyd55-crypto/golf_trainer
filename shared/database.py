@@ -2,7 +2,7 @@
 import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
-from datetime import datetime
+from datetime import datetime, date
 from urllib.parse import urlparse
 import random
 import string
@@ -477,19 +477,20 @@ def save_shot_to_db(data):
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     cur.execute("""
 INSERT INTO shots (
-    store_id, bay_id, user_id, club_id,
+    store_id, bay_id, user_id, club_id, pc_unique_id,
     total_distance, carry,
     ball_speed, club_speed, launch_angle,
     smash_factor, face_angle, club_path,
     lateral_offset, direction_angle,
     side_spin, back_spin,
     feedback, timestamp
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """, (
         data.get("store_id"),
         data.get("bay_id"),
         data.get("user_id"),
         data.get("club_id"),
+        data.get("pc_unique_id"),  # 추가
         data.get("total_distance"),
         data.get("carry"),
         data.get("ball_speed"),
@@ -604,6 +605,74 @@ def get_all_stores():
     cur.close()
     conn.close()
     return [dict(row) for row in rows]
+
+def get_store_by_id(store_id):
+    """매장코드로 매장 정보 조회"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM stores WHERE store_id = %s", (store_id,))
+    store = cur.fetchone()
+    cur.close()
+    conn.close()
+    return dict(store) if store else None
+
+def check_store_id_exists(store_id):
+    """매장코드 중복 확인"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM stores WHERE store_id = %s", (store_id,))
+    count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return count > 0
+
+def has_valid_pc_for_store(store_id):
+    """매장에 유효한 PC가 하나라도 있는지 확인"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    today = date.today()
+    
+    cur.execute("""
+        SELECT COUNT(*) as count
+        FROM store_pcs
+        WHERE store_id = %s
+          AND status = 'active'
+          AND (usage_end_date IS NULL OR usage_end_date >= %s)
+    """, (store_id, today))
+    
+    result = cur.fetchone()
+    count = result['count'] if result else 0
+    
+    cur.close()
+    conn.close()
+    
+    return count > 0
+
+def get_pc_status_summary(store_id):
+    """매장의 PC 상태 요약 (유효 개수, 전체 개수, 마지막 만료일)"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    today = date.today()
+    
+    cur.execute("""
+        SELECT
+            COUNT(*) FILTER (
+                WHERE status = 'active'
+                  AND (usage_end_date IS NULL OR usage_end_date >= %s)
+            ) AS valid_count,
+            COUNT(*) AS total_count,
+            MAX(usage_end_date) AS last_expiry
+        FROM store_pcs
+        WHERE store_id = %s
+    """, (today, store_id))
+    
+    result = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    return dict(result) if result else {"valid_count": 0, "total_count": 0, "last_expiry": None}
 
 def get_pending_stores():
     """승인 대기 중인 매장 목록 조회"""

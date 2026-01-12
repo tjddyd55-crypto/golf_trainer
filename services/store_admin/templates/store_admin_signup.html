@@ -6,10 +6,28 @@
     <title>매장 등록 - Golf Trainer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/store_admin.css') }}">
+    <style>
+        .form-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .section-title {
+            font-size: 18px;
+            font-weight: bold;
+            margin-bottom: 15px;
+            color: #6f42c1;
+        }
+        .required-field::after {
+            content: " *";
+            color: red;
+        }
+    </style>
 </head>
 <body>
     <div style="display: flex; justify-content: center; align-items: center; min-height: 100vh; background: linear-gradient(135deg, #6f42c1 0%, #8b5cf6 100%);">
-        <div style="background: white; padding: 3rem; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.1); width: 100%; max-width: 450px;">
+        <div style="background: white; padding: 3rem; border-radius: 1rem; box-shadow: 0 10px 40px rgba(0,0,0,0.1); width: 100%; max-width: 600px;">
             <h3 class="text-center mb-4" style="color: #6f42c1;">🏢 매장 등록</h3>
             
             {% if success %}
@@ -24,29 +42,102 @@
             </div>
             {% endif %}
             
-            <form method="POST">
-                <div class="mb-3">
-                    <label class="form-label">매장 코드</label>
-                    <input type="text" name="store_id" class="form-control" placeholder="예: A001" required>
+            <form method="POST" id="signupForm">
+                <!-- 1단계: 필수 입력 -->
+                <div class="form-section">
+                    <div class="section-title">1단계: 필수 입력</div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label required-field">매장코드 (아이디)</label>
+                        <input type="text" name="store_id" class="form-control" 
+                               placeholder="영문 대문자+숫자, 4-10자 (예: GAJA001)" 
+                               pattern="[A-Z][A-Z0-9]{3,9}" 
+                               title="영문 대문자로 시작하고, 영문자와 숫자만 사용 가능합니다. (4-10자)"
+                               required>
+                        <small class="form-text text-muted">이 매장코드가 로그인 아이디가 됩니다.</small>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label required-field">비밀번호</label>
+                        <input type="password" name="password" class="form-control" placeholder="비밀번호 입력" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label required-field">비밀번호 확인</label>
+                        <input type="password" name="password_confirm" class="form-control" placeholder="비밀번호 다시 입력" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label required-field">매장명</label>
+                        <input type="text" name="store_name" class="form-control" placeholder="가자골프 OO점" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label required-field">연락처</label>
+                        <input type="text" name="contact" class="form-control" placeholder="010-1234-5678" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label required-field">사업자등록번호</label>
+                        <input type="text" name="business_number" class="form-control" placeholder="123-45-67890" required>
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">매장 이름</label>
-                    <input type="text" name="store_name" class="form-control" placeholder="가자골프 OO점" required>
+                
+                <!-- 2단계: 선택 입력 -->
+                <div class="form-section">
+                    <div class="section-title">2단계: 선택 입력</div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">이름</label>
+                        <input type="text" name="owner_name" class="form-control" placeholder="매장 대표자 이름">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">생년월일</label>
+                        <input type="date" name="birth_date" class="form-control" placeholder="YYYY-MM-DD">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">이메일</label>
+                        <input type="email" name="email" class="form-control" placeholder="example@email.com">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">주소</label>
+                        <input type="text" name="address" class="form-control" placeholder="매장 주소 (선택사항)">
+                    </div>
                 </div>
-                <div class="mb-3">
-                    <label class="form-label">타석 수</label>
-                    <input type="number" name="bays_count" class="form-control" placeholder="설치된 타석 수" min="1" required>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label">관리자 비밀번호</label>
-                    <input type="password" name="password" class="form-control" placeholder="비밀번호 입력" required>
-                </div>
+                
                 <button type="submit" class="btn btn-primary w-100 py-3 mt-2">매장 등록하기</button>
             </form>
+            
             <div class="mt-3 text-center">
                 <a href="{{ url_for('store_admin_login') }}" class="text-secondary text-decoration-none">로그인으로 돌아가기</a>
             </div>
         </div>
     </div>
+    
+    <script>
+        // 비밀번호 확인
+        document.getElementById('signupForm').addEventListener('submit', function(e) {
+            const password = document.querySelector('input[name="password"]').value;
+            const passwordConfirm = document.querySelector('input[name="password_confirm"]').value;
+            
+            if (password !== passwordConfirm) {
+                e.preventDefault();
+                alert('비밀번호가 일치하지 않습니다.');
+                return false;
+            }
+            
+            // 매장코드 형식 검증
+            const storeId = document.querySelector('input[name="store_id"]').value;
+            const storeIdPattern = /^[A-Z][A-Z0-9]{3,9}$/;
+            if (!storeIdPattern.test(storeId)) {
+                e.preventDefault();
+                alert('매장코드는 영문 대문자로 시작하고, 영문자와 숫자만 사용 가능합니다. (4-10자)');
+                return false;
+            }
+        });
+    </script>
 </body>
 </html>

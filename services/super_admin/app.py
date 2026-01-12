@@ -274,48 +274,80 @@ def manage_all_pcs():
 @app.route("/api/approve_pc", methods=["POST"])
 @require_role("super_admin")
 def approve_pc():
-    """PC 승인 및 토큰 발급"""
+    """PC 승인 (사용 기간 설정)"""
     data = request.get_json()
     pc_unique_id = data.get("pc_unique_id")
     store_id = data.get("store_id")
     bay_id = data.get("bay_id")
-    approved_by = session.get("user_id", "super_admin")
-    usage_start_date = data.get("usage_start_date")
-    usage_end_date = data.get("usage_end_date")
+    usage_start_date = data.get("usage_start_date")  # YYYY-MM-DD 문자열
+    usage_end_date = data.get("usage_end_date")  # YYYY-MM-DD 문자열
     notes = data.get("notes", "")
     
-    if not pc_unique_id or not store_id or not bay_id:
-        return jsonify({"success": False, "message": "pc_unique_id, store_id, bay_id are required"}), 400
+    # 문자열을 DATE로 변환
+    from datetime import date
+    try:
+        start_date = date.fromisoformat(usage_start_date) if usage_start_date else None
+        end_date = date.fromisoformat(usage_end_date) if usage_end_date else None
+    except (ValueError, TypeError, AttributeError):
+        return jsonify({
+            "success": False,
+            "message": "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)"
+        }), 400
     
-    # PC 승인 및 토큰 발급
-    pc_data = database.approve_pc(pc_unique_id, store_id, bay_id, approved_by)
+    # PC 토큰 생성
+    conn = database.get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     
-    if pc_data:
-        # 사용 기간 업데이트 (선택사항)
-        if usage_start_date or usage_end_date or notes:
-            conn = database.get_db_connection()
-            cur = conn.cursor()
-            if usage_start_date:
-                cur.execute("UPDATE store_pcs SET usage_start_date = %s WHERE pc_unique_id = %s", 
-                           (usage_start_date, pc_unique_id))
-            if usage_end_date:
-                cur.execute("UPDATE store_pcs SET usage_end_date = %s WHERE pc_unique_id = %s", 
-                           (usage_end_date, pc_unique_id))
-            if notes:
-                cur.execute("UPDATE store_pcs SET notes = %s WHERE pc_unique_id = %s", 
-                           (notes, pc_unique_id))
-            conn.commit()
-            cur.close()
-            conn.close()
+    try:
+        # PC 정보 조회
+        cur.execute("SELECT * FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
+        pc_data = cur.fetchone()
+        if not pc_data:
+            return jsonify({"success": False, "message": "PC를 찾을 수 없습니다."}), 404
+        
+        pc_data = dict(pc_data)
+        mac_address = pc_data.get("mac_address")
+        
+        # 토큰 생성
+        pc_token = database.generate_pc_token(pc_unique_id, mac_address)
+        
+        # PC 승인 및 사용 기간 설정
+        cur.execute("""
+            UPDATE store_pcs 
+            SET status = 'active',
+                store_id = %s,
+                bay_id = %s,
+                pc_token = %s,
+                usage_start_date = %s,
+                usage_end_date = %s,
+                approved_at = CURRENT_TIMESTAMP,
+                approved_by = %s,
+                notes = %s
+            WHERE pc_unique_id = %s
+        """, (store_id, bay_id, pc_token, start_date, end_date, 
+              session.get("user_id", "super_admin"), notes, pc_unique_id))
+        
+        conn.commit()
+        
+        # 승인된 PC 정보 조회
+        cur.execute("SELECT * FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
+        pc_data = cur.fetchone()
+        cur.close()
+        conn.close()
         
         return jsonify({
             "success": True, 
             "message": "PC 승인 완료",
             "pc_token": pc_data.get("pc_token"),
-            "pc": pc_data
+            "pc": dict(pc_data)
         })
-    else:
-        return jsonify({"success": False, "message": "PC 승인 실패"}), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return jsonify({"success": False, "message": f"PC 승인 실패: {str(e)}"}), 400
 
 @app.route("/api/reject_pc", methods=["POST"])
 @require_role("super_admin")

@@ -39,6 +39,22 @@ def save_shot():
         data = request.json
         if not data:
             return jsonify({"status": "error", "message": "데이터가 없습니다"}), 400
+        
+        # PC 토큰에서 pc_unique_id 추출 (Authorization 헤더 또는 payload에서)
+        pc_unique_id = data.get("pc_unique_id")
+        if not pc_unique_id:
+            auth_header = request.headers.get("Authorization", "")
+            if auth_header.startswith("Bearer "):
+                pc_token = auth_header.replace("Bearer ", "")
+                pc_data = database.verify_pc_token(pc_token)
+                if pc_data:
+                    pc_unique_id = pc_data.get("pc_unique_id")
+                    data["pc_unique_id"] = pc_unique_id
+        
+        # store_name은 저장하지 않음 (조회 시 조인)
+        if "store_name" in data:
+            del data["store_name"]
+        
         print("📥 서버 수신 데이터:", data)
         database.save_shot_to_db(data)
         return jsonify({"status": "ok"})
@@ -201,58 +217,81 @@ def verify_pc():
         }), 500
 
 # =========================
-# PC 등록 상태 확인 API (register_pc.py에서 사용)
+# PC 등록 상태 확인 API (샷 수집 프로그램에서 사용)
 # =========================
-@app.route("/api/check_pc_status", methods=["GET", "POST"])
+@app.route("/api/check_pc_status", methods=["POST"])
 def check_pc_status():
-    """PC 등록 상태 확인 API"""
+    """PC 실행 허용 여부 확인 (타석 기준만)"""
     try:
         data = request.get_json() or {}
-        pc_unique_id = data.get("pc_unique_id") or request.args.get("pc_unique_id")
+        pc_unique_id = data.get("pc_unique_id")
         
         if not pc_unique_id:
             return jsonify({
-                "success": False,
-                "error": "pc_unique_id is required"
+                "allowed": False,
+                "reason": "MISSING_PC_ID"
             }), 400
         
         pc_data = database.get_store_pc_by_unique_id(pc_unique_id)
-        
         if not pc_data:
             return jsonify({
-                "success": False,
-                "status": "not_registered",
-                "message": "PC가 등록되지 않았습니다."
+                "allowed": False,
+                "reason": "NOT_REGISTERED"
             })
         
-        status = pc_data.get("status", "pending")
+        # PC 상태 체크
+        if pc_data.get("status") != "active":
+            return jsonify({
+                "allowed": False,
+                "reason": "INACTIVE",
+                "status": pc_data.get("status")
+            })
         
-        if status == "active":
-            return jsonify({
-                "success": True,
-                "status": "active",
-                "pc_token": pc_data.get("pc_token"),
-                "store_id": pc_data.get("store_id"),
-                "bay_id": pc_data.get("bay_id"),
-                "message": "PC가 승인되었습니다."
-            })
-        elif status == "pending":
-            return jsonify({
-                "success": True,
-                "status": "pending",
-                "message": "승인 대기 중입니다."
-            })
-        else:
-            return jsonify({
-                "success": False,
-                "status": status,
-                "message": f"PC 상태: {status}"
-            })
-            
-    except Exception as e:
-        print(f"PC 상태 확인 오류: {e}")
+        # 사용 기간 체크 (DATE 타입 직접 비교)
+        from datetime import date
+        today = date.today()
+        usage_end = pc_data.get("usage_end_date")
+        
+        if usage_end:
+            # DATE 타입이면 date 객체로 직접 비교
+            if isinstance(usage_end, date):
+                if today > usage_end:
+                    return jsonify({
+                        "allowed": False,
+                        "reason": "EXPIRED",
+                        "expires_at": usage_end.isoformat()
+                    })
+            else:
+                # 혼용 대비 (마이그레이션 중)
+                try:
+                    usage_end_date = date.fromisoformat(str(usage_end))
+                    if today > usage_end_date:
+                        return jsonify({
+                            "allowed": False,
+                            "reason": "EXPIRED",
+                            "expires_at": usage_end_date.isoformat()
+                        })
+                except (ValueError, AttributeError):
+                    # 변환 실패 시 차단
+                    return jsonify({
+                        "allowed": False,
+                        "reason": "INVALID_DATE"
+                    })
+        
+        # 허용
+        expires_at_str = usage_end.isoformat() if usage_end else None
         return jsonify({
-            "success": False,
+            "allowed": True,
+            "status": "active",
+            "expires_at": expires_at_str,
+            "pc_token": pc_data.get("pc_token")
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "allowed": False,
+            "reason": "ERROR",
             "error": str(e)
         }), 500
 

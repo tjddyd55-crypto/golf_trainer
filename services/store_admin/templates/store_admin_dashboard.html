@@ -16,6 +16,19 @@
             </div>
         </div>
         
+        {% if readonly_mode %}
+        <div class="alert alert-warning m-3" role="alert">
+            <h5 class="alert-heading">⚠️ 읽기 전용 모드</h5>
+            {% if readonly_reason == "no_valid_pc" %}
+            <p>유효한 타석이 없습니다. PC를 등록하거나 사용 기간을 연장해주세요.</p>
+            {% elif readonly_reason == "no_pc" %}
+            <p>등록된 타석이 없습니다. 먼저 PC를 등록해주세요.</p>
+            {% endif %}
+            <hr>
+            <p class="mb-0">이 모드에서는 샷 데이터 조회, 통계, 보고서 기능이 제한됩니다.</p>
+        </div>
+        {% endif %}
+        
         <div class="admin-main-content">
             <div class="d-flex justify-content-between align-items-center mb-4">
                 <h4>🖥️ 타석 현황</h4>

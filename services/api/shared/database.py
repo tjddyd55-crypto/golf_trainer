@@ -922,16 +922,24 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
         # PC 토큰 생성
         pc_token = generate_pc_token(pc_unique_id, mac_address)
         
-        # PC 등록 (바로 활성화, 토큰 발급)
-        # registered_code_id는 나중에 추가 가능 (현재는 코드 자체로 추적)
+        # store_id와 bay_id 추출 (store_name으로 조회)
+        store_info = get_store_by_store_name(store_name)
+        store_id_from_name = store_info.get("store_id") if store_info else None
+        
+        # bay_id는 bay_name에서 추출 (예: "01", "02" 등)
+        bay_id_from_name = bay_name.strip()
+        
+        # PC 등록 (대기 상태, 토큰 발급)
         cur.execute("""
             INSERT INTO store_pcs (
-                store_name, bay_name, pc_name, pc_unique_id,
+                store_id, store_name, bay_id, bay_name, pc_name, pc_unique_id,
                 pc_uuid, mac_address, pc_hostname, pc_platform,
                 pc_info, pc_token, status, registered_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE', CURRENT_TIMESTAMP)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP)
             ON CONFLICT (pc_unique_id) DO UPDATE SET
+                store_id = EXCLUDED.store_id,
                 store_name = EXCLUDED.store_name,
+                bay_id = EXCLUDED.bay_id,
                 bay_name = EXCLUDED.bay_name,
                 pc_name = EXCLUDED.pc_name,
                 pc_uuid = EXCLUDED.pc_uuid,
@@ -940,10 +948,13 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
                 pc_platform = EXCLUDED.pc_platform,
                 pc_info = EXCLUDED.pc_info,
                 pc_token = EXCLUDED.pc_token,
-                status = 'ACTIVE',
+                status = CASE 
+                    WHEN store_pcs.status = 'active' THEN 'active'  -- 이미 활성화된 경우 유지
+                    ELSE 'pending'  -- 새 등록이면 대기
+                END,
                 last_seen_at = CURRENT_TIMESTAMP
-        """, (store_name, bay_name, pc_name, pc_unique_id, pc_uuid, mac_address,
-              pc_hostname, pc_platform, pc_info_json, pc_token))
+        """, (store_id_from_name, store_name, bay_id_from_name, bay_name, pc_name, pc_unique_id, 
+              pc_uuid, mac_address, pc_hostname, pc_platform, pc_info_json, pc_token))
         
         conn.commit()
         
@@ -966,3 +977,13 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
         cur.close()
         conn.close()
         return None, str(e)
+
+def get_store_by_id(store_id):
+    """매장코드로 매장 정보 조회"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM stores WHERE store_id = %s", (store_id,))
+    store = cur.fetchone()
+    cur.close()
+    conn.close()
+    return dict(store) if store else None

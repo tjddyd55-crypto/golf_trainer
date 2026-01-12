@@ -3,6 +3,8 @@ import json
 import time
 import os
 import re
+import sys
+import threading
 from datetime import datetime
 
 import requests
@@ -12,6 +14,16 @@ import numpy as np
 import cv2
 import pytesseract
 from openai import OpenAI
+
+# 시스템 트레이 관련
+try:
+    import pystray
+    from PIL import Image, ImageDraw
+    TRAY_AVAILABLE = True
+except ImportError:
+    TRAY_AVAILABLE = False
+    print("경고: pystray가 설치되지 않았습니다. 시스템 트레이 기능을 사용할 수 없습니다.")
+    print("설치: pip install pystray pillow")
 
 # =========================
 # 설정
@@ -1145,7 +1157,7 @@ def check_pc_approval():
         pc_unique_id = pc_info.get("unique_id")
         
         headers = get_auth_headers()
-        response = requests.get(
+        response = requests.post(
             f"{DEFAULT_SERVER_URL}/api/check_pc_status",
             json={"pc_unique_id": pc_unique_id},
             headers=headers,
@@ -1154,10 +1166,11 @@ def check_pc_approval():
         
         if response.status_code == 200:
             data = response.json()
-            if data.get("approved"):
-                return True, data.get("message", "승인됨")
+            if data.get("allowed"):
+                return True, data.get("reason", "승인됨")
             else:
-                return False, data.get("message", "승인 대기 중이거나 사용기간이 만료되었습니다.")
+                reason = data.get("reason", "승인 대기 중이거나 사용기간이 만료되었습니다.")
+                return False, reason
         else:
             return False, f"서버 오류: {response.status_code}"
     except Exception as e:
@@ -1231,8 +1244,14 @@ def run():
     print("🟢 텍스트 존재 여부 기반 샷 감지 시작")
     print("💡 상태: WAITING (텍스트 대기 중)")
     print(f"⏰ 자동 세션 종료: {SESSION_AUTO_LOGOUT_NO_SHOT//60}분 동안 샷 없음 또는 {SESSION_AUTO_LOGOUT_NO_SCREEN//60}분 동안 연습 화면 아님")
+    if TRAY_AVAILABLE:
+        print("💡 최소화하면 시스템 트레이로 이동합니다.")
 
     while True:
+        # 종료 플래그 확인
+        if should_exit:
+            print("프로그램 종료 중...")
+            break
         # =========================
         # WAITING 상태: 텍스트 존재 여부 모니터링 (있으면 대기, 없으면 샷 시작)
         # =========================
@@ -1362,11 +1381,20 @@ def run():
                         except Exception as e:
                             print(f"⚠️ 디버그 이미지 저장 실패: {e}")
 
+                        # PC 고유번호 추출
+                        try:
+                            pc_info = get_pc_info()
+                            pc_unique_id = pc_info.get("unique_id")
+                        except Exception as e:
+                            print(f"⚠️ PC 고유번호 추출 실패: {e}")
+                            pc_unique_id = None
+                        
                         payload = {
                             "store_id": DEFAULT_STORE_ID,
                             "bay_id": DEFAULT_BAY_ID,
                             "user_id": active_user,
                             "club_id": DEFAULT_CLUB_ID,
+                            "pc_unique_id": pc_unique_id,  # 추가
 
                             "total_distance":   metrics["total_distance"],
                             "carry":            metrics["carry"],
@@ -1441,5 +1469,90 @@ def run():
             # 텍스트 재감지 대기 중
             time.sleep(POLL_INTERVAL)
 
+# =========================
+# 시스템 트레이 관련 함수
+# =========================
+tray_icon = None
+tray_thread = None
+main_thread = None
+should_exit = False
+
+def create_tray_icon():
+    """시스템 트레이 아이콘 생성"""
+    # 간단한 아이콘 이미지 생성 (골프공 모양)
+    image = Image.new('RGB', (64, 64), color='green')
+    draw = ImageDraw.Draw(image)
+    # 골프공 모양 그리기
+    draw.ellipse([10, 10, 54, 54], fill='white', outline='black', width=2)
+    draw.ellipse([20, 20, 44, 44], fill='lightgray')
+    
+    menu = pystray.Menu(
+        pystray.MenuItem("상태 보기", show_status, default=True),
+        pystray.MenuItem("종료", quit_app)
+    )
+    
+    icon = pystray.Icon("GolfShotTracker", image, "골프 샷 트래커", menu)
+    return icon
+
+def show_status(icon, item):
+    """상태 보기 (콘솔 창 표시)"""
+    # 콘솔 창이 숨겨져 있으면 다시 표시
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        # 콘솔 창 표시
+        kernel32.AllocConsole()
+        print("\n골프 샷 트래커가 실행 중입니다.")
+        print("최소화하면 다시 트레이로 이동합니다.")
+    except:
+        pass
+
+def quit_app(icon, item):
+    """프로그램 종료"""
+    global should_exit, tray_icon
+    should_exit = True
+    print("\n프로그램을 종료합니다...")
+    if tray_icon:
+        tray_icon.stop()
+    os._exit(0)
+
+
+def run_with_tray():
+    """트레이와 함께 메인 프로그램 실행"""
+    global main_thread, tray_icon
+    
+    if not TRAY_AVAILABLE:
+        # 트레이를 사용할 수 없으면 일반 실행
+        run()
+        return
+    
+    # 메인 프로그램을 별도 스레드에서 실행
+    main_thread = threading.Thread(target=run, daemon=True)
+    main_thread.start()
+    
+    # 트레이 아이콘 생성 및 실행 (메인 스레드에서 - pystray 요구사항)
+    tray_icon = create_tray_icon()
+    
+    # 콘솔 창 최소화 (트레이로 이동)
+    try:
+        import ctypes
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+        
+        # 콘솔 창 핸들 가져오기
+        hwnd = kernel32.GetConsoleWindow()
+        if hwnd:
+            # 최소화
+            user32.ShowWindow(hwnd, 6)  # SW_MINIMIZE
+    except:
+        pass
+    
+    # 트레이 아이콘 실행 (메인 스레드에서 블로킹)
+    tray_icon.run()
+
 if __name__ == "__main__":
-    run()
+    # 트레이 모드로 실행 (명령줄 인자로 --no-tray를 주면 일반 모드)
+    if "--no-tray" in sys.argv or not TRAY_AVAILABLE:
+        run()
+    else:
+        run_with_tray()

@@ -17,6 +17,16 @@
         </div>
         
         <div class="user-main-content">
+            {% if session.store_id and session.bay_id %}
+            <div class="alert alert-success user-mb-3">
+                <strong>📍 이용중:</strong> 
+                {% set store_name = session.store_id %}
+                {% for store in stores if store.store_id == session.store_id %}
+                    {% set store_name = store.store_name or store.store_id %}
+                {% endfor %}
+                {{ store_name }} {{ session.bay_id }}번 타석
+            </div>
+            {% endif %}
             {% if last_shot %}
             <div class="user-dashboard-stats">
                 <div class="user-stat-card">

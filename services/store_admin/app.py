@@ -25,22 +25,59 @@ database.init_db()
 # =========================
 # 매장 관리자 회원가입
 # =========================
+def validate_store_id(store_id):
+    """매장코드 형식 검증"""
+    import re
+    if not re.match(r'^[A-Z][A-Z0-9]{3,9}$', store_id):
+        return False, "매장코드는 영문 대문자로 시작하고, 영문자와 숫자만 사용 가능합니다. (4-10자)"
+    return True, None
+
 @app.route("/signup", methods=["GET", "POST"])
 def store_admin_signup():
     if request.method == "POST":
-        store_id = request.form.get("store_id")
-        store_name = request.form.get("store_name")
-        password = request.form.get("password")
-        bays_count = int(request.form.get("bays_count", 5))
-
+        # 필수 항목
+        store_id = request.form.get("store_id", "").strip().upper()
+        password = request.form.get("password", "")
+        password_confirm = request.form.get("password_confirm", "")
+        store_name = request.form.get("store_name", "").strip()
+        contact = request.form.get("contact", "").strip()
+        business_number = request.form.get("business_number", "").strip()
+        
+        # 선택 항목
+        owner_name = request.form.get("owner_name", "").strip() or None
+        birth_date = request.form.get("birth_date", "").strip() or None
+        email = request.form.get("email", "").strip() or None
+        address = request.form.get("address", "").strip() or None
+        
+        # 매장코드 검증
+        is_valid, error_msg = validate_store_id(store_id)
+        if not is_valid:
+            return render_template("store_admin_signup.html", error=error_msg)
+        
+        # 비밀번호 확인
+        if password != password_confirm:
+            return render_template("store_admin_signup.html", 
+                                 error="비밀번호가 일치하지 않습니다.")
+        
+        # 매장코드 중복 체크
+        if database.check_store_id_exists(store_id):
+            return render_template("store_admin_signup.html", 
+                                 error="이미 사용 중인 매장코드입니다.")
+        
+        # 매장 등록
         try:
-            if database.create_store(store_id, store_name, password, bays_count):
+            if database.create_store(
+                store_id, store_name, password, contact, business_number,
+                owner_name, birth_date, email, address
+            ):
                 return render_template("store_admin_signup.html", 
                                      success="매장 등록 요청이 완료되었습니다. 승인 대기 중입니다.")
             else:
                 return render_template("store_admin_signup.html", 
                                      error="매장 등록 실패. 다시 시도해주세요.")
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             return render_template("store_admin_signup.html", 
                                  error=f"매장 등록 실패: {str(e)}")
 
@@ -52,14 +89,16 @@ def store_admin_signup():
 @app.route("/login", methods=["GET", "POST"])
 def store_admin_login():
     if request.method == "POST":
-        store_id = request.form.get("store_id")
-        password = request.form.get("password")
+        store_id = request.form.get("store_id", "").strip()
+        password = request.form.get("password", "")
 
+        # 1️⃣ 매장 계정 검증
         store = database.check_store(store_id, password)
         if not store:
-            return render_template("store_admin_login.html", error="매장 코드 또는 비밀번호가 틀렸습니다.")
+            return render_template("store_admin_login.html", 
+                                 error="매장 코드 또는 비밀번호가 틀렸습니다.")
         
-        # 매장 승인 상태 확인
+        # 매장 상태 확인
         store_status = store.get("status", "pending")
         if store_status == "pending":
             return render_template("store_admin_login.html", 
@@ -68,10 +107,35 @@ def store_admin_login():
             return render_template("store_admin_login.html", 
                                  error="매장 등록이 거부되었습니다. 관리자에게 문의하세요.")
 
-        # 세션 설정
+        # 2️⃣ 타석(PC) 유효성 판정 (최적화된 쿼리)
+        from datetime import date
+        today = date.today()
+        
+        pc_summary = database.get_pc_status_summary(store_id)
+        valid_count = pc_summary.get("valid_count", 0)
+        total_count = pc_summary.get("total_count", 0)
+        last_expiry = pc_summary.get("last_expiry")
+        
+        # 3️⃣ 로그인 결과 분기
         session["store_id"] = store_id
         session["role"] = "store_admin"
-        return redirect(url_for("store_admin_dashboard"))
+        
+        if valid_count > 0:
+            # Case A: 유효 타석 1개 이상 → 정상 모드
+            session["readonly_mode"] = False
+            return redirect(url_for("store_admin_dashboard"))
+        elif total_count > 0:
+            # Case B: 유효 타석 0개 → 읽기 전용 모드
+            session["readonly_mode"] = True
+            session["readonly_reason"] = "no_valid_pc"
+            if last_expiry:
+                session["last_expiry"] = last_expiry.isoformat() if hasattr(last_expiry, 'isoformat') else str(last_expiry)
+            return redirect(url_for("store_admin_dashboard"))
+        else:
+            # Case C: 등록된 타석 없음 → 읽기 전용 모드
+            session["readonly_mode"] = True
+            session["readonly_reason"] = "no_pc"
+            return redirect(url_for("store_admin_dashboard"))
 
     return render_template("store_admin_login.html")
 
