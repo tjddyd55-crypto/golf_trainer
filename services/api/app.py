@@ -35,38 +35,55 @@ def health_check():
 # =========================
 @app.route("/api/save_shot", methods=["POST"])
 def save_shot():
-    data = request.json
-    print("📥 서버 수신 데이터:", data)
-    database.save_shot_to_db(data)
-    return jsonify({"status": "ok"})
+    try:
+        data = request.json
+        if not data:
+            return jsonify({"status": "error", "message": "데이터가 없습니다"}), 400
+        print("📥 서버 수신 데이터:", data)
+        database.save_shot_to_db(data)
+        return jsonify({"status": "ok"})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 # =========================
 # 활성 사용자 조회 API (main.py에서 사용)
 # =========================
 @app.route("/api/active_user", methods=["GET"])
 def get_active_user():
-    store_id = request.args.get("store_id")
-    bay_id = request.args.get("bay_id")
-    
-    if not store_id or not bay_id:
-        return jsonify({"error": "store_id and bay_id required"}), 400
-    
-    active_user = database.get_active_user(store_id, bay_id)
-    return jsonify(active_user if active_user else {})
+    try:
+        store_id = request.args.get("store_id")
+        bay_id = request.args.get("bay_id")
+        
+        if not store_id or not bay_id:
+            return jsonify({"error": "store_id and bay_id required"}), 400
+        
+        active_user = database.get_active_user(store_id, bay_id)
+        return jsonify(active_user if active_user else {})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 # =========================
 # 세션 삭제 API (main.py에서 사용)
 # =========================
 @app.route("/api/clear_session", methods=["POST"])
 def clear_session():
-    data = request.get_json() or {}
-    store_id = data.get("store_id") or request.args.get("store_id")
-    bay_id = data.get("bay_id") or request.args.get("bay_id")
-    
-    if store_id and bay_id:
-        deleted = database.clear_active_session(store_id, bay_id)
-        return jsonify({"success": True, "deleted": deleted})
-    return jsonify({"success": False, "error": "store_id and bay_id required"}), 400
+    try:
+        data = request.get_json() or {}
+        store_id = data.get("store_id") or request.args.get("store_id")
+        bay_id = data.get("bay_id") or request.args.get("bay_id")
+        
+        if store_id and bay_id:
+            deleted = database.clear_active_session(store_id, bay_id)
+            return jsonify({"success": True, "deleted": deleted})
+        return jsonify({"success": False, "error": "store_id and bay_id required"}), 400
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "error": str(e)}), 500
 
 # =========================
 # PC 등록 API (register_pc.py에서 사용)
@@ -234,6 +251,164 @@ def check_pc_status():
             
     except Exception as e:
         print(f"PC 상태 확인 오류: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# =========================
+# 관리자 API: 등록 코드 생성 (golf-super-admin에서 호출)
+# =========================
+def verify_admin_credentials(username, password):
+    """슈퍼 관리자 인증"""
+    super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "admin123")
+    return username == super_admin_username and password == super_admin_password
+
+@app.route("/api/admin/pc-registration-codes", methods=["POST"])
+def create_registration_code():
+    """PC 등록 코드 생성 API (슈퍼 관리자 전용)"""
+    try:
+        # 인증 정보 확인
+        auth_header = request.headers.get("Authorization", "")
+        data = request.get_json() or {}
+        
+        # Authorization 헤더에서 인증 정보 추출 (Basic 또는 Bearer)
+        username = None
+        password = None
+        
+        if auth_header.startswith("Basic "):
+            import base64
+            try:
+                credentials = base64.b64decode(auth_header[6:]).decode("utf-8")
+                username, password = credentials.split(":", 1)
+            except Exception:
+                pass
+        elif auth_header.startswith("Bearer "):
+            # Bearer 토큰 방식은 나중에 구현 가능
+            pass
+        
+        # 또는 JSON body에서 인증 정보 받기
+        if not username:
+            username = data.get("username") or request.headers.get("X-Admin-Username")
+            password = data.get("password") or request.headers.get("X-Admin-Password")
+        
+        # 인증 검증
+        if not username or not password:
+            return jsonify({
+                "success": False,
+                "error": "인증 정보가 필요합니다. (username, password)"
+            }), 401
+        
+        if not verify_admin_credentials(username, password):
+            return jsonify({
+                "success": False,
+                "error": "인증 실패"
+            }), 401
+        
+        # 등록 코드 생성
+        notes = data.get("notes", "")
+        code_data = database.create_registration_code(
+            issued_by=username,
+            notes=notes
+        )
+        
+        if code_data:
+            return jsonify({
+                "success": True,
+                "registration_code": code_data.get("code"),
+                "registration_key": code_data.get("code"),  # 하위 호환성
+                "status": code_data.get("status"),
+                "message": "등록 코드가 생성되었습니다. 기존 코드는 자동으로 폐기되었습니다."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "등록 코드 생성에 실패했습니다."
+            }), 500
+            
+    except Exception as e:
+        print(f"등록 코드 생성 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+@app.route("/api/admin/pc-registration-codes", methods=["GET"])
+def get_registration_codes():
+    """등록 코드 목록 조회 API (슈퍼 관리자 전용)"""
+    try:
+        # 인증 정보 확인
+        auth_header = request.headers.get("Authorization", "")
+        username = request.args.get("username") or request.headers.get("X-Admin-Username")
+        password = request.args.get("password") or request.headers.get("X-Admin-Password")
+        
+        if auth_header.startswith("Basic "):
+            import base64
+            try:
+                credentials = base64.b64decode(auth_header[6:]).decode("utf-8")
+                username, password = credentials.split(":", 1)
+            except Exception:
+                pass
+        
+        # 인증 검증
+        if not username or not password:
+            return jsonify({
+                "success": False,
+                "error": "인증 정보가 필요합니다. (username, password)"
+            }), 401
+        
+        if not verify_admin_credentials(username, password):
+            return jsonify({
+                "success": False,
+                "error": "인증 실패"
+            }), 401
+        
+        # 등록 코드 목록 조회
+        codes = database.get_all_registration_codes()
+        return jsonify({
+            "success": True,
+            "codes": codes,
+            "keys": codes  # 하위 호환성
+        })
+            
+    except Exception as e:
+        print(f"등록 코드 조회 오류: {e}")
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# =========================
+# 임시: 테스트용 등록 코드 생성 (빠른 생성용)
+# =========================
+@app.route("/api/test/create-code", methods=["GET", "POST"])
+def test_create_code():
+    """테스트용 등록 코드 생성 (인증 없음 - 테스트 전용)"""
+    try:
+        code_data = database.create_registration_code(
+            issued_by="test_api",
+            notes="테스트용 등록 코드 (API 생성)"
+        )
+        
+        if code_data:
+            return jsonify({
+                "success": True,
+                "registration_code": code_data.get("code"),
+                "message": "등록 코드가 생성되었습니다."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "error": "등록 코드 생성 실패"
+            }), 500
+            
+    except Exception as e:
+        print(f"등록 코드 생성 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
             "error": str(e)
