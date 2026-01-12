@@ -199,7 +199,7 @@ def init_db():
         # 기본 타석 생성 (코드 포함)
         for i in range(1, 6):
             bay_id = f"{i:02d}"
-            bay_code = generate_bay_code("gaja", bay_id)
+            bay_code = generate_bay_code("gaja", bay_id, cur)
             cur.execute(
                 """
                 INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code)
@@ -223,7 +223,7 @@ def init_db():
             cur.execute("SELECT bay_code FROM bays WHERE store_id = %s AND bay_id = %s", ("gaja", bay_id))
             existing = cur.fetchone()
             if not existing or not existing[0]:
-                bay_code = generate_bay_code("gaja", bay_id)
+                bay_code = generate_bay_code("gaja", bay_id, cur)
                 cur.execute(
                     "UPDATE bays SET bay_code = %s WHERE store_id = %s AND bay_id = %s",
                     (bay_code, "gaja", bay_id)
@@ -237,8 +237,14 @@ def init_db():
 # ------------------------------------------------
 # 타석 코드 생성
 # ------------------------------------------------
-def generate_bay_code(store_id, bay_id):
-    """타석 코드 생성 (4자리: 영문1자 + 숫자3자)"""
+def generate_bay_code(store_id, bay_id, cursor=None):
+    """타석 코드 생성 (4자리: 영문1자 + 숫자3자)
+    
+    Args:
+        store_id: 매장 ID
+        bay_id: 타석 ID
+        cursor: 기존 DB 커서 (선택사항). 제공되면 해당 커서 사용, 없으면 새 연결 생성
+    """
     import random
     import string
     
@@ -254,13 +260,27 @@ def generate_bay_code(store_id, bay_id):
     
     code = f"{prefix}{suffix}"
     
-    # 중복 확인
-    conn = get_db_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM bays WHERE bay_code = %s", (code,))
-    count = cur.fetchone()[0]
-    cur.close()
-    conn.close()
+    # 중복 확인 (커서가 제공되면 사용, 아니면 새 연결 생성)
+    if cursor:
+        # 기존 커서 사용 (같은 트랜잭션 내)
+        try:
+            cursor.execute("SELECT COUNT(*) FROM bays WHERE bay_code = %s", (code,))
+            count = cursor.fetchone()[0]
+        except Exception:
+            # 테이블이 아직 생성되지 않았으면 중복 확인 건너뛰기
+            count = 0
+    else:
+        # 새 연결 생성
+        conn = get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT COUNT(*) FROM bays WHERE bay_code = %s", (code,))
+            count = cur.fetchone()[0]
+        except Exception:
+            count = 0
+        finally:
+            cur.close()
+            conn.close()
     
     if count > 0:
         # 중복이면 다른 코드 생성
@@ -516,7 +536,7 @@ def create_store(store_id, store_name, password, bays_count):
         """, (store_id, store_name, password, bays_count))
         for i in range(1, bays_count + 1):
             bay_id = f"{i:02d}"
-            bay_code = generate_bay_code(store_id, bay_id)
+            bay_code = generate_bay_code(store_id, bay_id, cur)
             cur.execute(
                 "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s)",
                 (store_id, bay_id, bay_code)
