@@ -23,6 +23,13 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_
 database.init_db()
 
 # =========================
+# 루트 경로 (헬스체크용)
+# =========================
+@app.route("/")
+def index():
+    return redirect(url_for("user_login"))
+
+# =========================
 # 유저 회원가입
 # =========================
 @app.route("/signup", methods=["GET", "POST"])
