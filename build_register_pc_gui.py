@@ -22,6 +22,7 @@ build_options = [
     "--noconfirm",
     "--hidden-import", "pc_identifier",  # pc_identifier 모듈 명시적 포함
     "--hidden-import", "tkinter",  # tkinter 명시적 포함
+    "--hidden-import", "requests",  # requests 라이브러리 포함
 ]
 
 # 아이콘 파일이 있으면 추가

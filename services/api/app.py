@@ -102,6 +102,44 @@ def clear_session():
         return jsonify({"success": False, "error": str(e)}), 500
 
 # =========================
+# 매장 조회 API (PC 등록 GUI에서 사용)
+# =========================
+@app.route("/api/get_store", methods=["GET"])
+def get_store():
+    """매장 정보 조회 API (store_id로 조회)"""
+    try:
+        store_id = request.args.get("store_id", "").strip().upper()
+        
+        if not store_id:
+            return jsonify({
+                "success": False,
+                "error": "store_id is required"
+            }), 400
+        
+        store = database.get_store_by_id(store_id)
+        
+        if not store:
+            return jsonify({
+                "success": False,
+                "error": "매장을 찾을 수 없습니다."
+            }), 404
+        
+        # 필요한 정보만 반환 (매장명, 사업자등록번호)
+        return jsonify({
+            "success": True,
+            "store_id": store.get("store_id"),
+            "store_name": store.get("store_name"),
+            "business_number": store.get("business_number")
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
+
+# =========================
 # PC 등록 API (register_pc.py에서 사용)
 # =========================
 @app.route("/api/register_pc", methods=["POST"])

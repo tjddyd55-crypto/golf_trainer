@@ -9,6 +9,7 @@ import os
 import json
 import requests
 import sys
+import re
 
 # pc_identifier 모듈 import
 try:
@@ -25,12 +26,16 @@ class PCRegistrationGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("매장 PC 등록 프로그램")
-        self.root.geometry("600x700")
+        self.root.geometry("600x750")
         self.root.resizable(False, False)
         
         # PC 정보 저장
         self.pc_info = None
         self.server_url = DEFAULT_SERVER_URL
+        
+        # 선택된 매장 정보 저장
+        self.selected_store_id = None
+        self.selected_store_name = None
         
         # UI 생성
         self.create_ui()
@@ -75,6 +80,7 @@ class PCRegistrationGUI:
         ttk.Label(input_frame, text="PC 등록 코드:").grid(row=0, column=0, sticky=tk.W, pady=5)
         self.code_entry = ttk.Entry(input_frame, width=30, font=("맑은 고딕", 10))
         self.code_entry.grid(row=0, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        self.code_entry.bind("<KeyRelease>", self.on_code_entry_change)
         
         # 매장아이디 (매장코드)
         ttk.Label(input_frame, text="매장아이디:").grid(row=1, column=0, sticky=tk.W, pady=5)
@@ -82,6 +88,7 @@ class PCRegistrationGUI:
         store_frame.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         self.store_id_entry = ttk.Entry(store_frame, width=20, font=("맑은 고딕", 10))
         self.store_id_entry.pack(side=tk.LEFT)
+        self.store_id_entry.bind("<KeyRelease>", self.on_store_id_entry_change)
         self.lookup_button = ttk.Button(store_frame, text="조회", command=self.lookup_store, width=8)
         self.lookup_button.pack(side=tk.LEFT, padx=(5, 0))
         
@@ -99,18 +106,6 @@ class PCRegistrationGUI:
         self.bay_entry.grid(row=4, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         self.bay_entry.bind("<KeyRelease>", self.on_bay_entry_change)
         
-        # 선택된 매장 정보 저장
-        self.selected_store_id = None
-        self.selected_store_name = None
-    
-    def on_bay_entry_change(self, event=None):
-        """타석번호 입력 시 등록 요청 버튼 활성화"""
-        bay_name = self.bay_entry.get().strip()
-        if bay_name and self.selected_store_id:
-            self.register_button.config(state=tk.NORMAL)
-        else:
-            self.register_button.config(state=tk.DISABLED)
-        
         # 버튼 영역
         button_frame = ttk.Frame(main_frame)
         button_frame.pack(fill=tk.X, pady=(0, 20))
@@ -119,7 +114,8 @@ class PCRegistrationGUI:
             button_frame,
             text="등록 요청",
             command=self.register_pc,
-            width=20
+            width=20,
+            state=tk.DISABLED
         )
         self.register_button.pack(side=tk.LEFT, padx=(0, 10))
         
@@ -143,6 +139,44 @@ class PCRegistrationGUI:
             wrap=tk.WORD
         )
         self.status_text.pack(fill=tk.BOTH, expand=True)
+    
+    def filter_alphanumeric_upper(self, value):
+        """영문/숫자만 허용하고 대문자로 변환, 공백 제거"""
+        filtered = re.sub(r'[^A-Za-z0-9]', '', value)
+        return filtered.upper()
+    
+    def on_code_entry_change(self, event=None):
+        """PC 등록 코드 입력 필터링"""
+        current = self.code_entry.get()
+        filtered = self.filter_alphanumeric_upper(current)
+        if current != filtered:
+            cursor_pos = self.code_entry.index(tk.INSERT)
+            self.code_entry.delete(0, tk.END)
+            self.code_entry.insert(0, filtered)
+            # 커서 위치 조정
+            new_pos = min(cursor_pos - (len(current) - len(filtered)), len(filtered))
+            self.code_entry.icursor(new_pos)
+    
+    def on_store_id_entry_change(self, event=None):
+        """매장아이디 입력 필터링"""
+        current = self.store_id_entry.get()
+        filtered = self.filter_alphanumeric_upper(current)
+        if current != filtered:
+            cursor_pos = self.store_id_entry.index(tk.INSERT)
+            self.store_id_entry.delete(0, tk.END)
+            self.store_id_entry.insert(0, filtered)
+            # 커서 위치 조정
+            new_pos = min(cursor_pos - (len(current) - len(filtered)), len(filtered))
+            self.store_id_entry.icursor(new_pos)
+    
+    def on_bay_entry_change(self, event=None):
+        """타석번호 입력 시 등록 요청 버튼 활성화"""
+        bay_name = self.bay_entry.get().strip()
+        registration_code = self.code_entry.get().strip()
+        if bay_name and self.selected_store_id and registration_code:
+            self.register_button.config(state=tk.NORMAL)
+        else:
+            self.register_button.config(state=tk.DISABLED)
     
     def update_status(self, message, is_error=False):
         """상태 메시지 업데이트"""
@@ -211,7 +245,6 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
                             self.store_id_entry.config(state=tk.NORMAL)
                             self.lookup_button.config(state=tk.NORMAL)
                             self.bay_entry.config(state=tk.NORMAL)
-                            self.register_button.config(state=tk.NORMAL)
                             self.store_info_label.config(text="")
                             self.selected_store_id = None
                             self.selected_store_name = None
@@ -247,23 +280,94 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
             self.update_status(f"토큰 저장 실패: {e}", is_error=True)
             return False
     
+    def lookup_store(self):
+        """매장 조회"""
+        store_id = self.store_id_entry.get().strip().upper()
+        if not store_id:
+            messagebox.showerror("오류", "매장아이디를 입력하세요.")
+            return
+        
+        self.update_status(f"매장 조회 중: {store_id}")
+        self.lookup_button.config(state=tk.DISABLED)
+        
+        try:
+            # 매장 조회 API 호출
+            response = requests.get(
+                f"{self.server_url}/api/get_store",
+                params={"store_id": store_id},
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                if data.get("success"):
+                    store_name = data.get("store_name", "")
+                    business_number = data.get("business_number", "")
+                    
+                    if store_name:
+                        # 매장명과 사업자등록번호 표시
+                        info_text = f"매장명: {store_name}"
+                        if business_number:
+                            info_text += f" | 사업자등록번호: {business_number}"
+                        
+                        self.store_info_label.config(text=info_text, foreground="blue")
+                        self.selected_store_id = store_id
+                        self.selected_store_name = store_name
+                        self.confirm_button.config(state=tk.NORMAL)
+                        self.update_status(f"매장 조회 성공: {store_name}")
+                    else:
+                        self.store_info_label.config(text="매장을 찾을 수 없습니다.", foreground="red")
+                        self.update_status("매장을 찾을 수 없습니다.", is_error=True)
+                else:
+                    error_msg = data.get("error", "알 수 없는 오류")
+                    self.store_info_label.config(text=error_msg, foreground="red")
+                    self.update_status(f"매장 조회 실패: {error_msg}", is_error=True)
+            elif response.status_code == 404:
+                self.store_info_label.config(text="매장을 찾을 수 없습니다.", foreground="red")
+                self.update_status("매장을 찾을 수 없습니다.", is_error=True)
+            else:
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("error", response.text[:100])
+                except:
+                    error_msg = f"서버 오류: {response.status_code}"
+                self.store_info_label.config(text="매장 조회 실패", foreground="red")
+                self.update_status(f"매장 조회 실패 ({response.status_code}): {error_msg}", is_error=True)
+        except requests.exceptions.ConnectionError:
+            self.store_info_label.config(text="서버 연결 실패", foreground="red")
+            self.update_status("서버 연결 실패", is_error=True)
+            messagebox.showerror("연결 실패", "서버에 연결할 수 없습니다.")
+        except Exception as e:
+            self.store_info_label.config(text=f"조회 오류: {e}", foreground="red")
+            self.update_status(f"매장 조회 오류: {e}", is_error=True)
+        finally:
+            self.lookup_button.config(state=tk.NORMAL)
+    
+    def confirm_store(self):
+        """매장 확인 후 타석번호 입력 활성화"""
+        if self.selected_store_id and self.selected_store_name:
+            self.bay_entry.config(state=tk.NORMAL)
+            self.update_status(f"매장 확인 완료: {self.selected_store_name}")
+            self.on_bay_entry_change()
+        else:
+            messagebox.showerror("오류", "매장을 먼저 조회하세요.")
+    
     def register_pc(self):
         """PC 등록 요청"""
         # 입력값 확인
         registration_code = self.code_entry.get().strip().upper()
-        store_name = self.store_entry.get().strip()
         bay_name = self.bay_entry.get().strip()
         
         if not registration_code:
             messagebox.showerror("오류", "PC 등록 코드를 입력하세요.")
             return
         
-        if not store_name:
-            messagebox.showerror("오류", "매장명을 입력하세요.")
+        if not self.selected_store_id:
+            messagebox.showerror("오류", "매장을 먼저 조회하고 확인하세요.")
             return
         
         if not bay_name:
-            messagebox.showerror("오류", "타석/룸명을 입력하세요.")
+            messagebox.showerror("오류", "타석번호를 입력하세요.")
             return
         
         if not self.pc_info:
@@ -292,6 +396,7 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
         try:
             payload = {
                 "registration_key": registration_code,
+                "store_id": self.selected_store_id,
                 "store_name": self.selected_store_name,
                 "bay_name": bay_name,
                 "pc_name": pc_name,
@@ -318,7 +423,9 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
                             
                             # 입력 필드 비활성화
                             self.code_entry.config(state=tk.DISABLED)
-                            self.store_entry.config(state=tk.DISABLED)
+                            self.store_id_entry.config(state=tk.DISABLED)
+                            self.lookup_button.config(state=tk.DISABLED)
+                            self.confirm_button.config(state=tk.DISABLED)
                             self.bay_entry.config(state=tk.DISABLED)
                             self.register_button.config(state=tk.DISABLED)
                             
@@ -372,7 +479,7 @@ def main():
     # 상태 텍스트 태그 설정
     app = PCRegistrationGUI(root)
     
-    # 상태 텍스트 태그 설정 (나중에)
+    # 상태 텍스트 태그 설정
     app.status_text.tag_config("error", foreground="red")
     app.status_text.tag_config("normal", foreground="green")
     
