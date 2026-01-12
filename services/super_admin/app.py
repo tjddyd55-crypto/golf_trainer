@@ -78,8 +78,9 @@ def super_admin_dashboard():
 @app.route("/stores")
 @require_role("super_admin")
 def manage_stores():
+    from psycopg2.extras import RealDictCursor
     conn = database.get_db_connection()
-    cur = conn.cursor(cursor_factory=database.RealDictCursor)
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
     stores = [dict(row) for row in cur.fetchall()]
     cur.close()
