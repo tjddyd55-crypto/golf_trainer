@@ -14,7 +14,7 @@ import json
 try:
     from pc_identifier import get_pc_info
 except ImportError:
-    print("❌ 오류: pc_identifier.py 파일을 찾을 수 없습니다.")
+    print("[ERROR] 오류: pc_identifier.py 파일을 찾을 수 없습니다.")
     print("   register_pc.py와 같은 디렉토리에 pc_identifier.py가 있어야 합니다.")
     sys.exit(1)
 
@@ -82,22 +82,22 @@ def register_pc_to_server(server_url, store_name, bay_name, pc_name, pc_info):
             data = response.json()
             if data.get("success"):
                 pc_code = data.get("pc_code", pc_info['unique_id'][:8].upper())
-                print(f"✅ PC 등록 성공!")
+                print(f"[OK] PC 등록 성공!")
                 print(f"   매장: {store_name}")
                 print(f"   타석: {bay_name}")
                 print(f"   PC 이름: {pc_name}")
                 print(f"   PC 코드: {pc_code}")
                 print()
                 print("=" * 60)
-                print("⚠️ 중요: 슈퍼 관리자의 승인을 기다려야 합니다.")
+                print("[WARNING] 중요: 슈퍼 관리자의 승인을 기다려야 합니다.")
                 print("   승인 후 샷 수집 프로그램을 실행할 수 있습니다.")
                 print("=" * 60)
                 return True
             else:
-                print(f"❌ 등록 실패: {data.get('error', '알 수 없는 오류')}")
+                print(f"[ERROR] 등록 실패: {data.get('error', '알 수 없는 오류')}")
                 return False
         else:
-            print(f"❌ 서버 오류: {response.status_code}")
+            print(f"[ERROR] 서버 오류: {response.status_code}")
             try:
                 error_data = response.json()
                 print(f"   오류: {error_data.get('error', response.text)}")
@@ -105,14 +105,14 @@ def register_pc_to_server(server_url, store_name, bay_name, pc_name, pc_info):
                 print(f"   응답: {response.text}")
             return False
     except requests.exceptions.ConnectionError:
-        print(f"❌ 서버 연결 실패: {server_url}")
+        print(f"[ERROR] 서버 연결 실패: {server_url}")
         print("   서버 URL이 올바른지 확인해주세요.")
         return False
     except requests.exceptions.Timeout:
-        print(f"❌ 서버 응답 시간 초과")
+        print(f"[ERROR] 서버 응답 시간 초과")
         return False
     except Exception as e:
-        print(f"❌ 등록 요청 실패: {e}")
+        print(f"[ERROR] 등록 요청 실패: {e}")
         return False
 
 def main():
@@ -124,7 +124,7 @@ def main():
     # 저장된 토큰 확인
     saved_token, saved_url = load_pc_token()
     if saved_token:
-        print("⚠️ 이미 등록된 PC가 감지되었습니다.")
+        print("[WARNING] 이미 등록된 PC가 감지되었습니다.")
         print(f"   토큰: {saved_token[:20]}...")
         print()
         choice = input("재등록하시겠습니까? (y/N): ").strip().lower()
@@ -137,7 +137,7 @@ def main():
     try:
         pc_info = get_pc_info()
     except Exception as e:
-        print(f"❌ PC 정보 수집 실패: {e}")
+        print(f"[ERROR] PC 정보 수집 실패: {e}")
         return 1
     
     # 필수 정보 확인
@@ -145,66 +145,50 @@ def main():
     pc_uuid = pc_info.get("system_uuid") or pc_info.get("machine_guid")
     
     if not mac_address:
-        print("❌ MAC Address를 수집할 수 없습니다.")
+        print("[ERROR] MAC Address를 수집할 수 없습니다.")
         return 1
     
     if not pc_uuid:
-        print("❌ PC UUID를 수집할 수 없습니다.")
+        print("[ERROR] PC UUID를 수집할 수 없습니다.")
         return 1
     
-    print(f"✅ PC 고유번호: {pc_info['unique_id']}")
-    print(f"   MAC 주소: {mac_address}")
-    print(f"   PC UUID: {pc_uuid}")
-    print(f"   호스트명: {pc_info['hostname']}")
-    print(f"   플랫폼: {pc_info['platform']}")
+    print(f"[OK] PC 고유번호: {pc_info['unique_id']}")
+    print(f"     MAC 주소: {mac_address}")
+    print(f"     PC UUID: {pc_uuid}")
+    print(f"     호스트명: {pc_info['hostname']}")
+    print(f"     플랫폼: {pc_info['platform']}")
     print()
     
-    # 사용자 입력
+    # 사용자 입력 (단순화: 매장명, 룸/타석만)
     print("등록 정보를 입력하세요:")
-    print("(이 정보는 슈퍼 관리자가 PC를 구분하는 데 사용됩니다)")
     print()
     
     store_name = input("매장명: ").strip()
     if not store_name:
-        print("❌ 매장명을 입력해야 합니다.")
+        print("[ERROR] 매장명을 입력해야 합니다.")
         return 1
     
-    bay_name = input("타석번호/룸번호 (예: 1번, A타석, 101호): ").strip()
+    bay_name = input("룸 또는 타석: ").strip()
     if not bay_name:
-        print("❌ 타석번호를 입력해야 합니다.")
+        print("[ERROR] 룸 또는 타석을 입력해야 합니다.")
         return 1
     
-    pc_name = input("PC 이름 (예: 타석1-PC, 룸A-PC): ").strip()
-    if not pc_name:
-        print("❌ PC 이름을 입력해야 합니다.")
-        return 1
+    # PC 이름 자동 생성 (매장명 + 룸번호 + "-PC")
+    pc_name = f"{store_name}-{bay_name}-PC"
     
     print()
     print("입력한 정보 확인:")
     print(f"  매장명: {store_name}")
-    print(f"  타석번호: {bay_name}")
-    print(f"  PC 이름: {pc_name}")
+    print(f"  룸 또는 타석: {bay_name}")
     print()
     confirm = input("위 정보가 맞습니까? (Y/n): ").strip().lower()
     if confirm and confirm != 'y' and confirm != 'yes':
         print("등록이 취소되었습니다.")
         return 1
     
-    # 서버 URL 입력
-    print()
-    print("서버 URL을 입력하세요:")
-    print("(예: https://golf-api-production.up.railway.app)")
-    print("(환경 변수 SERVER_URL이 설정되어 있으면 기본값으로 사용)")
-    default_url = os.environ.get("SERVER_URL", "")
-    if default_url:
-        print(f"(기본값: {default_url})")
-    server_url = input("서버 URL (엔터 시 기본값): ").strip()
-    if not server_url:
-        if default_url:
-            server_url = default_url
-        else:
-            print("❌ 서버 URL을 입력해야 합니다.")
-            return 1
+    # 서버 URL 가져오기 (환경 변수 또는 기본값)
+    # 환경 변수가 없으면 Railway 기본 URL 사용 (운영 시 환경 변수로 오버라이드)
+    server_url = os.environ.get("SERVER_URL", "https://golf-api-production.up.railway.app")
     
     # URL 정규화 (끝의 / 제거)
     server_url = server_url.rstrip('/')
@@ -223,7 +207,7 @@ def main():
         print("등록 완료!")
         print("=" * 60)
         print()
-        print("💡 다음 단계:")
+        print("[INFO] 다음 단계:")
         print("   1. 슈퍼 관리자에게 승인 요청")
         print("   2. 승인 후 이 프로그램을 다시 실행하면 자동으로 토큰이 저장됩니다")
         print("   3. 샷 수집 프로그램(main.py)이 자동으로 인증됩니다")
