@@ -244,6 +244,59 @@ def reject_pc():
         conn.close()
         return jsonify({"success": False, "message": f"PC 거부 실패: {str(e)}"}), 400
 
+@app.route("/api/create_registration_key", methods=["POST"])
+@require_role("super_admin")
+def create_registration_key():
+    """PC 등록 키 생성"""
+    data = request.get_json() or {}
+    max_uses = int(data.get("max_uses", 1))
+    expires_hours = int(data.get("expires_hours", 24))
+    notes = data.get("notes", "")
+    created_by = session.get("user_id", "super_admin")
+    
+    try:
+        key_data = database.create_registration_key(
+            created_by=created_by,
+            max_uses=max_uses,
+            expires_hours=expires_hours,
+            notes=notes
+        )
+        
+        if key_data:
+            return jsonify({
+                "success": True,
+                "registration_key": key_data.get("registration_key"),
+                "expires_at": key_data.get("expires_at"),
+                "max_uses": key_data.get("max_uses"),
+                "message": "등록 키가 생성되었습니다."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "등록 키 생성에 실패했습니다."
+            }), 500
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"등록 키 생성 오류: {str(e)}"
+        }), 500
+
+@app.route("/api/registration_keys", methods=["GET"])
+@require_role("super_admin")
+def get_registration_keys():
+    """등록 키 목록 조회"""
+    try:
+        keys = database.get_all_registration_keys()
+        return jsonify({
+            "success": True,
+            "keys": keys
+        })
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "message": f"등록 키 조회 오류: {str(e)}"
+        }), 500
+
 @app.route("/logout")
 def super_admin_logout():
     session.clear()

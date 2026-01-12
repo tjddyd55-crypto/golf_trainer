@@ -62,10 +62,11 @@ def check_pc_status(server_url, pc_unique_id):
         print(f"상태 확인 실패: {e}")
         return None
 
-def register_pc_to_server(server_url, store_name, bay_name, pc_name, pc_info):
-    """서버에 PC 등록 요청"""
+def register_pc_to_server(server_url, registration_key, store_name, bay_name, pc_name, pc_info):
+    """서버에 PC 등록 요청 (등록 키 포함)"""
     try:
         payload = {
+            "registration_key": registration_key,
             "store_name": store_name,
             "bay_name": bay_name,
             "pc_name": pc_name,
@@ -81,17 +82,21 @@ def register_pc_to_server(server_url, store_name, bay_name, pc_name, pc_info):
         if response.status_code == 200:
             data = response.json()
             if data.get("success"):
-                pc_code = data.get("pc_code", pc_info['unique_id'][:8].upper())
+                pc_token = data.get("pc_token")
                 print(f"[OK] PC 등록 성공!")
                 print(f"   매장: {store_name}")
                 print(f"   타석: {bay_name}")
                 print(f"   PC 이름: {pc_name}")
-                print(f"   PC 코드: {pc_code}")
-                print()
-                print("=" * 60)
-                print("[WARNING] 중요: 슈퍼 관리자의 승인을 기다려야 합니다.")
-                print("   승인 후 샷 수집 프로그램을 실행할 수 있습니다.")
-                print("=" * 60)
+                if pc_token:
+                    print(f"   PC 토큰: {pc_token[:20]}...")
+                    # 토큰 저장
+                    save_pc_token(pc_token, server_url)
+                    print()
+                    print("=" * 60)
+                    print("[OK] PC 등록이 완료되었습니다.")
+                    print("   토큰이 자동으로 저장되었습니다.")
+                    print("   샷 수집 프로그램을 실행할 수 있습니다.")
+                    print("=" * 60)
                 return True
             else:
                 print(f"[ERROR] 등록 실패: {data.get('error', '알 수 없는 오류')}")
@@ -159,9 +164,14 @@ def main():
     print(f"     플랫폼: {pc_info['platform']}")
     print()
     
-    # 사용자 입력 (단순화: 매장명, 룸/타석만)
+    # 사용자 입력 (등록 키, 매장명, 룸/타석)
     print("등록 정보를 입력하세요:")
     print()
+    
+    registration_key = input("PC 등록 코드: ").strip().upper()
+    if not registration_key:
+        print("[ERROR] PC 등록 코드를 입력해야 합니다.")
+        return 1
     
     store_name = input("매장명: ").strip()
     if not store_name:
@@ -178,6 +188,7 @@ def main():
     
     print()
     print("입력한 정보 확인:")
+    print(f"  PC 등록 코드: {registration_key}")
     print(f"  매장명: {store_name}")
     print(f"  룸 또는 타석: {bay_name}")
     print()
@@ -199,7 +210,7 @@ def main():
     print(f"서버에 등록 요청 중: {server_url}")
     print("=" * 60)
     print()
-    success = register_pc_to_server(server_url, store_name, bay_name, pc_name, pc_info)
+    success = register_pc_to_server(server_url, registration_key, store_name, bay_name, pc_name, pc_info)
     
     if success:
         print()

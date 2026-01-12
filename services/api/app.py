@@ -72,15 +72,24 @@ def clear_session():
 # PC 등록 API (register_pc.py에서 사용)
 # =========================
 @app.route("/api/register_pc", methods=["POST"])
+@app.route("/pc/register", methods=["POST"])
 def register_pc():
-    """매장 PC 등록 API (승인 대기 상태)"""
+    """PC 등록 API (등록 키 검증 후 토큰 발급)"""
     try:
         data = request.get_json()
         
+        registration_key = data.get("registration_key")
         store_name = data.get("store_name")
         bay_name = data.get("bay_name")
         pc_name = data.get("pc_name")
         pc_info = data.get("pc_info")
+        
+        # 필수 파라미터 확인
+        if not registration_key:
+            return jsonify({
+                "success": False,
+                "error": "registration_key is required"
+            }), 400
         
         if not store_name or not bay_name or not pc_name or not pc_info:
             return jsonify({
@@ -104,28 +113,28 @@ def register_pc():
                 "error": "PC UUID is required"
             }), 400
         
-        # 데이터베이스에 PC 등록
-        success = database.register_store_pc(store_name, bay_name, pc_name, pc_info)
+        # 등록 키로 PC 등록 및 토큰 발급
+        pc_data, error = database.register_pc_with_key(
+            registration_key, store_name, bay_name, pc_name, pc_info
+        )
         
-        if success:
-            # 등록된 PC 정보 반환
-            pc_unique_id = pc_info.get("unique_id")
-            pc_data = database.get_store_pc_by_unique_id(pc_unique_id)
-            
+        if pc_data:
             return jsonify({
                 "success": True,
-                "message": "PC 등록 요청이 접수되었습니다. 슈퍼 관리자의 승인을 기다려주세요.",
-                "pc_code": pc_unique_id[:8].upper(),  # 표시용 짧은 코드
-                "status": "pending"
+                "message": "PC 등록이 완료되었습니다.",
+                "pc_token": pc_data.get("pc_token"),
+                "status": "active"
             })
         else:
             return jsonify({
                 "success": False,
-                "error": "PC 등록에 실패했습니다."
-            }), 500
+                "error": error or "PC 등록에 실패했습니다."
+            }), 400
             
     except Exception as e:
         print(f"PC 등록 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
             "error": str(e)
