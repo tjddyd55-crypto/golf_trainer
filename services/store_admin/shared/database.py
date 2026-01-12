@@ -106,6 +106,13 @@ def init_db():
             cur.execute(f"ALTER TABLE stores ADD COLUMN IF NOT EXISTS {col} TEXT")
         except Exception:
             pass
+    
+    # stores 테이블에 매장 정보 컬럼 추가
+    for col in ["contact", "business_number", "owner_name", "birth_date", "email", "address"]:
+        try:
+            cur.execute(f"ALTER TABLE stores ADD COLUMN IF NOT EXISTS {col} TEXT")
+        except Exception:
+            pass
 
     # 4️⃣ 타석 테이블 (코드 필드 추가)
     cur.execute("""
@@ -576,19 +583,30 @@ def get_shots_by_bay(store_id, bay_id):
     conn.close()
     return [dict(row) for row in rows]
 
-def create_store(store_id, store_name, password, bays_count):
+def create_store(store_id, store_name, password, contact=None, business_number=None, owner_name=None, birth_date=None, email=None, address=None, bays_count=1):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        # store_id를 대문자로 변환
+        store_id = store_id.upper().strip()
+        # store_name에서 띄어쓰기 제거하지 않음 (매장명은 띄어쓰기 가능해야 함)
+        store_name = store_name.strip()
+        
         cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
         cur.execute("""
-            INSERT INTO stores (store_id, store_name, admin_pw, bays_count) 
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO stores (store_id, store_name, admin_pw, bays_count, contact, business_number, owner_name, birth_date, email, address) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (store_id) DO UPDATE SET
                 store_name = EXCLUDED.store_name,
                 admin_pw = EXCLUDED.admin_pw,
-                bays_count = EXCLUDED.bays_count
-        """, (store_id, store_name, password, bays_count))
+                bays_count = EXCLUDED.bays_count,
+                contact = EXCLUDED.contact,
+                business_number = EXCLUDED.business_number,
+                owner_name = EXCLUDED.owner_name,
+                birth_date = EXCLUDED.birth_date,
+                email = EXCLUDED.email,
+                address = EXCLUDED.address
+        """, (store_id, store_name, password, bays_count, contact, business_number, owner_name, birth_date, email, address))
         for i in range(1, bays_count + 1):
             bay_id = f"{i:02d}"
             bay_code = generate_bay_code(store_id, bay_id, cur)
