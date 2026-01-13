@@ -1340,42 +1340,42 @@ def run(regions=None):
                             print(f"⏰ {SESSION_AUTO_LOGOUT_NO_SCREEN//60}분 동안 연습 화면이 감지되지 않음 → 자동 세션 종료")
                             clear_active_session(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
                             last_screen_detected_time = now  # 재체크 방지
-            
-            # 자동 세션 종료 체크 2: 20분 동안 샷이 없는 경우
-            time_since_last_shot = now - last_shot_time
-            if time_since_last_shot >= SESSION_AUTO_LOGOUT_NO_SHOT:
-                active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
-                if active_user:
-                    print(f"⏰ {SESSION_AUTO_LOGOUT_NO_SHOT//60}분 동안 샷이 없음 → 자동 세션 종료")
-                    clear_active_session(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
-                    last_shot_time = now  # 재체크 방지
-            
-            if has_text is None:
-                # 텍스트 영역이 없으면 기존 방식으로 동작
-                print("⚠️ 텍스트 영역이 설정되지 않았습니다. 기존 방식으로 전환합니다.")
-                state = "COLLECTING"
-                prev_bs = None
-                prev_cs = None
-                continue
-            
-            if prev_run_detected is None:
-                prev_run_detected = has_text
-                time.sleep(WAITING_POLL_INTERVAL)
-                continue
+                
+                # 자동 세션 종료 체크 2: 20분 동안 샷이 없는 경우
+                time_since_last_shot = now - last_shot_time
+                if time_since_last_shot >= SESSION_AUTO_LOGOUT_NO_SHOT:
+                    active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                    if active_user:
+                        print(f"⏰ {SESSION_AUTO_LOGOUT_NO_SHOT//60}분 동안 샷이 없음 → 자동 세션 종료")
+                        clear_active_session(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                        last_shot_time = now  # 재체크 방지
+                
+                if has_text is None:
+                    # 텍스트 영역이 없으면 기존 방식으로 동작
+                    print("⚠️ 텍스트 영역이 설정되지 않았습니다. 기존 방식으로 전환합니다.")
+                    state = "COLLECTING"
+                    prev_bs = None
+                    prev_cs = None
+                    continue
+                
+                if prev_run_detected is None:
+                    prev_run_detected = has_text
+                    time.sleep(WAITING_POLL_INTERVAL)
+                    continue
 
-            # 텍스트가 사라지면 (샷 시작) - 시간 기록
-            if prev_run_detected and not has_text:
-                print("🎯 텍스트 사라짐 → 샷 시작 감지")
-                print("💡 상태: COLLECTING (샷 데이터 수집 시작)")
-                state = "COLLECTING"
-                text_disappear_time = time.time()  # 텍스트가 사라진 시간 기록
-                prev_run_detected = False  # COLLECTING 상태에서는 텍스트가 없는 상태
-                prev_bs = None
-                prev_cs = None
-                stable_count = 0
-            else:
-                prev_run_detected = has_text
-                time.sleep(WAITING_POLL_INTERVAL)
+                # 텍스트가 사라지면 (샷 시작) - 시간 기록
+                if prev_run_detected and not has_text:
+                    print("🎯 텍스트 사라짐 → 샷 시작 감지")
+                    print("💡 상태: COLLECTING (샷 데이터 수집 시작)")
+                    state = "COLLECTING"
+                    text_disappear_time = time.time()  # 텍스트가 사라진 시간 기록
+                    prev_run_detected = False  # COLLECTING 상태에서는 텍스트가 없는 상태
+                    prev_bs = None
+                    prev_cs = None
+                    stable_count = 0
+                else:
+                    prev_run_detected = has_text
+                    time.sleep(WAITING_POLL_INTERVAL)
 
             # =========================
             # COLLECTING 상태: 텍스트 재감지 대기 (데이터 수집 안함)
