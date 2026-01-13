@@ -338,6 +338,19 @@ def verify_pc():
 def check_pc_status():
     """PC 실행 허용 여부 확인 (타석 기준만)"""
     try:
+        # =========================
+        # 🔧 TEST MODE (강제 통과)
+        # =========================
+        if TEST_MODE:
+            return jsonify({
+                "allowed": True,
+                "reason": "TEST_MODE_FORCE_ALLOW",
+                "status": "ACTIVE"
+            }), 200
+        
+        # =========================
+        # 기존 로직 (그대로 유지)
+        # =========================
         data = request.get_json() or {}
         pc_unique_id = data.get("pc_unique_id")
         
