@@ -1318,10 +1318,10 @@ def run(regions=None):
             if should_exit:
                 print("프로그램 종료 중...")
                 break
-        # =========================
-        # WAITING 상태: 텍스트 존재 여부 모니터링 (있으면 대기, 없으면 샷 시작)
-        # =========================
-        if state == "WAITING":
+            # =========================
+            # WAITING 상태: 텍스트 존재 여부 모니터링 (있으면 대기, 없으면 샷 시작)
+            # =========================
+            if state == "WAITING":
             has_text = detect_text_presence()
             now = time.time()
             
