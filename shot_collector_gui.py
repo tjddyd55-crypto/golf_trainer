@@ -9,6 +9,7 @@ import json
 import os
 import sys
 import threading
+import queue
 import requests
 
 # 트레이 관련 import
@@ -49,12 +50,64 @@ def get_api_base_url():
         return api_url.rstrip('/')
     return "https://golf-api-production-e675.up.railway.app"
 
+# =========================
+# 로그 브리지 클래스 (stdout/stderr 캡처)
+# =========================
+class UILogWriter:
+    """stdout/stderr를 GUI 로그로 리다이렉트하는 클래스"""
+    def __init__(self, log_callback):
+        self.log_callback = log_callback
+        self.buffer = ""
+    
+    def write(self, text):
+        if text:
+            self.buffer += text
+            while '\n' in self.buffer:
+                line, self.buffer = self.buffer.split('\n', 1)
+                if line.strip():
+                    self.log_callback(line)
+    
+    def flush(self):
+        pass
+    
+    def isatty(self):
+        return False
+
+class UILogBridge:
+    """GUI Text 위젯에 스레드 안전하게 로그를 전달하는 클래스"""
+    def __init__(self, text_widget):
+        self.text_widget = text_widget
+        self.log_queue = queue.Queue()
+        self.max_log_lines = 500
+    
+    def append(self, message):
+        """로그 메시지 추가 (스레드 안전)"""
+        self.log_queue.put(message)
+    
+    def process_queue(self):
+        """큐에 쌓인 로그를 GUI에 표시 (메인 스레드에서 호출)"""
+        try:
+            while True:
+                message = self.log_queue.get_nowait()
+                self.text_widget.config(state=tk.NORMAL)
+                self.text_widget.insert(tk.END, message + "\n")
+                
+                # 라인 수 제한
+                lines = int(self.text_widget.index("end-1c").split(".")[0])
+                if lines > self.max_log_lines:
+                    self.text_widget.delete("1.0", "2.0")
+                
+                self.text_widget.see(tk.END)
+                self.text_widget.config(state=tk.DISABLED)
+        except queue.Empty:
+            pass
+
 class ShotCollectorGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("샷 수집 프로그램 설정")
-        self.root.geometry("500x400")
-        self.root.resizable(False, False)
+        self.root.geometry("700x600")
+        self.root.resizable(True, True)
         
         # API URL
         self.api_base_url = get_api_base_url()
@@ -73,8 +126,23 @@ class ShotCollectorGUI:
         # GUI 구성
         self.setup_ui()
         
+        # stdout/stderr 캡처 설정
+        self.old_stdout = sys.stdout
+        self.old_stderr = sys.stderr
+        self.log_bridge = UILogBridge(self.log_text)
+        sys.stdout = UILogWriter(self.log_bridge.append)
+        sys.stderr = UILogWriter(self.log_bridge.append)
+        
+        # 로그 큐 처리 시작
+        self.root.after(100, self._process_logs)
+        
         # 창 닫기 이벤트
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+    
+    def _process_logs(self):
+        """로그 큐 처리 (메인 스레드)"""
+        self.log_bridge.process_queue()
+        self.root.after(100, self._process_logs)
     
     def setup_ui(self):
         """UI 구성"""
@@ -83,9 +151,20 @@ class ShotCollectorGUI:
             self.root,
             text="샷 수집 프로그램",
             font=("맑은 고딕", 16, "bold"),
-            pady=20
+            pady=10
         )
         title_label.pack()
+        
+        # 상태 표시 (상단 고정)
+        self.status_var = tk.StringVar(value="🔴 대기중")
+        self.running_status_label = tk.Label(
+            self.root,
+            textvariable=self.status_var,
+            font=("맑은 고딕", 12, "bold"),
+            fg="red",
+            pady=5
+        )
+        self.running_status_label.pack(fill=tk.X, padx=10, pady=5)
         
         # 브랜드 선택
         brand_frame = tk.Frame(self.root, pady=10)
@@ -110,8 +189,8 @@ class ShotCollectorGUI:
         self.brand_combo.pack(fill=tk.X, pady=5)
         
         # 좌표 파일 선택
-        file_frame = tk.Frame(self.root, pady=10)
-        file_frame.pack(fill=tk.BOTH, expand=True, padx=20)
+        file_frame = tk.Frame(self.root, pady=5)
+        file_frame.pack(fill=tk.X, padx=20)
         
         tk.Label(
             file_frame,
@@ -121,7 +200,7 @@ class ShotCollectorGUI:
         
         # 리스트박스와 스크롤바
         listbox_frame = tk.Frame(file_frame)
-        listbox_frame.pack(fill=tk.BOTH, expand=True, pady=5)
+        listbox_frame.pack(fill=tk.X, pady=5)
         
         scrollbar = tk.Scrollbar(listbox_frame)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
@@ -130,15 +209,15 @@ class ShotCollectorGUI:
             listbox_frame,
             yscrollcommand=scrollbar.set,
             font=("맑은 고딕", 9),
-            height=8
+            height=5
         )
-        self.file_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        self.file_listbox.pack(side=tk.LEFT, fill=tk.X, expand=True)
         scrollbar.config(command=self.file_listbox.yview)
         
         self.file_listbox.bind("<<ListboxSelect>>", self.on_file_selected)
         
         # 버튼 프레임
-        button_frame = tk.Frame(self.root, pady=20)
+        button_frame = tk.Frame(self.root, pady=10)
         button_frame.pack(fill=tk.X, padx=20)
         
         self.start_button = tk.Button(
@@ -167,13 +246,38 @@ class ShotCollectorGUI:
         )
         self.stop_button.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
         
-        # 상태 표시
+        # 실행 로그 패널
+        log_frame = tk.Frame(self.root, pady=5)
+        log_frame.pack(fill=tk.BOTH, expand=True, padx=20)
+        
+        tk.Label(
+            log_frame,
+            text="실행 로그:",
+            font=("맑은 고딕", 10)
+        ).pack(anchor=tk.W)
+        
+        log_scrollbar = tk.Scrollbar(log_frame)
+        log_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        self.log_text = tk.Text(
+            log_frame,
+            yscrollcommand=log_scrollbar.set,
+            font=("Consolas", 9),
+            bg="#111111",
+            fg="#00ff88",
+            wrap=tk.WORD,
+            state=tk.DISABLED
+        )
+        self.log_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        log_scrollbar.config(command=self.log_text.yview)
+        
+        # 상태 표시 (하단)
         self.status_label = tk.Label(
             self.root,
             text="브랜드를 선택하세요",
             font=("맑은 고딕", 9),
             fg="gray",
-            pady=10
+            pady=5
         )
         self.status_label.pack()
     
@@ -350,12 +454,19 @@ class ShotCollectorGUI:
             # main.py를 import하여 run 함수 실행
             import main
             
-            # 좌표 데이터 전달하여 실행
+            # 좌표 데이터 전달하여 실행 (기존 코드 그대로)
             main.run(regions=self.downloaded_regions)
             
         except Exception as e:
             import traceback
             error_msg = traceback.format_exc()
+            print(f"[ERROR] 샷 수집 루프 오류: {str(e)}")
+            print(error_msg)
+            
+            # 상단 상태 표시 변경
+            self.root.after(0, lambda: self.status_var.set("❌ 오류"))
+            self.root.after(0, lambda: self.running_status_label.config(fg="red"))
+            
             self.root.after(0, lambda: messagebox.showerror("오류", f"샷 수집 루프 오류: {str(e)}\n\n{error_msg}"))
             self.is_running = False
             self.root.after(0, self.on_collection_stopped)
@@ -366,6 +477,11 @@ class ShotCollectorGUI:
         self.stop_button.config(state=tk.NORMAL)
         self.brand_combo.config(state=tk.DISABLED)
         self.file_listbox.config(state=tk.DISABLED)
+        
+        # 상단 상태 표시 변경
+        self.status_var.set("🟢 작동중")
+        self.running_status_label.config(fg="green")
+        
         self.status_label.config(text="● 실행 중 - 트레이로 이동합니다", fg="green")
         
         # 트레이로 이동 (GUI 숨김)
@@ -456,10 +572,21 @@ class ShotCollectorGUI:
         self.stop_button.config(state=tk.DISABLED)
         self.brand_combo.config(state="readonly")
         self.file_listbox.config(state=tk.NORMAL)
+        
+        # 상단 상태 표시 변경
+        self.status_var.set("🔴 대기중")
+        self.running_status_label.config(fg="red")
+        
         self.status_label.config(text="종료됨", fg="gray")
     
     def on_closing(self):
         """창 닫기"""
+        # stdout/stderr 복원
+        if hasattr(self, 'old_stdout'):
+            sys.stdout = self.old_stdout
+        if hasattr(self, 'old_stderr'):
+            sys.stderr = self.old_stderr
+        
         if self.is_running:
             if messagebox.askyesno("확인", "샷 수집이 실행 중입니다. 종료하시겠습니까?"):
                 self.stop_collection()
