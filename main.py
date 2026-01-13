@@ -1327,12 +1327,12 @@ def run(regions=None):
                 
                 # 연습 화면 감지 여부 업데이트
                 if has_text is not None:
-                if has_text:
-                    # 연습 화면이 감지됨
-                    last_screen_detected_time = now
-            
-            # 자동 세션 종료 체크 1: 연습 화면이 아닌 경우 (5분)
-            if has_text is not None and not has_text:
+                    if has_text:
+                        # 연습 화면이 감지됨
+                        last_screen_detected_time = now
+                
+                # 자동 세션 종료 체크 1: 연습 화면이 아닌 경우 (5분)
+                if has_text is not None and not has_text:
                 time_since_screen = now - last_screen_detected_time
                 if time_since_screen >= SESSION_AUTO_LOGOUT_NO_SCREEN:
                     active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
