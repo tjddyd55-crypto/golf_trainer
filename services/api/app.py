@@ -521,6 +521,98 @@ def extract_auth_from_header():
     
     return username, password
 
+@app.route("/api/coordinates/<brand>", methods=["GET"])
+def list_coordinates(brand):
+    """브랜드별 좌표 파일 목록 조회 API"""
+    try:
+        brand = brand.upper().strip()
+        base_dir = get_coordinates_base_dir()
+        brand_dir = base_dir / brand
+        
+        if not brand_dir.exists():
+            return jsonify({
+                "success": True,
+                "files": []
+            }), 200
+        
+        # JSON 파일 목록 조회
+        json_files = list(brand_dir.glob("*.json"))
+        files = []
+        for file_path in sorted(json_files):
+            filename = file_path.name
+            try:
+                # 파일 메타데이터 읽기
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    files.append({
+                        "filename": filename,
+                        "brand": data.get("brand", brand),
+                        "resolution": data.get("resolution", ""),
+                        "version": data.get("version", 0),
+                        "created_at": data.get("created_at", "")
+                    })
+            except Exception:
+                # JSON 파싱 실패 시 파일명만 추가
+                files.append({
+                    "filename": filename,
+                    "brand": brand,
+                    "resolution": "",
+                    "version": 0,
+                    "created_at": ""
+                })
+        
+        return jsonify({
+            "success": True,
+            "files": files
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": "Internal server error"
+        }), 500
+
+@app.route("/api/coordinates/<brand>/<filename>", methods=["GET"])
+def download_coordinates(brand, filename):
+    """좌표 파일 다운로드 API"""
+    try:
+        brand = brand.upper().strip()
+        base_dir = get_coordinates_base_dir()
+        brand_dir = base_dir / brand
+        file_path = brand_dir / filename
+        
+        # 보안: 상위 디렉토리 접근 방지
+        if not str(file_path.resolve()).startswith(str(base_dir.resolve())):
+            return jsonify({
+                "success": False,
+                "error": "Invalid path"
+            }), 400
+        
+        if not file_path.exists():
+            return jsonify({
+                "success": False,
+                "error": "File not found"
+            }), 404
+        
+        # JSON 파일 읽기
+        with open(file_path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        return jsonify({
+            "success": True,
+            "data": data
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": "Internal server error"
+        }), 500
+
 @app.route("/api/coordinates/upload", methods=["POST"])
 def upload_coordinates():
     """좌표 파일 업로드 API (슈퍼 관리자 전용)"""
