@@ -88,10 +88,10 @@ TEXT_REAPPEAR_MIN_TIME = 1.0    # 텍스트가 다시 나타난 후 최소 유�
 # =========================
 DEBUG = False
 
-def log(msg):
+def log(*args):
     """로그 출력 (DEBUG 모드에서만)"""
     if DEBUG:
-        print(msg)
+        print(*args)
 
 # ===== 자동 세션 종료 기준 =====
 SESSION_AUTO_LOGOUT_NO_SHOT = 20 * 60  # 20분 동안 샷이 없으면 자동 종료 (초)
