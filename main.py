@@ -1552,6 +1552,14 @@ def run(regions=None):
             
             # 텍스트 재감지 대기 중
             time.sleep(POLL_INTERVAL)
+        except Exception as e:
+            # 예외 발생해도 프로그램 종료하지 않고 계속 실행
+            import traceback
+            log(f"샷 수집 루프 오류: {e}")
+            if DEBUG:
+                traceback.print_exc()
+            time.sleep(0.2)  # 잠깐 쉬고 계속
+            continue
 
 # =========================
 # 시스템 트레이 관련 함수
