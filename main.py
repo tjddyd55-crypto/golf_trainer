@@ -1335,11 +1335,11 @@ def run(regions=None):
                 if has_text is not None and not has_text:
                     time_since_screen = now - last_screen_detected_time
                     if time_since_screen >= SESSION_AUTO_LOGOUT_NO_SCREEN:
-                    active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
-                    if active_user:
-                        print(f"⏰ {SESSION_AUTO_LOGOUT_NO_SCREEN//60}분 동안 연습 화면이 감지되지 않음 → 자동 세션 종료")
-                        clear_active_session(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
-                        last_screen_detected_time = now  # 재체크 방지
+                        active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                        if active_user:
+                            print(f"⏰ {SESSION_AUTO_LOGOUT_NO_SCREEN//60}분 동안 연습 화면이 감지되지 않음 → 자동 세션 종료")
+                            clear_active_session(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                            last_screen_detected_time = now  # 재체크 방지
             
             # 자동 세션 종료 체크 2: 20분 동안 샷이 없는 경우
             time_since_last_shot = now - last_shot_time
@@ -1377,10 +1377,10 @@ def run(regions=None):
                 prev_run_detected = has_text
                 time.sleep(WAITING_POLL_INTERVAL)
 
-        # =========================
-        # COLLECTING 상태: 텍스트 재감지 대기 (데이터 수집 안함)
-        # =========================
-        elif state == "COLLECTING":
+            # =========================
+            # COLLECTING 상태: 텍스트 재감지 대기 (데이터 수집 안함)
+            # =========================
+            elif state == "COLLECTING":
             # 텍스트 상태만 확인 (데이터는 수집하지 않음)
             has_text = detect_text_presence()
             now = time.time()
