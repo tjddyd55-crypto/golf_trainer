@@ -1142,6 +1142,24 @@ def clear_active_session(store_id, bay_id):
         return False
 
 # =========================
+# 중복 샷 차단
+# =========================
+last_shot_signature = None
+
+def is_same_shot(shot_data):
+    """중복 샷 차단 (ball_speed, club_speed, launch_angle 비교)"""
+    global last_shot_signature
+    sig = (
+        shot_data.get("ball_speed"),
+        shot_data.get("club_speed"),
+        shot_data.get("launch_angle"),
+    )
+    if sig == last_shot_signature:
+        return True
+    last_shot_signature = sig
+    return False
+
+# =========================
 # 메인 루프 (런 텍스트 기반 샷 감지)
 # =========================
 def check_pc_approval():
@@ -1383,6 +1401,17 @@ def run(regions=None):
                         # 1초 대기 후 데이터 수집 (화면이 완전히 업데이트된 후)
                         metrics = read_metrics()
                         
+                        # 의미 없는 샷 스킵
+                        if not metrics or metrics.get("ball_speed", 0) < 5:
+                            log("⚠️ 의미 없는 샷 스킵 (ball_speed < 5)")
+                            state = "WAITING"
+                            prev_run_detected = has_text
+                            text_disappear_time = None
+                            prev_bs = None
+                            prev_cs = None
+                            time.sleep(POLL_INTERVAL)
+                            continue
+                        
                         # 샷 감지 시 디버그 이미지 저장 (한 번만)
                         try:
                             bs_img = capture_region_ratio(REGIONS["ball_speed"])
@@ -1447,7 +1476,18 @@ def run(regions=None):
                             "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                         }
 
-                        print("📦 전송:", payload)
+                        # 중복 샷 차단
+                        if is_same_shot(payload):
+                            log("⚠️ 중복 샷 감지 → 스킵")
+                            state = "WAITING"
+                            prev_run_detected = has_text
+                            text_disappear_time = None
+                            prev_bs = None
+                            prev_cs = None
+                            time.sleep(POLL_INTERVAL)
+                            continue
+
+                        log("📦 전송:", payload)
                         send_to_server(payload)
                         
                         # 마지막 샷 시간 업데이트
