@@ -204,16 +204,12 @@ class ShotCollectorGUI:
         """서버에서 좌표 파일 목록 가져오기"""
         try:
             url = f"{self.api_base_url}/api/coordinates/{brand_code}"
-            print(f"[DEBUG] API URL: {url}")  # 디버그용
             response = requests.get(url, timeout=10)
-            print(f"[DEBUG] Response status: {response.status_code}")  # 디버그용
             
             if response.status_code == 200:
                 data = response.json()
-                print(f"[DEBUG] Response data: {data}")  # 디버그용
                 if data.get("success"):
                     files = data.get("files", [])
-                    print(f"[DEBUG] Files count: {len(files)}")  # 디버그용
                     self.coordinate_files = files
                     
                     # UI 업데이트 (메인 스레드)
