@@ -204,24 +204,44 @@ class ShotCollectorGUI:
         """서버에서 좌표 파일 목록 가져오기"""
         try:
             url = f"{self.api_base_url}/api/coordinates/{brand_code}"
+            print(f"[DEBUG] API URL: {url}")  # 디버그용
             response = requests.get(url, timeout=10)
+            print(f"[DEBUG] Response status: {response.status_code}")  # 디버그용
             
             if response.status_code == 200:
                 data = response.json()
+                print(f"[DEBUG] Response data: {data}")  # 디버그용
                 if data.get("success"):
                     files = data.get("files", [])
+                    print(f"[DEBUG] Files count: {len(files)}")  # 디버그용
                     self.coordinate_files = files
                     
                     # UI 업데이트 (메인 스레드)
                     self.root.after(0, self.update_file_listbox, files)
                     return
-            
-            # 에러
+                else:
+                    error_msg = data.get("error", "알 수 없는 오류")
+                    self.root.after(0, lambda: self.status_label.config(
+                        text=f"오류: {error_msg}",
+                        fg="red"
+                    ))
+                    return
+            else:
+                # HTTP 오류
+                error_text = response.text[:100] if response.text else "알 수 없는 오류"
+                self.root.after(0, lambda: self.status_label.config(
+                    text=f"서버 오류 ({response.status_code}): {error_text}",
+                    fg="red"
+                ))
+        except requests.exceptions.RequestException as e:
+            error_msg = str(e)
             self.root.after(0, lambda: self.status_label.config(
-                text="좌표 파일 목록을 가져올 수 없습니다",
+                text=f"연결 오류: {error_msg}",
                 fg="red"
             ))
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             self.root.after(0, lambda: self.status_label.config(
                 text=f"오류: {str(e)}",
                 fg="red"
