@@ -262,6 +262,7 @@ class ShotCollectorGUI:
     
     def update_file_listbox(self, files):
         """파일 목록 업데이트"""
+        print(f"[DEBUG] update_file_listbox 호출: 파일 개수={len(files) if files else 0}")
         self.file_listbox.delete(0, tk.END)
         for file_info in files:
             filename = file_info.get("filename", "")
@@ -270,12 +271,15 @@ class ShotCollectorGUI:
             display_text = f"{filename}"
             if resolution:
                 display_text += f" ({resolution})"
+            print(f"[DEBUG] 리스트박스에 추가: {display_text}")
             self.file_listbox.insert(tk.END, display_text)
         
         if files:
             self.status_label.config(text="좌표 파일을 선택하세요", fg="gray")
+            print(f"[DEBUG] 상태 라벨 업데이트: 좌표 파일을 선택하세요")
         else:
             self.status_label.config(text="좌표 파일이 없습니다", fg="orange")
+            print(f"[DEBUG] 상태 라벨 업데이트: 좌표 파일이 없습니다")
     
     def on_file_selected(self, event=None):
         """좌표 파일 선택"""
