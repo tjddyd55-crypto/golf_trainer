@@ -1322,11 +1322,11 @@ def run(regions=None):
             # WAITING 상태: 텍스트 존재 여부 모니터링 (있으면 대기, 없으면 샷 시작)
             # =========================
             if state == "WAITING":
-            has_text = detect_text_presence()
-            now = time.time()
-            
-            # 연습 화면 감지 여부 업데이트
-            if has_text is not None:
+                has_text = detect_text_presence()
+                now = time.time()
+                
+                # 연습 화면 감지 여부 업데이트
+                if has_text is not None:
                 if has_text:
                     # 연습 화면이 감지됨
                     last_screen_detected_time = now
