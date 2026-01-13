@@ -1200,7 +1200,28 @@ def update_pc_last_seen():
     except Exception:
         pass  # 조용히 실패 (주기적 업데이트이므로)
 
-def run():
+def run(regions=None):
+    """
+    샷 수집 루프 실행
+    
+    Args:
+        regions: 좌표 데이터 딕셔너리 (GUI에서 전달). None이면 기본 좌표 파일 사용
+    """
+    global REGIONS
+    # GUI에서 좌표를 전달받았으면 사용, 아니면 기본 좌표 파일 사용
+    if regions is not None:
+        REGIONS = regions
+        print(f"✅ GUI에서 전달받은 좌표 사용")
+    else:
+        # temp_regions.json이 있으면 우선적으로 로드 (GUI에서 다운로드한 좌표 파일)
+        temp_regions_file = os.path.join(os.path.dirname(__file__), "temp_regions.json")
+        if os.path.exists(temp_regions_file):
+            try:
+                REGIONS = load_json(temp_regions_file)["regions"]
+                print(f"✅ GUI에서 다운로드한 좌표 파일 로드: temp_regions.json")
+            except Exception as e:
+                print(f"⚠️ temp_regions.json 로드 실패, 기본 좌표 파일 사용: {e}")
+    
     # PC 승인 상태 확인 (프로그램 시작 시 필수)
     print("=" * 60)
     print("⛳ 골프 샷 트래커 시작")
@@ -1218,7 +1239,14 @@ def run():
         print("   2. 슈퍼 관리자에게 승인 요청")
         print("   3. 승인 후 다시 실행")
         print("=" * 60)
-        input("엔터 키를 눌러 종료...")
+        # GUI에서 실행 중이면 input() 스킵 (GUI에서 메시지 표시)
+        try:
+            # sys.stdin이 TTY인지 확인 (콘솔이 있는지)
+            if sys.stdin.isatty():
+                input("엔터 키를 눌러 종료...")
+        except (EOFError, OSError):
+            # GUI 환경에서는 input()이 작동하지 않을 수 있음
+            pass
         return
     
     print(f"✅ PC 승인 확인: {message}")
@@ -1338,14 +1366,9 @@ def run():
                         # 현재 활성 사용자 조회
                         active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
                         if not active_user:
-                            print("⚠️ 활성 사용자가 없습니다. 샷을 기록하지 않습니다.")
-                            state = "WAITING"
-                            prev_run_detected = has_text
-                            text_disappear_time = None
-                            prev_bs = None
-                            prev_cs = None
-                            time.sleep(POLL_INTERVAL)
-                            continue
+                            # 로그인하지 않은 경우 게스트로 저장
+                            active_user = "GUEST"
+                            print("👤 활성 사용자가 없습니다. 게스트로 기록합니다.")
 
                         # 1초 대기 후 데이터 수집 (화면이 완전히 업데이트된 후)
                         metrics = read_metrics()
