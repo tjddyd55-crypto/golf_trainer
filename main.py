@@ -1208,6 +1208,9 @@ def run(regions=None):
         regions: 좌표 데이터 딕셔너리 (GUI에서 전달). None이면 기본 좌표 파일 사용
     """
     global REGIONS
+    
+    # GUI 모드 확인 (GUI 스레드 환경 또는 PyInstaller 빌드)
+    IS_GUI_MODE = sys.stdin is None or getattr(sys, "frozen", False)
     # GUI에서 좌표를 전달받았으면 사용, 아니면 기본 좌표 파일 사용
     if regions is not None:
         REGIONS = regions
