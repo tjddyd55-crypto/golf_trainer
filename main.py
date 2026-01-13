@@ -29,8 +29,8 @@ except ImportError:
 # 설정
 # =========================
 # 서버 URL은 환경 변수로 설정 가능 (Railway 배포 시 사용)
-# 환경 변수가 없으면 로컬 개발 환경 기본값 사용
-DEFAULT_SERVER_URL = os.environ.get("SERVER_URL", "http://127.0.0.1:5000")
+# 환경 변수가 없으면 Railway 프로덕션 서버 기본값 사용
+DEFAULT_SERVER_URL = os.environ.get("SERVER_URL", "https://golf-api-production-e675.up.railway.app")
 SERVER_URL = f"{DEFAULT_SERVER_URL}/api/save_shot"
 
 # PC 토큰 파일 경로 (register_pc.py와 동일한 위치)
