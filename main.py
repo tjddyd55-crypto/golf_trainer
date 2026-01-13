@@ -1381,14 +1381,14 @@ def run(regions=None):
             # COLLECTING 상태: 텍스트 재감지 대기 (데이터 수집 안함)
             # =========================
             elif state == "COLLECTING":
-            # 텍스트 상태만 확인 (데이터는 수집하지 않음)
-            has_text = detect_text_presence()
-            now = time.time()
-            
-            # 텍스트가 다시 나타났는지 확인
-            if not prev_run_detected and has_text:
-                # 텍스트가 다시 나타남
-                if text_disappear_time is not None:
+                # 텍스트 상태만 확인 (데이터는 수집하지 않음)
+                has_text = detect_text_presence()
+                now = time.time()
+                
+                # 텍스트가 다시 나타났는지 확인
+                if not prev_run_detected and has_text:
+                    # 텍스트가 다시 나타남
+                    if text_disappear_time is not None:
                     elapsed_time = now - text_disappear_time
                     
                     if elapsed_time >= TEXT_REAPPEAR_MIN_TIME:
@@ -1552,14 +1552,6 @@ def run(regions=None):
             
             # 텍스트 재감지 대기 중
             time.sleep(POLL_INTERVAL)
-        except Exception as e:
-            # 예외 발생해도 프로그램 종료하지 않고 계속 실행
-            import traceback
-            log(f"샷 수집 루프 오류: {e}")
-            if DEBUG:
-                traceback.print_exc()
-            time.sleep(0.2)  # 잠깐 쉬고 계속
-            continue
         except Exception as e:
             # 예외 발생해도 프로그램 종료하지 않고 계속 실행
             import traceback
