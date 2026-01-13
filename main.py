@@ -8,7 +8,6 @@ import threading
 from datetime import datetime
 
 import requests
-import pyttsx3
 import pyautogui
 import numpy as np
 import cv2
@@ -69,7 +68,7 @@ def get_auth_headers():
         headers["Authorization"] = f"Bearer {pc_token}"
     return headers
 
-POLL_INTERVAL = 0.20
+POLL_INTERVAL = 0.05  # 샷 처리 속도 개선 (0.20 -> 0.05)
 COOLDOWN_SEC  = 2.0
 SPEED_TOL     = 0.25
 MIN_CHANGE    = 0.60
@@ -80,9 +79,19 @@ STABLE_TOL    = 0.25   # 안정 상태 허용 오차
 ACTIVE_DELTA  = 1.0    # 샷 시작으로 보는 최소 변화
 STABLE_FRAMES = 4      # 안정 복귀 프레임 수
 # ===== 런 텍스트 감지 기준 =====
-WAITING_POLL_INTERVAL = 0.3     # 대기 상태에서 런 텍스트 체크 간격 (초)
+WAITING_POLL_INTERVAL = 0.05    # 대기 상태에서 런 텍스트 체크 간격 (초) - 속도 개선 (0.3 -> 0.05)
 RUN_DETECTION_FRAMES = 2        # 런 텍스트가 연속으로 감지되어야 하는 프레임 수
 TEXT_REAPPEAR_MIN_TIME = 1.0    # 텍스트가 다시 나타난 후 최소 유지 시간 (초) - 이 시간 이하면 데이터 수집 안함
+
+# =========================
+# 로그 제어 (실매장용: DEBUG = False)
+# =========================
+DEBUG = False
+
+def log(msg):
+    """로그 출력 (DEBUG 모드에서만)"""
+    if DEBUG:
+        print(msg)
 
 # ===== 자동 세션 종료 기준 =====
 SESSION_AUTO_LOGOUT_NO_SHOT = 20 * 60  # 20분 동안 샷이 없으면 자동 종료 (초)
@@ -136,26 +145,11 @@ GPT_MODEL = "gpt-4o-mini"  # 또는 "gpt-3.5-turbo", "gpt-4" 등
 USE_GPT_FEEDBACK = False  # GPT 피드백 사용 여부 (True면 GPT 사용, False면 기존 기준표 방식 사용)
 
 # =========================
-# TTS
+# TTS (완전 비활성화)
 # =========================
-import threading
-
 def speak(text: str):
-    """음성 안내 (스레드로 실행하여 블로킹 방지)"""
-    print("🔊", text)
-    
-    def _speak_thread():
-        try:
-            # 매번 새로운 TTS 객체 생성 (재사용 시 문제 발생 방지)
-            tts = pyttsx3.init()
-            tts.say(text)
-            tts.runAndWait()
-        except Exception as e:
-            print(f"⚠️ 음성 안내 오류: {e}")
-    
-    # 별도 스레드에서 실행 (메인 루프 블로킹 방지)
-    thread = threading.Thread(target=_speak_thread, daemon=True)
-    thread.start()
+    """TTS 완전 비활성화"""
+    pass
 
 # =========================
 # 유틸
