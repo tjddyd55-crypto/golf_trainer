@@ -1313,10 +1313,11 @@ def run(regions=None):
         print("💡 최소화하면 시스템 트레이로 이동합니다.")
 
     while True:
-        # 종료 플래그 확인
-        if should_exit:
-            print("프로그램 종료 중...")
-            break
+        try:
+            # 종료 플래그 확인
+            if should_exit:
+                print("프로그램 종료 중...")
+                break
         # =========================
         # WAITING 상태: 텍스트 존재 여부 모니터링 (있으면 대기, 없으면 샷 시작)
         # =========================
