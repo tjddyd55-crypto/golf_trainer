@@ -1401,8 +1401,9 @@ def run(regions=None):
                         # 1초 대기 후 데이터 수집 (화면이 완전히 업데이트된 후)
                         metrics = read_metrics()
                         
-                        # 의미 없는 샷 스킵
-                        if not metrics or metrics.get("ball_speed", 0) < 5:
+                        # 의미 없는 샷 스킵 (None 방어)
+                        ball_speed = safe_number(metrics.get("ball_speed") if metrics else None)
+                        if ball_speed is None or ball_speed < 5:
                             log("⚠️ 의미 없는 샷 스킵 (ball_speed < 5)")
                             state = "WAITING"
                             prev_run_detected = has_text
