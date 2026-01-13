@@ -568,12 +568,6 @@ def test_create_code():
 # =========================
 # 좌표 관리 API
 # =========================
-def get_coordinates_base_dir():
-    """좌표 파일 저장 기본 디렉토리 반환"""
-    base_dir = Path(current_dir) / "data" / "coordinates"
-    base_dir.mkdir(parents=True, exist_ok=True)
-    return base_dir
-
 def extract_auth_from_header():
     """Authorization 헤더에서 인증 정보 추출"""
     auth_header = request.headers.get("Authorization", "")
