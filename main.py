@@ -1389,7 +1389,7 @@ def run(regions=None):
                 if not prev_run_detected and has_text:
                     # 텍스트가 다시 나타남
                     if text_disappear_time is not None:
-                    elapsed_time = now - text_disappear_time
+                        elapsed_time = now - text_disappear_time
                     
                     if elapsed_time >= TEXT_REAPPEAR_MIN_TIME:
                         # 1초 이상 경과 → 정상 샷
