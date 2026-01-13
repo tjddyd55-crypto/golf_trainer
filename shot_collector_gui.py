@@ -191,7 +191,11 @@ class ShotCollectorGUI:
                 break
         
         if not brand_code:
+            self.status_label.config(text=f"브랜드 코드를 찾을 수 없습니다: {brand_name}", fg="red")
             return
+        
+        # 디버그: 선택된 브랜드 정보 출력
+        print(f"[DEBUG] 선택된 브랜드: {brand_name} -> 코드: {brand_code}")
         
         self.selected_brand = brand_code
         self.status_label.config(text="좌표 파일 목록 가져오는 중...", fg="blue")
@@ -204,12 +208,21 @@ class ShotCollectorGUI:
         """서버에서 좌표 파일 목록 가져오기"""
         try:
             url = f"{self.api_base_url}/api/coordinates/{brand_code}"
+            print(f"[DEBUG] API 호출: {url}")
             response = requests.get(url, timeout=10)
+            print(f"[DEBUG] 응답 상태: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
+                print(f"[DEBUG] 응답 데이터 타입: {type(data)}")
+                print(f"[DEBUG] 응답 데이터: {data}")
+                
                 if data.get("success"):
                     files = data.get("files", [])
+                    print(f"[DEBUG] 파일 개수: {len(files)}, 타입: {type(files)}")
+                    if files:
+                        print(f"[DEBUG] 파일 목록: {[f.get('filename') for f in files]}")
+                    
                     self.coordinate_files = files
                     
                     # UI 업데이트 (메인 스레드)
@@ -217,6 +230,7 @@ class ShotCollectorGUI:
                     return
                 else:
                     error_msg = data.get("error", "알 수 없는 오류")
+                    print(f"[DEBUG] API 오류: {error_msg}")
                     self.root.after(0, lambda: self.status_label.config(
                         text=f"오류: {error_msg}",
                         fg="red"
@@ -225,18 +239,21 @@ class ShotCollectorGUI:
             else:
                 # HTTP 오류
                 error_text = response.text[:100] if response.text else "알 수 없는 오류"
+                print(f"[DEBUG] HTTP 오류: {response.status_code}, {error_text}")
                 self.root.after(0, lambda: self.status_label.config(
                     text=f"서버 오류 ({response.status_code}): {error_text}",
                     fg="red"
                 ))
         except requests.exceptions.RequestException as e:
             error_msg = str(e)
+            print(f"[DEBUG] 요청 오류: {error_msg}")
             self.root.after(0, lambda: self.status_label.config(
                 text=f"연결 오류: {error_msg}",
                 fg="red"
             ))
         except Exception as e:
             import traceback
+            print(f"[DEBUG] 예외 발생:")
             traceback.print_exc()
             self.root.after(0, lambda: self.status_label.config(
                 text=f"오류: {str(e)}",
