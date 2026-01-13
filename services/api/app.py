@@ -8,73 +8,90 @@ from pathlib import Path
 from datetime import datetime
 
 # =========================
-# 좌표 파일 저장 경로 설정
+# 좌표 파일 저장 (DB 저장)
 # =========================
-# Railway Volume 또는 영구 경로
-COORDINATE_BASE_DIR = os.getenv(
-    "COORDINATE_DIR",
-    "/data/coordinates"   # Railway Volume mount path
-)
-
-def get_brand_coordinate_dir(brand: str) -> str:
-    """브랜드별 좌표 파일 디렉토리 경로 반환 (생성 포함)"""
-    path = os.path.join(COORDINATE_BASE_DIR, brand.upper())
-    os.makedirs(path, exist_ok=True)
-    return path
-
 def save_coordinate_file(brand: str, filename: str, payload: dict):
-    """좌표 파일 저장"""
-    brand_dir = get_brand_coordinate_dir(brand)
-    filepath = os.path.join(brand_dir, filename)
+    """좌표 파일 DB 저장"""
+    import json
+    conn = database.get_db_connection()
+    cur = conn.cursor()
     
-    with open(filepath, "w", encoding="utf-8") as f:
-        json.dump(payload, f, ensure_ascii=False, indent=2)
-    
-    return filepath
+    try:
+        # payload에서 brand, resolution, version 추출
+        brand_val = payload.get("brand", brand).upper()
+        resolution = payload.get("resolution", "")
+        version = payload.get("version", 0)
+        
+        # JSONB로 저장 (json.dumps 사용)
+        payload_json = json.dumps(payload, ensure_ascii=False)
+        
+        cur.execute("""
+            INSERT INTO coordinates (brand, resolution, version, filename, payload)
+            VALUES (%s, %s, %s, %s, %s::jsonb)
+            ON CONFLICT (brand, resolution, version) 
+            DO UPDATE SET filename = EXCLUDED.filename, payload = EXCLUDED.payload
+        """, (brand_val, resolution, version, filename, payload_json))
+        
+        conn.commit()
+        return filename
+    finally:
+        cur.close()
+        conn.close()
 
 def list_coordinate_files(brand: str):
-    """좌표 파일 목록 조회"""
-    brand_dir = get_brand_coordinate_dir(brand)
+    """좌표 파일 목록 조회 (DB에서)"""
+    brand = brand.upper()
+    conn = database.get_db_connection()
+    cur = conn.cursor()
     
-    if not os.path.exists(brand_dir):
-        return []
-    
-    files = []
-    for fname in os.listdir(brand_dir):
-        if fname.endswith(".json"):
-            filepath = os.path.join(brand_dir, fname)
-            try:
-                with open(filepath, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    files.append({
-                        "filename": fname,
-                        "brand": data.get("brand", ""),
-                        "resolution": data.get("resolution", ""),
-                        "version": data.get("version", 0),
-                        "created_at": data.get("created_at", "")
-                    })
-            except Exception:
-                # JSON 파싱 실패 시 파일명만 추가
-                files.append({
-                    "filename": fname,
-                    "brand": brand,
-                    "resolution": "",
-                    "version": 0,
-                    "created_at": ""
-                })
-    
-    return sorted(files, key=lambda x: x.get("version", 0), reverse=True)
+    try:
+        cur.execute("""
+            SELECT filename, version, resolution, created_at
+            FROM coordinates
+            WHERE brand = %s
+            ORDER BY version DESC
+        """, (brand,))
+        
+        rows = cur.fetchall()
+        
+        files = []
+        for row in rows:
+            filename, version, resolution, created_at = row
+            files.append({
+                "filename": filename,
+                "brand": brand,
+                "resolution": resolution,
+                "version": version,
+                "created_at": created_at.isoformat() if created_at else ""
+            })
+        
+        return files
+    finally:
+        cur.close()
+        conn.close()
 
 def load_coordinate_file(brand: str, filename: str):
-    """좌표 파일 로드"""
-    brand_dir = get_brand_coordinate_dir(brand)
-    filepath = os.path.join(brand_dir, filename)
+    """좌표 파일 로드 (DB에서)"""
+    brand = brand.upper()
+    conn = database.get_db_connection()
+    cur = conn.cursor()
     
-    if not os.path.exists(filepath):
-        raise FileNotFoundError(f"좌표 파일 없음: {filename}")
-    
-    with open(filepath, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        cur.execute("""
+            SELECT payload
+            FROM coordinates
+            WHERE brand = %s AND filename = %s
+        """, (brand, filename))
+        
+        row = cur.fetchone()
+        if not row:
+            raise FileNotFoundError(f"좌표 파일 없음: {filename}")
+        
+        # JSONB는 자동으로 dict로 변환됨
+        return row[0]
+    finally:
+        cur.close()
+        conn.close()
 
 # 공유 모듈 경로 추가
 # Railway에서 Root Directory가 services/api일 때를 대비
@@ -701,27 +718,23 @@ def upload_coordinates():
                 "error": "regions is required and must be a non-empty object"
             }), 400
         
-        # 3. 최신 버전 탐색 (자동 증가)
-        brand_dir = get_brand_coordinate_dir(brand)
-        existing_files = []
-        if os.path.exists(brand_dir):
-            filename_pattern = f"{brand}_{resolution}_v*.json"
-            import glob
-            existing_files = glob.glob(os.path.join(brand_dir, filename_pattern))
+        # 3. 최신 버전 탐색 (자동 증가) - DB에서
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT MAX(version) as max_version
+                FROM coordinates
+                WHERE brand = %s AND resolution = %s
+            """, (brand, resolution))
+            row = cur.fetchone()
+            max_version = row[0] if row and row[0] else 0
+            next_version = max_version + 1
+        finally:
+            cur.close()
+            conn.close()
         
-        max_version = 0
-        for file_path in existing_files:
-            filename = os.path.basename(file_path)
-            # 파일명에서 버전 추출 (예: GOLFZON_1920x1080_v3.json -> 3)
-            match = re.search(r'_v(\d+)\.json$', filename)
-            if match:
-                version = int(match.group(1))
-                if version > max_version:
-                    max_version = version
-        
-        next_version = max_version + 1
-        
-        # 4. 파일 저장
+        # 4. 파일 저장 (DB)
         filename = f"{brand}_{resolution}_v{next_version}.json"
         
         created_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")

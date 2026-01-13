@@ -285,6 +285,26 @@ def init_db():
     except Exception:
         pass  # 테이블이 없으면 스킵
 
+    # 🔟 좌표 파일 테이블 (신규)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS coordinates (
+        id SERIAL PRIMARY KEY,
+        brand VARCHAR(50) NOT NULL,
+        resolution VARCHAR(20) NOT NULL,
+        version INTEGER NOT NULL,
+        filename VARCHAR(100) NOT NULL,
+        payload JSONB NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE (brand, resolution, version)
+    )
+    """)
+    
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_coordinates_brand ON coordinates(brand)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_coordinates_brand_filename ON coordinates(brand, filename)")
+    except Exception:
+        pass
+
     # 기본 매장 생성
     cur.execute("SELECT COUNT(*) AS c FROM stores WHERE store_id = %s", ("gaja",))
     row = cur.fetchone()
