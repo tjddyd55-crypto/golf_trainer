@@ -1242,14 +1242,12 @@ def run(regions=None):
         print("   2. 슈퍼 관리자에게 승인 요청")
         print("   3. 승인 후 다시 실행")
         print("=" * 60)
-        # GUI에서 실행 중이면 input() 스킵 (GUI에서 메시지 표시)
-        try:
-            # sys.stdin이 TTY인지 확인 (콘솔이 있는지)
-            if sys.stdin.isatty():
+        # GUI 모드가 아닐 때만 input() 사용 (콘솔 환경)
+        if not IS_GUI_MODE:
+            try:
                 input("엔터 키를 눌러 종료...")
-        except (EOFError, OSError):
-            # GUI 환경에서는 input()이 작동하지 않을 수 있음
-            pass
+            except (EOFError, OSError):
+                pass
         return
     
     print(f"✅ PC 승인 확인: {message}")
