@@ -7,6 +7,75 @@ import re
 from pathlib import Path
 from datetime import datetime
 
+# =========================
+# 좌표 파일 저장 경로 설정
+# =========================
+# Railway Volume 또는 영구 경로
+COORDINATE_BASE_DIR = os.getenv(
+    "COORDINATE_DIR",
+    "/data/coordinates"   # Railway Volume mount path
+)
+
+def get_brand_coordinate_dir(brand: str) -> str:
+    """브랜드별 좌표 파일 디렉토리 경로 반환 (생성 포함)"""
+    path = os.path.join(COORDINATE_BASE_DIR, brand.upper())
+    os.makedirs(path, exist_ok=True)
+    return path
+
+def save_coordinate_file(brand: str, filename: str, payload: dict):
+    """좌표 파일 저장"""
+    brand_dir = get_brand_coordinate_dir(brand)
+    filepath = os.path.join(brand_dir, filename)
+    
+    with open(filepath, "w", encoding="utf-8") as f:
+        json.dump(payload, f, ensure_ascii=False, indent=2)
+    
+    return filepath
+
+def list_coordinate_files(brand: str):
+    """좌표 파일 목록 조회"""
+    brand_dir = get_brand_coordinate_dir(brand)
+    
+    if not os.path.exists(brand_dir):
+        return []
+    
+    files = []
+    for fname in os.listdir(brand_dir):
+        if fname.endswith(".json"):
+            filepath = os.path.join(brand_dir, fname)
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    data = json.load(f)
+                    files.append({
+                        "filename": fname,
+                        "brand": data.get("brand", ""),
+                        "resolution": data.get("resolution", ""),
+                        "version": data.get("version", 0),
+                        "created_at": data.get("created_at", "")
+                    })
+            except Exception:
+                # JSON 파싱 실패 시 파일명만 추가
+                files.append({
+                    "filename": fname,
+                    "brand": brand,
+                    "resolution": "",
+                    "version": 0,
+                    "created_at": ""
+                })
+    
+    return sorted(files, key=lambda x: x.get("version", 0), reverse=True)
+
+def load_coordinate_file(brand: str, filename: str):
+    """좌표 파일 로드"""
+    brand_dir = get_brand_coordinate_dir(brand)
+    filepath = os.path.join(brand_dir, filename)
+    
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"좌표 파일 없음: {filename}")
+    
+    with open(filepath, "r", encoding="utf-8") as f:
+        return json.load(f)
+
 # 공유 모듈 경로 추가
 # Railway에서 Root Directory가 services/api일 때를 대비
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -579,31 +648,18 @@ def download_coordinates(brand, filename):
     """좌표 파일 다운로드 API"""
     try:
         brand = brand.upper().strip()
-        base_dir = get_coordinates_base_dir()
-        brand_dir = base_dir / brand
-        file_path = brand_dir / filename
-        
-        # 보안: 상위 디렉토리 접근 방지
-        if not str(file_path.resolve()).startswith(str(base_dir.resolve())):
-            return jsonify({
-                "success": False,
-                "error": "Invalid path"
-            }), 400
-        
-        if not file_path.exists():
-            return jsonify({
-                "success": False,
-                "error": "File not found"
-            }), 404
-        
-        # JSON 파일 읽기
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        data = load_coordinate_file(brand, filename)
         
         return jsonify({
             "success": True,
             "data": data
         }), 200
+        
+    except FileNotFoundError:
+        return jsonify({
+            "success": False,
+            "error": "File not found"
+        }), 404
         
     except Exception as e:
         import traceback
@@ -668,18 +724,17 @@ def upload_coordinates():
                 "error": "regions is required and must be a non-empty object"
             }), 400
         
-        # 3. 디렉토리 생성
-        base_dir = get_coordinates_base_dir()
-        brand_dir = base_dir / brand
-        brand_dir.mkdir(parents=True, exist_ok=True)
-        
-        # 4. 최신 버전 탐색 (자동 증가)
-        filename_pattern = f"{brand}_{resolution}_v*.json"
-        existing_files = list(brand_dir.glob(filename_pattern))
+        # 3. 최신 버전 탐색 (자동 증가)
+        brand_dir = get_brand_coordinate_dir(brand)
+        existing_files = []
+        if os.path.exists(brand_dir):
+            filename_pattern = f"{brand}_{resolution}_v*.json"
+            import glob
+            existing_files = glob.glob(os.path.join(brand_dir, filename_pattern))
         
         max_version = 0
         for file_path in existing_files:
-            filename = file_path.name
+            filename = os.path.basename(file_path)
             # 파일명에서 버전 추출 (예: GOLFZON_1920x1080_v3.json -> 3)
             match = re.search(r'_v(\d+)\.json$', filename)
             if match:
@@ -689,9 +744,8 @@ def upload_coordinates():
         
         next_version = max_version + 1
         
-        # 5. 파일 저장
+        # 4. 파일 저장
         filename = f"{brand}_{resolution}_v{next_version}.json"
-        file_path = brand_dir / filename
         
         created_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
         
@@ -703,8 +757,7 @@ def upload_coordinates():
             "regions": regions
         }
         
-        with open(file_path, 'w', encoding='utf-8') as f:
-            json.dump(file_data, f, indent=2, ensure_ascii=False)
+        save_coordinate_file(brand, filename, file_data)
         
         # 6. 성공 응답
         return jsonify({
