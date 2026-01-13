@@ -834,6 +834,15 @@ def read_metrics():
 # =========================
 # 감지 보조
 # =========================
+def safe_number(value, default=None):
+    """안전한 숫자 변환 (None 방어)"""
+    try:
+        if value is None:
+            return default
+        return float(value)
+    except Exception:
+        return default
+
 def is_valid_speed(v):
     try:
         v = float(v)
