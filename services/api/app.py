@@ -2,6 +2,10 @@
 from flask import Flask, request, jsonify
 import sys
 import os
+import json
+import re
+from pathlib import Path
+from datetime import datetime
 
 # 공유 모듈 경로 추가
 # Railway에서 Root Directory가 services/api일 때를 대비
@@ -340,7 +344,7 @@ def check_pc_status():
 def verify_admin_credentials(username, password):
     """슈퍼 관리자 인증"""
     super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "admin123")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "endolpin0!")
     return username == super_admin_username and password == super_admin_password
 
 @app.route("/api/admin/pc-registration-codes", methods=["POST"])
@@ -490,6 +494,140 @@ def test_create_code():
         return jsonify({
             "success": False,
             "error": str(e)
+        }), 500
+
+# =========================
+# 좌표 관리 API
+# =========================
+def get_coordinates_base_dir():
+    """좌표 파일 저장 기본 디렉토리 반환"""
+    base_dir = Path(current_dir) / "data" / "coordinates"
+    base_dir.mkdir(parents=True, exist_ok=True)
+    return base_dir
+
+def extract_auth_from_header():
+    """Authorization 헤더에서 인증 정보 추출"""
+    auth_header = request.headers.get("Authorization", "")
+    username = None
+    password = None
+    
+    if auth_header.startswith("Basic "):
+        import base64
+        try:
+            credentials = base64.b64decode(auth_header[6:]).decode("utf-8")
+            username, password = credentials.split(":", 1)
+        except Exception:
+            pass
+    
+    return username, password
+
+@app.route("/api/coordinates/upload", methods=["POST"])
+def upload_coordinates():
+    """좌표 파일 업로드 API (슈퍼 관리자 전용)"""
+    try:
+        # 1. 인증 확인
+        username, password = extract_auth_from_header()
+        if not username or not password:
+            return jsonify({
+                "success": False,
+                "error": "Unauthorized"
+            }), 401
+        
+        if not verify_admin_credentials(username, password):
+            return jsonify({
+                "success": False,
+                "error": "Unauthorized"
+            }), 401
+        
+        # 2. 입력값 검증
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "Request body is required"
+            }), 400
+        
+        brand = data.get("brand", "").strip().upper()
+        resolution = data.get("resolution", "").strip()
+        regions = data.get("regions")
+        
+        if not brand:
+            return jsonify({
+                "success": False,
+                "error": "brand is required"
+            }), 400
+        
+        if not resolution:
+            return jsonify({
+                "success": False,
+                "error": "resolution is required"
+            }), 400
+        
+        # resolution 형식 검증 (예: "1920x1080")
+        if not re.match(r'^\d+x\d+$', resolution):
+            return jsonify({
+                "success": False,
+                "error": "Invalid resolution format. Expected format: WIDTHxHEIGHT (e.g., 1920x1080)"
+            }), 400
+        
+        if not regions or not isinstance(regions, dict) or len(regions) == 0:
+            return jsonify({
+                "success": False,
+                "error": "regions is required and must be a non-empty object"
+            }), 400
+        
+        # 3. 디렉토리 생성
+        base_dir = get_coordinates_base_dir()
+        brand_dir = base_dir / brand
+        brand_dir.mkdir(parents=True, exist_ok=True)
+        
+        # 4. 최신 버전 탐색 (자동 증가)
+        filename_pattern = f"{brand}_{resolution}_v*.json"
+        existing_files = list(brand_dir.glob(filename_pattern))
+        
+        max_version = 0
+        for file_path in existing_files:
+            filename = file_path.name
+            # 파일명에서 버전 추출 (예: GOLFZON_1920x1080_v3.json -> 3)
+            match = re.search(r'_v(\d+)\.json$', filename)
+            if match:
+                version = int(match.group(1))
+                if version > max_version:
+                    max_version = version
+        
+        next_version = max_version + 1
+        
+        # 5. 파일 저장
+        filename = f"{brand}_{resolution}_v{next_version}.json"
+        file_path = brand_dir / filename
+        
+        created_at = datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+        
+        file_data = {
+            "brand": brand,
+            "resolution": resolution,
+            "version": next_version,
+            "created_at": created_at,
+            "regions": regions
+        }
+        
+        with open(file_path, 'w', encoding='utf-8') as f:
+            json.dump(file_data, f, indent=2, ensure_ascii=False)
+        
+        # 6. 성공 응답
+        return jsonify({
+            "success": True,
+            "filename": filename,
+            "version": next_version,
+            "created_at": created_at
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": "Internal server error"
         }), 500
 
 if __name__ == "__main__":
