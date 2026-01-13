@@ -1119,7 +1119,7 @@ def get_all_registration_codes():
     conn.close()
     return [dict(row) for row in rows]
 
-def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_info):
+def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_info, store_id=None):
     """등록 코드로 PC 등록 및 토큰 발급 (복수 사용 허용)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
@@ -1131,6 +1131,32 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
             return None, "유효하지 않거나 폐기된 등록 코드입니다."
         
         code_id = code_data.get("id")
+        
+        # store_id가 없으면 store_name을 store_id로 사용
+        if not store_id:
+            store_id = store_name
+        
+        # 1️⃣ stores 테이블 확인
+        store = get_store_by_id(store_id)
+        
+        if not store:
+            # 2️⃣ 매장 없으면 pending으로 생성
+            # bay_name에서 숫자 추출 (예: "2번" -> 2, "02" -> 2)
+            import re
+            bay_number_match = re.search(r'(\d+)', str(bay_name))
+            bays_count = int(bay_number_match.group(1)) if bay_number_match else 5
+            # 최소값 보장
+            if bays_count < 1:
+                bays_count = 5
+            
+            # create_store는 password와 bays_count가 필요함
+            # 기본 password는 빈 문자열 또는 store_id 사용
+            create_store(
+                store_id=store_id,
+                store_name=store_name or store_id,
+                password="",  # 나중에 설정 가능
+                bays_count=bays_count
+            )
         
         # PC 정보 추출
         pc_unique_id = pc_info.get("unique_id")
@@ -1146,16 +1172,21 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
         # PC 토큰 생성
         pc_token = generate_pc_token(pc_unique_id, mac_address)
         
-        # PC 등록 (바로 활성화, 토큰 발급)
-        # registered_code_id는 나중에 추가 가능 (현재는 코드 자체로 추적)
+        # bay_name에서 bay_id 추출 (예: "2번" -> "02")
+        bay_id_match = re.search(r'(\d+)', str(bay_name))
+        bay_id = f"{int(bay_id_match.group(1)):02d}" if bay_id_match else bay_name
+        
+        # 3️⃣ 기존 PC 등록 로직 (store_id 추가)
         cur.execute("""
             INSERT INTO store_pcs (
-                store_name, bay_name, pc_name, pc_unique_id,
+                store_id, store_name, bay_id, bay_name, pc_name, pc_unique_id,
                 pc_uuid, mac_address, pc_hostname, pc_platform,
                 pc_info, pc_token, status, registered_at
-            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE', CURRENT_TIMESTAMP)
+            ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE', CURRENT_TIMESTAMP)
             ON CONFLICT (pc_unique_id) DO UPDATE SET
+                store_id = EXCLUDED.store_id,
                 store_name = EXCLUDED.store_name,
+                bay_id = EXCLUDED.bay_id,
                 bay_name = EXCLUDED.bay_name,
                 pc_name = EXCLUDED.pc_name,
                 pc_uuid = EXCLUDED.pc_uuid,
@@ -1166,7 +1197,7 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
                 pc_token = EXCLUDED.pc_token,
                 status = 'ACTIVE',
                 last_seen_at = CURRENT_TIMESTAMP
-        """, (store_name, bay_name, pc_name, pc_unique_id, pc_uuid, mac_address,
+        """, (store_id, store_name, bay_id, bay_name, pc_name, pc_unique_id, pc_uuid, mac_address,
               pc_hostname, pc_platform, pc_info_json, pc_token))
         
         conn.commit()
