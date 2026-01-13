@@ -589,40 +589,7 @@ def list_coordinates(brand):
     """브랜드별 좌표 파일 목록 조회 API"""
     try:
         brand = brand.upper().strip()
-        base_dir = get_coordinates_base_dir()
-        brand_dir = base_dir / brand
-        
-        if not brand_dir.exists():
-            return jsonify({
-                "success": True,
-                "files": []
-            }), 200
-        
-        # JSON 파일 목록 조회
-        json_files = list(brand_dir.glob("*.json"))
-        files = []
-        for file_path in sorted(json_files):
-            filename = file_path.name
-            try:
-                # 파일 메타데이터 읽기
-                with open(file_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    files.append({
-                        "filename": filename,
-                        "brand": data.get("brand", brand),
-                        "resolution": data.get("resolution", ""),
-                        "version": data.get("version", 0),
-                        "created_at": data.get("created_at", "")
-                    })
-            except Exception:
-                # JSON 파싱 실패 시 파일명만 추가
-                files.append({
-                    "filename": filename,
-                    "brand": brand,
-                    "resolution": "",
-                    "version": 0,
-                    "created_at": ""
-                })
+        files = list_coordinate_files(brand)
         
         return jsonify({
             "success": True,
