@@ -1333,8 +1333,8 @@ def run(regions=None):
                 
                 # 자동 세션 종료 체크 1: 연습 화면이 아닌 경우 (5분)
                 if has_text is not None and not has_text:
-                time_since_screen = now - last_screen_detected_time
-                if time_since_screen >= SESSION_AUTO_LOGOUT_NO_SCREEN:
+                    time_since_screen = now - last_screen_detected_time
+                    if time_since_screen >= SESSION_AUTO_LOGOUT_NO_SCREEN:
                     active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
                     if active_user:
                         print(f"⏰ {SESSION_AUTO_LOGOUT_NO_SCREEN//60}분 동안 연습 화면이 감지되지 않음 → 자동 세션 종료")
