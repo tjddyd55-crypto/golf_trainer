@@ -1156,13 +1156,25 @@ def check_pc_approval():
         pc_info = get_pc_info()
         pc_unique_id = pc_info.get("unique_id")
         
+        # STEP 3: API URL 확인 (진단용)
+        api_url = f"{DEFAULT_SERVER_URL}/api/check_pc_status"
+        print(f"🔍 PC STATUS CHECK URL: {api_url}")
+        
         headers = get_auth_headers()
         response = requests.post(
-            f"{DEFAULT_SERVER_URL}/api/check_pc_status",
+            api_url,
             json={"pc_unique_id": pc_unique_id},
             headers=headers,
             timeout=10
         )
+        
+        # STEP 2: 실제 응답 로그 출력 (진단용)
+        print(f"🔍 PC STATUS RESPONSE STATUS: {response.status_code}")
+        try:
+            response_data = response.json()
+            print(f"🔍 PC STATUS RESPONSE DATA: {response_data}")
+        except:
+            print(f"🔍 PC STATUS RESPONSE TEXT: {response.text[:500]}")
         
         if response.status_code == 200:
             data = response.json()
@@ -1174,6 +1186,9 @@ def check_pc_approval():
         else:
             return False, f"서버 오류: {response.status_code}"
     except Exception as e:
+        print(f"🔍 PC STATUS CHECK ERROR: {e}")
+        import traceback
+        traceback.print_exc()
         return False, f"승인 확인 실패: {e}"
 
 def register_pc_to_server():
