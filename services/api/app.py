@@ -92,6 +92,9 @@ from shared import database
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_in_production")
 
+# 테스트 모드 스위치 (기본값: False)
+TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
+
 # 데이터베이스 초기화
 database.init_db()
 
