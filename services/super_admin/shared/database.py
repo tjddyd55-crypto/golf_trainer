@@ -1113,11 +1113,14 @@ def approve_store(store_id, approved_by):
                 bay_code = None
                 for attempt in range(max_attempts):
                     bay_code = generate_bay_code(store_id, bay_id, cur)
-                    # 중복 확인
-                    cur.execute("SELECT COUNT(*) FROM bays WHERE bay_code = %s", (bay_code,))
+                    # 중복 확인 (RealDictCursor 사용 시 딕셔너리 반환)
+                    cur.execute("SELECT COUNT(*) as count FROM bays WHERE bay_code = %s", (bay_code,))
                     count_result = cur.fetchone()
-                    if count_result and count_result[0] == 0:
-                        break
+                    if count_result:
+                        # RealDictCursor는 딕셔너리, 일반 커서는 튜플 반환
+                        count_value = count_result.get('count', 0) if isinstance(count_result, dict) else count_result[0]
+                        if count_value == 0:
+                            break
                     if attempt == max_attempts - 1:
                         error_msg = f"타석 {bay_id}의 고유 코드 생성 실패 (중복, {max_attempts}회 시도)"
                         print(f"[ERROR] {error_msg}")
@@ -1126,9 +1129,10 @@ def approve_store(store_id, approved_by):
                 
                 # 타석 삽입 (ON CONFLICT 처리)
                 try:
-                    # 먼저 기존 타석이 있는지 확인
-                    cur.execute("SELECT COUNT(*) FROM bays WHERE store_id = %s AND bay_id = %s", (store_id, bay_id))
-                    existing_count = cur.fetchone()[0]
+                    # 먼저 기존 타석이 있는지 확인 (RealDictCursor 사용 시 딕셔너리 반환)
+                    cur.execute("SELECT COUNT(*) as count FROM bays WHERE store_id = %s AND bay_id = %s", (store_id, bay_id))
+                    count_result = cur.fetchone()
+                    existing_count = count_result.get('count', 0) if isinstance(count_result, dict) else (count_result[0] if count_result else 0)
                     
                     if existing_count > 0:
                         # 기존 타석 업데이트
