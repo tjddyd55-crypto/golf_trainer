@@ -2,12 +2,12 @@
 # Railway에서 자동 생성되는 Dockerfile의 보안 경고를 방지하기 위한 설정
 
 [phases.setup]
-nixPkgs = ["python310"]
+nixPkgs = ["python310", "python310Packages.pip"]
 
 [phases.install]
 cmds = [
-  "pip install --upgrade pip",
-  "pip install -r requirements.txt"
+  "python -m pip install --upgrade pip",
+  "python -m pip install -r requirements.txt"
 ]
 
 [start]
