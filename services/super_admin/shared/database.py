@@ -1,6 +1,7 @@
 # ===== shared/database.py (공유 데이터베이스 모듈) =====
 import os
 import psycopg2
+from psycopg2 import errors as psycopg2_errors
 from psycopg2.extras import RealDictCursor
 from datetime import datetime
 from urllib.parse import urlparse
@@ -1137,29 +1138,34 @@ def approve_store(store_id, approved_by):
                                 status = 'READY'
                             WHERE store_id = %s AND bay_id = %s
                         """, (bay_code, store_id, bay_id))
+                        # UPDATE는 rowcount가 0이어도 정상일 수 있음 (변경사항 없음)
+                        created_bays.append(bay_id)
+                        print(f"[DEBUG] 타석 {bay_id} 업데이트 성공 (bay_code={bay_code})")
                     else:
                         # 새 타석 삽입
                         cur.execute("""
                             INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) 
                             VALUES (%s, %s, 'READY', '', '', %s)
                         """, (store_id, bay_id, bay_code))
+                        
+                        # INSERT는 rowcount가 1이어야 함
+                        if cur.rowcount == 0:
+                            error_msg = f"타석 {bay_id} 삽입 실패: rowcount=0 (bay_code={bay_code})"
+                            print(f"[ERROR] {error_msg}")
+                            import traceback
+                            traceback.print_exc()
+                            conn.rollback()
+                            return (False, error_msg)
+                        
+                        created_bays.append(bay_id)
+                        print(f"[DEBUG] 타석 {bay_id} 삽입 성공 (bay_code={bay_code})")
                     
-                    # 삽입/업데이트 확인
-                    if cur.rowcount == 0:
-                        error_msg = f"타석 {bay_id} 삽입/업데이트 실패: rowcount=0 (bay_code={bay_code})"
-                        print(f"[ERROR] {error_msg}")
-                        import traceback
-                        traceback.print_exc()
-                        conn.rollback()
-                        return (False, error_msg)
-                    
-                    created_bays.append(bay_id)
-                    print(f"[DEBUG] 타석 {bay_id} 생성 성공 (bay_code={bay_code})")
-                    
-                except psycopg2.errors.UniqueViolation as e:
+                except psycopg2_errors.UniqueViolation as e:
                     # bay_code 중복인 경우 - 다른 코드로 재시도
-                    print(f"[WARN] 타석 {bay_id} bay_code 중복 ({bay_code}), 재시도...")
+                    error_detail = str(e)
+                    print(f"[WARN] 타석 {bay_id} bay_code 중복 ({bay_code}), 재시도... 오류: {error_detail}")
                     # 다른 코드 생성
+                    retry_success = False
                     for retry in range(5):
                         new_bay_code = generate_bay_code(store_id, bay_id, cur)
                         if new_bay_code != bay_code:
@@ -1168,19 +1174,22 @@ def approve_store(store_id, approved_by):
                                     INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) 
                                     VALUES (%s, %s, 'READY', '', '', %s)
                                 """, (store_id, bay_id, new_bay_code))
-                                created_bays.append(bay_id)
-                                print(f"[DEBUG] 타석 {bay_id} 생성 성공 (재시도, bay_code={new_bay_code})")
-                                break
-                            except psycopg2.errors.UniqueViolation:
+                                if cur.rowcount > 0:
+                                    created_bays.append(bay_id)
+                                    print(f"[DEBUG] 타석 {bay_id} 생성 성공 (재시도, bay_code={new_bay_code})")
+                                    retry_success = True
+                                    break
+                            except psycopg2_errors.UniqueViolation:
                                 if retry == 4:
-                                    error_msg = f"타석 {bay_id} 삽입 실패: bay_code 중복 (5회 재시도 실패)"
+                                    error_msg = f"타석 {bay_id} 삽입 실패: bay_code 중복 (5회 재시도 실패, 마지막 시도: {new_bay_code})"
                                     print(f"[ERROR] {error_msg}")
                                     import traceback
                                     traceback.print_exc()
                                     conn.rollback()
                                     return (False, error_msg)
                                 continue
-                    else:
+                    
+                    if not retry_success:
                         error_msg = f"타석 {bay_id} 삽입 실패: bay_code 중복 (재시도 실패)"
                         print(f"[ERROR] {error_msg}")
                         import traceback
@@ -1188,7 +1197,7 @@ def approve_store(store_id, approved_by):
                         conn.rollback()
                         return (False, error_msg)
                         
-                except psycopg2.errors.NotNullViolation as e:
+                except psycopg2_errors.NotNullViolation as e:
                     # 필수 컬럼 누락
                     error_msg = f"타석 {bay_id} 삽입 실패: 필수 컬럼 누락 - {str(e)}"
                     print(f"[ERROR] {error_msg}")
@@ -1198,7 +1207,7 @@ def approve_store(store_id, approved_by):
                     return (False, error_msg)
                 except psycopg2.Error as e:
                     # 기타 PostgreSQL 오류
-                    error_msg = f"타석 {bay_id} 삽입 실패: PostgreSQL 오류 - {str(e)}"
+                    error_msg = f"타석 {bay_id} 삽입 실패: PostgreSQL 오류 - {type(e).__name__}: {str(e)}"
                     print(f"[ERROR] {error_msg}")
                     import traceback
                     traceback.print_exc()
