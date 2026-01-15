@@ -353,7 +353,7 @@ def format_bay_display(bay_id=None, bay_name=None):
 @app.route("/pcs")
 @require_role("store_admin")
 def manage_pcs():
-    """매장 PC 관리"""
+    """매장 타석(룸) 관리"""
     store_id = session.get("store_id")
     
     # 매장 이름 조회

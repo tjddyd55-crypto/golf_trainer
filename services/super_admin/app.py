@@ -529,7 +529,7 @@ def extend_subscription():
 @app.route("/pcs")
 @require_role("super_admin")
 def manage_all_pcs():
-    """전체 매장 PC 관리"""
+    """전체 매장 타석(룸) 관리"""
     try:
         from psycopg2.extras import RealDictCursor
         conn = database.get_db_connection()

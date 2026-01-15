@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>전체 매장 PC 관리 - Golf Trainer</title>
+    <title>전체 매장 타석(룸) 관리 - Golf Trainer</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/super_admin.css') }}">
     <style>
@@ -17,7 +17,7 @@
 <body>
     <div class="super-container">
         <div class="super-header">
-            <h1 class="text-white mb-0">💻 전체 매장 PC 관리</h1>
+            <h1 class="text-white mb-0">🏢 전체 매장 타석(룸) 관리</h1>
         </div>
         
         <div class="super-main-content">
@@ -31,7 +31,8 @@
                     <thead>
                         <tr>
                             <th>매장명</th>
-                            <th>타석(룸)번호 (PC 이름)</th>
+                            <th>타석(룸)번호</th>
+                            <th>타석(룸) 이름</th>
                             <th>등록일</th>
                             <th>사용기간</th>
                             <th>마지막 접속</th>
@@ -45,7 +46,7 @@
                         <tr>
                             <td><strong style="font-size: 1.1em;">{{ pc.store_name }}</strong></td>
                             <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_display }}</strong></td>
-                            <td>{{ pc.pc_name }}</td>
+                            <td><strong>{{ pc.pc_name }}</strong></td>
                             <td>{{ pc.registered_at.split(' ')[0] if pc.registered_at else "-" }}</td>
                             <td>
                                 {% if pc.usage_start_date and pc.usage_end_date %}
@@ -101,7 +102,7 @@
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="approve-store-name"></span></p>
                     <p><strong>타석(룸):</strong> <span id="approve-bay-name"></span></p>
-                    <p><strong>PC 이름:</strong> <span id="approve-pc-name"></span></p>
+                    <p><strong>타석(룸) 이름:</strong> <span id="approve-pc-name"></span></p>
                     <hr>
                     <label>사용 시작일:</label>
                     <input type="date" id="approve-start-date" class="form-control" required>
@@ -125,13 +126,13 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">PC 거부</h5>
+                    <h5 class="modal-title">타석(룸) 거부</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="reject-store-name"></span></p>
                     <p><strong>타석(룸):</strong> <span id="reject-bay-name"></span></p>
-                    <p><strong>PC 이름:</strong> <span id="reject-pc-name"></span></p>
+                    <p><strong>타석(룸) 이름:</strong> <span id="reject-pc-name"></span></p>
                     <hr>
                     <label>거부 사유 (선택):</label>
                     <textarea id="reject-notes" class="form-control" rows="3"></textarea>
@@ -163,7 +164,7 @@
                             <td id="detail-bay-name"></td>
                         </tr>
                         <tr>
-                            <th>PC 이름</th>
+                            <th>타석(룸) 이름</th>
                             <td id="detail-pc-name"></td>
                         </tr>
                         <tr>

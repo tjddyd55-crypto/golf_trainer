@@ -68,13 +68,13 @@
                             {% elif bay.has_pc %}
                             <span class="badge bg-warning">⚠ 무효</span>
                             {% else %}
-                            <span class="badge bg-secondary">PC 미등록</span>
+                            <span class="badge bg-secondary">타석(룸) 미등록</span>
                             {% endif %}
                         </div>
                         
                         {% if bay.pc_name %}
                         <div class="mb-2">
-                            <strong>PC 이름:</strong> {{ bay.pc_name }}
+                            <strong>타석(룸) 이름:</strong> {{ bay.pc_name }}
                         </div>
                         {% endif %}
                         
@@ -132,7 +132,7 @@
                 </div>
                 <div class="modal-body">
                     <p><strong>타석(룸):</strong> <span id="edit-bay-id"></span></p>
-                    <p><strong>PC 이름:</strong> <span id="edit-pc-name"></span></p>
+                    <p><strong>타석(룸) 이름:</strong> <span id="edit-pc-name"></span></p>
                     <hr>
                     <div class="mb-3">
                         <label>사용 시작일:</label>
@@ -179,7 +179,7 @@
             currentPcUniqueId = pcUniqueId;
             
             document.getElementById('edit-bay-id').textContent = bayId + '번 타석(룸)';
-            document.getElementById('edit-pc-name').textContent = pcName || 'PC 미등록';
+            document.getElementById('edit-pc-name').textContent = pcName || '타석(룸) 미등록';
             document.getElementById('edit-start-date').value = startDate || '';
             document.getElementById('edit-end-date').value = endDate || '';
             document.getElementById('edit-status').value = status || 'pending';
@@ -195,7 +195,7 @@
             const notes = document.getElementById('edit-notes').value;
             
             if (!currentPcUniqueId) {
-                alert('PC가 등록되지 않은 타석입니다. 먼저 PC를 등록해주세요.');
+                alert('타석(룸)이 등록되지 않았습니다. 먼저 타석(룸)을 등록해주세요.');
                 return;
             }
             
