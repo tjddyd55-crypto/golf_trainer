@@ -585,25 +585,64 @@ def get_all_stores():
     return [dict(row) for row in rows]
 
 def get_bays(store_id):
+    """매장의 승인된 타석 목록만 반환 (store_pcs에서 status='active'인 타석만)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
-    store = cur.fetchone()
-    if not store:
+    
+    try:
+        # 매장 정보 조회
+        cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
+        store = cur.fetchone()
+        if not store:
+            return []
+        
+        bays_count = store.get("bays_count", 0)
+        if not isinstance(bays_count, int):
+            try:
+                bays_count = int(bays_count)
+            except (ValueError, TypeError):
+                bays_count = 0
+        
+        # 승인된 PC가 있는 타석만 조회 (store_pcs 테이블과 조인)
+        from datetime import date
+        today = date.today()
+        
+        cur.execute("""
+            SELECT DISTINCT b.store_id, b.bay_id, b.status, b.user_id, b.last_update, b.bay_code
+            FROM bays b
+            INNER JOIN store_pcs sp ON b.store_id = sp.store_id AND b.bay_id = sp.bay_id
+            WHERE b.store_id = %s
+              AND sp.status = 'active'
+              AND (sp.usage_end_date IS NULL OR sp.usage_end_date >= %s)
+            ORDER BY b.bay_id
+        """, (store_id, today))
+        
+        approved_bays = cur.fetchall()
+        cur.close()
+        conn.close()
+        
+        # 타석 번호로 필터링 (bays_count 이하만)
+        filtered_bays = []
+        for bay in approved_bays:
+            try:
+                bay_num = int(bay["bay_id"])
+                if bay_num <= bays_count:
+                    filtered_bays.append(dict(bay))
+            except (ValueError, TypeError):
+                # bay_id가 숫자가 아닌 경우 건너뛰기
+                continue
+        
+        return filtered_bays
+        
+    except Exception as e:
+        print(f"[ERROR] get_bays 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
         return []
-    bays_count = store["bays_count"]
-    cur.execute("""
-        SELECT * FROM bays WHERE store_id = %s ORDER BY bay_id
-    """, (store_id,))
-    all_bays = cur.fetchall()
-    cur.close()
-    conn.close()
-    filtered_bays = []
-    for bay in all_bays:
-        bay_num = int(bay["bay_id"])
-        if bay_num <= bays_count:
-            filtered_bays.append(dict(bay))
-    return filtered_bays
 
 def get_all_shots_by_store(store_id):
     conn = get_db_connection()

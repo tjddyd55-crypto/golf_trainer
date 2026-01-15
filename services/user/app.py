@@ -121,6 +121,18 @@ def select_store_bay():
                                      stores=stores, 
                                      error="매장과 타석을 선택해주세요.")
             
+            # 승인된 타석인지 확인
+            approved_bays = database.get_bays(store_id)
+            bay_approved = any(bay.get("bay_id") == bay_id for bay in approved_bays)
+            
+            if not bay_approved:
+                stores = database.get_all_stores()
+                return render_template("select_store_bay.html", 
+                                     stores=stores,
+                                     selected_store_id=store_id,
+                                     selected_bay_id=bay_id,
+                                     error=f"{bay_id}번 타석은 승인되지 않았거나 사용할 수 없습니다.")
+            
             # 타석 사용 가능 여부 확인
             active_user = database.get_bay_active_user_info(store_id, bay_id)
             uid = session["user_id"]
