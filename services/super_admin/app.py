@@ -393,17 +393,27 @@ def store_requests():
 @require_role("super_admin")
 def approve_store():
     """매장 승인"""
-    data = request.get_json()
-    store_id = data.get("store_id")
-    approved_by = session.get("user_id", "super_admin")
-    
-    if not store_id:
-        return jsonify({"success": False, "message": "store_id 필요"}), 400
-    
-    if database.approve_store(store_id, approved_by):
-        return jsonify({"success": True, "message": "매장이 승인되었습니다."})
-    else:
-        return jsonify({"success": False, "message": "매장 승인 실패"}), 500
+    try:
+        data = request.get_json()
+        store_id = data.get("store_id")
+        approved_by = session.get("user_id", "super_admin")
+        
+        if not store_id:
+            return jsonify({"success": False, "message": "store_id가 필요합니다."}), 400
+        
+        result = database.approve_store(store_id, approved_by)
+        if result is True:
+            return jsonify({"success": True, "message": "매장이 승인되었습니다."})
+        elif isinstance(result, tuple) and len(result) == 2:
+            # (False, "오류 메시지") 형식
+            return jsonify({"success": False, "message": f"매장 승인 실패: {result[1]}"}), 500
+        else:
+            return jsonify({"success": False, "message": "매장 승인 실패. 다시 시도해주세요."}), 500
+    except Exception as e:
+        import traceback
+        error_trace = traceback.format_exc()
+        print(f"[ERROR] approve_store 예외 발생: {error_trace}")
+        return jsonify({"success": False, "message": f"매장 승인 실패: {str(e)}"}), 500
 
 @app.route("/api/reject_store", methods=["POST"])
 @require_role("super_admin")

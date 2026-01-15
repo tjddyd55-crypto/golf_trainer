@@ -1016,48 +1016,142 @@ def get_pending_stores():
     return [dict(row) for row in rows]
 
 def approve_store(store_id, approved_by):
-    """매장 승인 (타석 생성 포함)"""
-    conn = get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    """매장 승인 (타석 생성 포함) - 완전한 오류 처리"""
+    conn = None
+    cur = None
     
     try:
-        # 매장 정보 조회
+        # 1단계: 입력값 검증
+        if not store_id:
+            print("[ERROR] approve_store: store_id가 없습니다.")
+            return False
+        if not approved_by:
+            approved_by = "super_admin"
+        
+        # 2단계: 데이터베이스 연결
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 3단계: 스키마 마이그레이션 (필요한 컬럼 추가)
+        try:
+            cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS approved_at TEXT")
+            cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS approved_by TEXT")
+            conn.commit()
+        except Exception as e:
+            print(f"[WARN] 스키마 마이그레이션 중 오류 (계속 진행): {e}")
+            conn.rollback()
+        
+        # 4단계: 매장 정보 조회
         cur.execute("SELECT * FROM stores WHERE store_id = %s", (store_id,))
         store = cur.fetchone()
         if not store:
+            print(f"[ERROR] approve_store: 매장을 찾을 수 없습니다. store_id={store_id}")
             return False
         
         store = dict(store)
         bays_count = store.get("bays_count", 5)
         
-        # 매장 상태를 approved로 변경
-        cur.execute("""
-            UPDATE stores 
-            SET status = 'approved',
-                approved_at = CURRENT_TIMESTAMP,
-                approved_by = %s
-            WHERE store_id = %s
-        """, (approved_by, store_id))
+        if not isinstance(bays_count, int) or bays_count < 1:
+            bays_count = 5  # 기본값
         
-        # 타석 생성
-        cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
+        # 5단계: 매장 상태를 approved로 변경
+        from datetime import datetime
+        current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            cur.execute("""
+                UPDATE stores 
+                SET status = 'approved',
+                    approved_at = %s,
+                    approved_by = %s
+                WHERE store_id = %s
+            """, (current_timestamp, approved_by, store_id))
+        except Exception as e:
+            error_msg = f"매장 상태 업데이트 실패: {str(e)}"
+            print(f"[ERROR] {error_msg}")
+            import traceback
+            traceback.print_exc()
+            conn.rollback()
+            return False
+        
+        # 6단계: 기존 타석 삭제
+        try:
+            cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
+        except Exception as e:
+            print(f"[WARN] 기존 타석 삭제 중 오류 (계속 진행): {e}")
+        
+        # 7단계: 타석 생성
+        created_bays = []
         for i in range(1, bays_count + 1):
             bay_id = f"{i:02d}"
-            bay_code = generate_bay_code(store_id, bay_id, cur)
-            cur.execute(
-                "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s)",
-                (store_id, bay_id, bay_code)
-            )
+            try:
+                # bay_code 생성 (중복 방지)
+                max_attempts = 10
+                bay_code = None
+                for attempt in range(max_attempts):
+                    bay_code = generate_bay_code(store_id, bay_id, cur)
+                    # 중복 확인
+                    cur.execute("SELECT COUNT(*) FROM bays WHERE bay_code = %s", (bay_code,))
+                    if cur.fetchone()[0] == 0:
+                        break
+                    if attempt == max_attempts - 1:
+                        error_msg = f"타석 {bay_id}의 고유 코드 생성 실패 (중복)"
+                        print(f"[ERROR] {error_msg}")
+                        conn.rollback()
+                        return False
+                
+                # 타석 삽입
+                cur.execute("""
+                    INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) 
+                    VALUES (%s, %s, 'READY', '', '', %s)
+                    ON CONFLICT (store_id, bay_id) DO UPDATE SET 
+                        bay_code = EXCLUDED.bay_code,
+                        status = 'READY'
+                """, (store_id, bay_id, bay_code))
+                
+                created_bays.append(bay_id)
+            except Exception as e:
+                error_msg = f"타석 {bay_id} 생성 실패: {str(e)}"
+                print(f"[ERROR] {error_msg}")
+                import traceback
+                traceback.print_exc()
+                conn.rollback()
+                return False
         
+        # 8단계: 커밋
         conn.commit()
+        print(f"[SUCCESS] 매장 승인 완료: {store_id}, 타석 {len(created_bays)}개 생성")
         return True
+        
+    except psycopg2.IntegrityError as e:
+        error_msg = f"데이터베이스 제약 조건 위반: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
+        return False
+    except psycopg2.ProgrammingError as e:
+        error_msg = f"SQL 구문 오류: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
+        return False
     except Exception as e:
-        print(f"매장 승인 오류: {e}")
-        conn.rollback()
+        error_msg = f"매장 승인 오류: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
         return False
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 def reject_store(store_id, approved_by):
     """매장 거부"""
