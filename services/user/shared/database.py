@@ -605,7 +605,7 @@ def get_bays(store_id):
         
         # 승인된 PC가 있는 타석만 조회 (store_pcs 테이블과 조인)
         from datetime import date
-        today = date.today()
+        today_str = date.today().strftime("%Y-%m-%d")
         
         cur.execute("""
             SELECT DISTINCT b.store_id, b.bay_id, b.status, b.user_id, b.last_update, b.bay_code
@@ -613,9 +613,9 @@ def get_bays(store_id):
             INNER JOIN store_pcs sp ON b.store_id = sp.store_id AND b.bay_id = sp.bay_id
             WHERE b.store_id = %s
               AND sp.status = 'active'
-              AND (sp.usage_end_date IS NULL OR sp.usage_end_date >= %s)
+              AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date OR sp.usage_end_date >= %s)
             ORDER BY b.bay_id
-        """, (store_id, today))
+        """, (store_id, today_str, today_str))
         
         approved_bays = cur.fetchall()
         cur.close()
