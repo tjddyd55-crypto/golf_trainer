@@ -362,21 +362,39 @@ def manage_pcs():
         
         # 매장 이름 조회
         from psycopg2.extras import RealDictCursor
-        conn = database.get_db_connection()
-        cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
-        store = cur.fetchone()
-        cur.close()
-        conn.close()
-        
-        store_name = store["store_name"] if store else store_id
+        conn = None
+        cur = None
+        try:
+            conn = database.get_db_connection()
+            cur = conn.cursor(cursor_factory=RealDictCursor)
+            cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
+            store = cur.fetchone()
+            store_name = store["store_name"] if store and store.get("store_name") else store_id
+        except Exception as e:
+            print(f"매장 정보 조회 오류: {e}")
+            store_name = store_id
+        finally:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
         
         # 해당 매장의 PC 목록 조회
-        pcs = database.get_store_pcs_by_store(store_name)
+        try:
+            pcs = database.get_store_pcs_by_store(store_name)
+        except Exception as e:
+            print(f"PC 목록 조회 오류: {e}")
+            import traceback
+            traceback.print_exc()
+            pcs = []
         
         # 각 PC에 표시용 bay_display 추가
         for pc in pcs:
-            pc["bay_display"] = format_bay_display(pc.get("bay_id"), pc.get("bay_name"))
+            try:
+                pc["bay_display"] = format_bay_display(pc.get("bay_id"), pc.get("bay_name"))
+            except Exception as e:
+                print(f"bay_display 생성 오류: {e}")
+                pc["bay_display"] = "타석 정보 없음"
         
         return render_template("manage_pcs.html",
                              store_id=store_id,
@@ -384,8 +402,10 @@ def manage_pcs():
                              pcs=pcs)
     except Exception as e:
         import traceback
+        error_msg = str(e)
         traceback.print_exc()
-        return f"오류 발생: {str(e)}", 500
+        print(f"manage_pcs 전체 오류: {error_msg}")
+        return f"오류 발생: {error_msg}", 500
 
 @app.route("/logout")
 def store_admin_logout():
