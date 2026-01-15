@@ -590,45 +590,80 @@ def get_bays(store_id):
                     bay.update(dict(db_bay))
                     break
     
-    # 각 타석의 PC 등록 상태 및 유효성 확인
+    # 각 타석의 PC 등록 상태 및 유효성 확인 (bay_id 포함)
     cur.execute("""
-        SELECT bay_name, pc_name, status, usage_end_date, approved_at
+        SELECT bay_id, bay_name, pc_name, status, usage_end_date, approved_at
         FROM store_pcs
         WHERE store_name = %s
     """, (store_name,))
     pcs = cur.fetchall()
     
-    # bay_name에서 타석 번호 추출하여 매칭
+    # 각 타석의 PC 등록 상태 및 유효성 확인 (bay_id 우선 사용)
     import re
     for pc in pcs:
-        bay_name = pc.get("bay_name", "")
-        # "2번룸", "02번 타석", "1타석" 등에서 숫자 추출
-        match = re.search(r'(\d+)', str(bay_name))
-        if match:
-            pc_bay_num = int(match.group(1))
-            if 1 <= pc_bay_num <= bays_count:
-                bay_id = f"{pc_bay_num:02d}"
-                for bay in all_bays:
-                    if bay["bay_id"] == bay_id:
-                        bay["has_pc"] = True
-                        bay["pc_status"] = pc.get("status")
-                        bay["pc_name"] = pc.get("pc_name")
-                        # 유효성 판정: status='active'이고 사용 기간이 유효한 경우
-                        if pc.get("status") == "active":
-                            usage_end_date = pc.get("usage_end_date")
-                            if usage_end_date:
-                                if isinstance(usage_end_date, str):
-                                    from datetime import datetime
-                                    try:
-                                        usage_end_date = datetime.strptime(usage_end_date, "%Y-%m-%d").date()
-                                    except:
-                                        usage_end_date = None
-                                if usage_end_date and usage_end_date >= today:
+        # 1. bay_id가 있으면 우선 사용
+        pc_bay_id = pc.get("bay_id")
+        if pc_bay_id and str(pc_bay_id).strip().isdigit():
+            try:
+                pc_bay_num = int(pc_bay_id)
+                if 1 <= pc_bay_num <= bays_count:
+                    bay_id = f"{pc_bay_num:02d}"
+                    for bay in all_bays:
+                        if bay["bay_id"] == bay_id:
+                            bay["has_pc"] = True
+                            bay["pc_status"] = pc.get("status")
+                            bay["pc_name"] = pc.get("pc_name")
+                            # 유효성 판정: status='active'이고 사용 기간이 유효한 경우
+                            if pc.get("status") == "active":
+                                usage_end_date = pc.get("usage_end_date")
+                                if usage_end_date:
+                                    if isinstance(usage_end_date, str):
+                                        from datetime import datetime
+                                        try:
+                                            usage_end_date = datetime.strptime(usage_end_date, "%Y-%m-%d").date()
+                                        except:
+                                            usage_end_date = None
+                                    if usage_end_date and usage_end_date >= today:
+                                        bay["is_valid"] = True
+                                else:
+                                    # 사용 기간이 없으면 무제한으로 간주
                                     bay["is_valid"] = True
-                            else:
-                                # 사용 기간이 없으면 무제한으로 간주
-                                bay["is_valid"] = True
-                        break
+                            break
+                    continue  # bay_id로 매칭했으면 다음 PC로
+            except (ValueError, TypeError):
+                pass
+        
+        # 2. bay_id가 없으면 bay_name에서 추출
+        bay_name = pc.get("bay_name", "")
+        if bay_name:
+            # "1번룸", "01번 타석", "1타석", "테스트매장-1번룸-PC" 등에서 숫자 추출
+            # 패턴: 숫자 뒤에 "번" 또는 숫자만 있는 경우
+            match = re.search(r'(\d+)\s*번|^(\d+)(?=\s|$)', str(bay_name))
+            if match:
+                pc_bay_num = int(match.group(1) or match.group(2))
+                if 1 <= pc_bay_num <= bays_count:
+                    bay_id = f"{pc_bay_num:02d}"
+                    for bay in all_bays:
+                        if bay["bay_id"] == bay_id:
+                            bay["has_pc"] = True
+                            bay["pc_status"] = pc.get("status")
+                            bay["pc_name"] = pc.get("pc_name")
+                            # 유효성 판정: status='active'이고 사용 기간이 유효한 경우
+                            if pc.get("status") == "active":
+                                usage_end_date = pc.get("usage_end_date")
+                                if usage_end_date:
+                                    if isinstance(usage_end_date, str):
+                                        from datetime import datetime
+                                        try:
+                                            usage_end_date = datetime.strptime(usage_end_date, "%Y-%m-%d").date()
+                                        except:
+                                            usage_end_date = None
+                                    if usage_end_date and usage_end_date >= today:
+                                        bay["is_valid"] = True
+                                else:
+                                    # 사용 기간이 없으면 무제한으로 간주
+                                    bay["is_valid"] = True
+                            break
     
     cur.close()
     conn.close()
@@ -904,9 +939,11 @@ def get_store_pcs_by_store(store_name):
                 if not bay_id or not str(bay_id).strip().isdigit():
                     bay_name = pc.get("bay_name", "")
                     if bay_name:
-                        match = re.search(r'(\d+)', str(bay_name))
+                        # "1번룸", "01번 타석", "1타석", "테스트매장-1번룸-PC" 등에서 숫자 추출
+                        # 패턴: 숫자 뒤에 "번" 또는 숫자만 있는 경우
+                        match = re.search(r'(\d+)\s*번|^(\d+)(?=\s|$)', str(bay_name))
                         if match:
-                            bay_num = int(match.group(1))
+                            bay_num = int(match.group(1) or match.group(2))
                             pc["bay_id"] = f"{bay_num:02d}"
                 result.append(pc)
             except Exception as e:
