@@ -18,7 +18,7 @@
                 <a href="{{ url_for('super_admin_dashboard') }}" class="super-btn super-btn-secondary">← 대시보드로 돌아가기</a>
                 <div>
                     <label for="store-select" class="me-2">매장 선택:</label>
-                    <select id="store-select" class="form-select d-inline-block" style="width: auto;" onchange="location.href=this.value ? '{{ url_for('store_bays_detail', store_id='') }}' + this.value : '{{ url_for('manage_stores') }}'">
+                    <select id="store-select" class="form-select d-inline-block" style="width: auto;" onchange="selectStore(this.value)">
                         <option value="">전체 매장</option>
                         {% for store in stores %}
                         <option value="{{ store.store_id }}" {% if request.args.get('store_id') == store.store_id %}selected{% endif %}>
@@ -75,6 +75,14 @@
     </div>
     
     <script>
+        function selectStore(storeId) {
+            if (storeId) {
+                location.href = '/stores/' + storeId + '/bays';
+            } else {
+                location.href = '{{ url_for("manage_stores") }}';
+            }
+        }
+        
         function extendSubscription(storeId, months) {
             if (confirm(`${months}개월 구독을 연장하시겠습니까?`)) {
                 fetch('{{ url_for("extend_subscription") }}', {

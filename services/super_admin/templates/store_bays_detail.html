@@ -37,7 +37,7 @@
                 <a href="{{ url_for('super_admin_dashboard') }}" class="super-btn super-btn-secondary">← 대시보드로 돌아가기</a>
                 <div>
                     <label for="store-select" class="me-2">매장 선택:</label>
-                    <select id="store-select" class="form-select d-inline-block" style="width: auto;" onchange="location.href='{{ url_for('store_bays_detail', store_id='') }}' + this.value">
+                    <select id="store-select" class="form-select d-inline-block" style="width: auto;" onchange="selectStore(this.value)">
                         <option value="">매장 선택</option>
                         {% for s in all_stores %}
                         <option value="{{ s.store_id }}" {% if s.store_id == store.store_id %}selected{% endif %}>
