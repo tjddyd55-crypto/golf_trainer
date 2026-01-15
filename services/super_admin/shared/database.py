@@ -348,8 +348,13 @@ def generate_bay_code(store_id, bay_id, cursor=None):
     if cursor:
         # 기존 커서 사용 (같은 트랜잭션 내)
         try:
-            cursor.execute("SELECT COUNT(*) FROM bays WHERE bay_code = %s", (code,))
-            count = cursor.fetchone()[0]
+            cursor.execute("SELECT COUNT(*) as count FROM bays WHERE bay_code = %s", (code,))
+            count_result = cursor.fetchone()
+            if count_result:
+                # RealDictCursor는 딕셔너리, 일반 커서는 튜플 반환
+                count = count_result.get('count', 0) if isinstance(count_result, dict) else count_result[0]
+            else:
+                count = 0
         except Exception:
             # 테이블이 아직 생성되지 않았으면 중복 확인 건너뛰기
             count = 0
@@ -358,8 +363,12 @@ def generate_bay_code(store_id, bay_id, cursor=None):
         conn = get_db_connection()
         cur = conn.cursor()
         try:
-            cur.execute("SELECT COUNT(*) FROM bays WHERE bay_code = %s", (code,))
-            count = cur.fetchone()[0]
+            cur.execute("SELECT COUNT(*) as count FROM bays WHERE bay_code = %s", (code,))
+            count_result = cur.fetchone()
+            if count_result:
+                count = count_result.get('count', 0) if isinstance(count_result, dict) else count_result[0]
+            else:
+                count = 0
         except Exception:
             count = 0
         finally:
