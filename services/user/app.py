@@ -8,15 +8,18 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 local_shared = os.path.join(current_dir, 'shared')
 if os.path.exists(local_shared):
     sys.path.insert(0, current_dir)
+    static_path = os.path.join(current_dir, '../../static')
 else:
     project_root = os.path.abspath(os.path.join(current_dir, '../../'))
     sys.path.insert(0, project_root)
+    static_path = os.path.join(project_root, 'static')
+
 from shared import database
 from shared.auth import require_login
 
 app = Flask(__name__, 
             template_folder='templates',
-            static_folder='../../static')
+            static_folder=static_path)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_in_production")
 
 # 데이터베이스 초기화
