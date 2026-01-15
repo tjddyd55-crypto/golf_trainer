@@ -80,18 +80,24 @@ def store_admin_signup():
         
         # 매장 등록
         try:
-            if database.create_store(
+            result = database.create_store(
                 store_id, store_name, password, contact, business_number,
                 owner_name, birth_date, email, address, bays_count
-            ):
+            )
+            if result is True:
                 return render_template("store_admin_signup.html", 
                                      success="매장 등록 요청이 완료되었습니다. 승인 대기 중입니다.")
+            elif isinstance(result, tuple) and len(result) == 2:
+                # (False, "오류 메시지") 형식
+                return render_template("store_admin_signup.html", 
+                                     error=f"매장 등록 실패: {result[1]}")
             else:
                 return render_template("store_admin_signup.html", 
                                      error="매장 등록 실패. 다시 시도해주세요.")
         except Exception as e:
             import traceback
-            traceback.print_exc()
+            error_trace = traceback.format_exc()
+            print(f"[ERROR] 매장 등록 예외 발생: {error_trace}")
             return render_template("store_admin_signup.html", 
                                  error=f"매장 등록 실패: {str(e)}")
 

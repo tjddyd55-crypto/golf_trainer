@@ -699,62 +699,105 @@ def get_shots_by_bay(store_id, bay_id):
     return [dict(row) for row in rows]
 
 def create_store(store_id, store_name, password, contact=None, business_number=None, owner_name=None, birth_date=None, email=None, address=None, bays_count=1):
-    conn = get_db_connection()
-    cur = conn.cursor()
+    conn = None
+    cur = None
     try:
         # store_id를 대문자로 변환
         store_id = store_id.upper().strip()
         # store_name에서 띄어쓰기 제거하지 않음 (매장명은 띄어쓰기 가능해야 함)
         store_name = store_name.strip()
         
+        if not store_id:
+            return False, "매장코드를 입력해주세요."
+        if not store_name:
+            return False, "매장명을 입력해주세요."
+        if not password:
+            return False, "비밀번호를 입력해주세요."
+        if bays_count < 1 or bays_count > 50:
+            return False, "타석(룸) 수는 1개 이상 50개 이하여야 합니다."
+        
+        conn = get_db_connection()
+        cur = conn.cursor()
+        
         # status와 requested_at 컬럼이 없으면 추가 (안전장치)
         try:
             cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS status TEXT")
             cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS requested_at TEXT")
-        except Exception:
-            pass  # 이미 존재하면 무시
+            conn.commit()
+        except Exception as e:
+            print(f"컬럼 추가 시도 중 오류 (무시 가능): {e}")
+            conn.rollback()
         
-        cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
-        cur.execute("""
-            INSERT INTO stores (store_id, store_name, admin_pw, bays_count, contact, business_number, owner_name, birth_date, email, address, status, requested_at) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP)
-            ON CONFLICT (store_id) DO UPDATE SET
-                store_name = EXCLUDED.store_name,
-                admin_pw = EXCLUDED.admin_pw,
-                bays_count = EXCLUDED.bays_count,
-                contact = EXCLUDED.contact,
-                business_number = EXCLUDED.business_number,
-                owner_name = EXCLUDED.owner_name,
-                birth_date = EXCLUDED.birth_date,
-                email = EXCLUDED.email,
-                address = EXCLUDED.address,
-                status = CASE 
-                    WHEN stores.status = 'approved' THEN 'approved'  -- 이미 승인된 경우 유지
-                    ELSE 'pending'  -- 새 요청이면 pending
-                END,
-                requested_at = CASE 
-                    WHEN stores.status = 'approved' THEN stores.requested_at  -- 이미 승인된 경우 유지
-                    ELSE CURRENT_TIMESTAMP  -- 새 요청이면 현재 시간
-                END
-        """, (store_id, store_name, password, bays_count, contact, business_number, owner_name, birth_date, email, address))
+        # 기존 타석 삭제
+        try:
+            cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
+        except Exception as e:
+            print(f"기존 타석 삭제 중 오류 (무시 가능): {e}")
+        
+        # 매장 정보 삽입/업데이트
+        try:
+            cur.execute("""
+                INSERT INTO stores (store_id, store_name, admin_pw, bays_count, contact, business_number, owner_name, birth_date, email, address, status, requested_at) 
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP)
+                ON CONFLICT (store_id) DO UPDATE SET
+                    store_name = EXCLUDED.store_name,
+                    admin_pw = EXCLUDED.admin_pw,
+                    bays_count = EXCLUDED.bays_count,
+                    contact = EXCLUDED.contact,
+                    business_number = EXCLUDED.business_number,
+                    owner_name = EXCLUDED.owner_name,
+                    birth_date = EXCLUDED.birth_date,
+                    email = EXCLUDED.email,
+                    address = EXCLUDED.address,
+                    status = CASE 
+                        WHEN stores.status = 'approved' THEN 'approved'  -- 이미 승인된 경우 유지
+                        ELSE 'pending'  -- 새 요청이면 pending
+                    END,
+                    requested_at = CASE 
+                        WHEN stores.status = 'approved' THEN stores.requested_at  -- 이미 승인된 경우 유지
+                        ELSE CURRENT_TIMESTAMP  -- 새 요청이면 현재 시간
+                    END
+            """, (store_id, store_name, password, bays_count, contact, business_number, owner_name, birth_date, email, address))
+        except Exception as e:
+            error_msg = f"매장 정보 저장 실패: {str(e)}"
+            print(f"[ERROR] {error_msg}")
+            import traceback
+            traceback.print_exc()
+            conn.rollback()
+            return False, error_msg
+        
+        # 타석 생성
         for i in range(1, bays_count + 1):
-            bay_id = f"{i:02d}"
-            bay_code = generate_bay_code(store_id, bay_id, cur)
-            cur.execute(
-                "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s) ON CONFLICT (store_id, bay_id) DO UPDATE SET bay_code = EXCLUDED.bay_code",
-                (store_id, bay_id, bay_code)
-            )
+            try:
+                bay_id = f"{i:02d}"
+                bay_code = generate_bay_code(store_id, bay_id, cur)
+                cur.execute(
+                    "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s) ON CONFLICT (store_id, bay_id) DO UPDATE SET bay_code = EXCLUDED.bay_code",
+                    (store_id, bay_id, bay_code)
+                )
+            except Exception as e:
+                error_msg = f"타석 {bay_id} 생성 실패: {str(e)}"
+                print(f"[ERROR] {error_msg}")
+                import traceback
+                traceback.print_exc()
+                conn.rollback()
+                return False, error_msg
+        
         conn.commit()
         return True
     except Exception as e:
-        print(f"매장 등록 오류: {e}")
+        error_msg = f"매장 등록 오류: {str(e)}"
+        print(f"[ERROR] {error_msg}")
         import traceback
         traceback.print_exc()
-        conn.rollback()
-        return False
+        if conn:
+            conn.rollback()
+        return False, error_msg
     finally:
-        cur.close()
-        conn.close()
+        if cur:
+            cur.close()
+        if conn:
+            conn.close()
 
 def get_all_active_sessions(store_id):
     conn = get_db_connection()
