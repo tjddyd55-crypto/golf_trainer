@@ -113,6 +113,13 @@ def init_db():
             cur.execute(f"ALTER TABLE stores ADD COLUMN IF NOT EXISTS {col} TEXT")
         except Exception:
             pass
+    
+    # stores 테이블에 status와 requested_at 컬럼 추가 (매장 등록 요청용)
+    for col in ["status", "requested_at"]:
+        try:
+            cur.execute(f"ALTER TABLE stores ADD COLUMN IF NOT EXISTS {col} TEXT")
+        except Exception:
+            pass
 
     # 4️⃣ 타석 테이블 (코드 필드 추가)
     cur.execute("""
@@ -700,6 +707,13 @@ def create_store(store_id, store_name, password, contact=None, business_number=N
         # store_name에서 띄어쓰기 제거하지 않음 (매장명은 띄어쓰기 가능해야 함)
         store_name = store_name.strip()
         
+        # status와 requested_at 컬럼이 없으면 추가 (안전장치)
+        try:
+            cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS status TEXT")
+            cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS requested_at TEXT")
+        except Exception:
+            pass  # 이미 존재하면 무시
+        
         cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
         cur.execute("""
             INSERT INTO stores (store_id, store_name, admin_pw, bays_count, contact, business_number, owner_name, birth_date, email, address, status, requested_at) 
@@ -727,13 +741,15 @@ def create_store(store_id, store_name, password, contact=None, business_number=N
             bay_id = f"{i:02d}"
             bay_code = generate_bay_code(store_id, bay_id, cur)
             cur.execute(
-                "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s)",
+                "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s) ON CONFLICT (store_id, bay_id) DO UPDATE SET bay_code = EXCLUDED.bay_code",
                 (store_id, bay_id, bay_code)
             )
         conn.commit()
         return True
     except Exception as e:
         print(f"매장 등록 오류: {e}")
+        import traceback
+        traceback.print_exc()
         conn.rollback()
         return False
     finally:
