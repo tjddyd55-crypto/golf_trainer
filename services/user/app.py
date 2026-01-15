@@ -8,14 +8,19 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 local_shared = os.path.join(current_dir, 'shared')
 if os.path.exists(local_shared):
     sys.path.insert(0, current_dir)
-    static_path = os.path.join(current_dir, '../../static')
 else:
     project_root = os.path.abspath(os.path.join(current_dir, '../../'))
     sys.path.insert(0, project_root)
-    static_path = os.path.join(project_root, 'static')
 
 from shared import database
 from shared.auth import require_login
+
+# Static 폴더 경로: 로컬 static 폴더 우선, 없으면 상위 static 폴더
+static_path = os.path.join(current_dir, 'static')
+if not os.path.exists(static_path):
+    static_path = os.path.join(current_dir, '../../static')
+    if not os.path.exists(static_path):
+        static_path = 'static'  # 기본값
 
 app = Flask(__name__, 
             template_folder='templates',

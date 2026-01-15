@@ -1,0 +1,342 @@
+/* ========================================
+   총책임자 서비스 CSS
+   웹디자이너가 수정하기 쉽도록 구조화
+   ======================================== */
+
+/* ========================================
+   1. 기본 설정
+   ======================================== */
+:root {
+    /* 색상 변수 */
+    --super-primary-color: #dc3545;
+    --super-secondary-color: #6c757d;
+    --super-success-color: #28a745;
+    --super-warning-color: #ffc107;
+    --super-info-color: #17a2b8;
+    
+    /* 배경색 */
+    --super-bg-primary: #ffffff;
+    --super-bg-secondary: #f8f9fa;
+    --super-bg-dark: #212529;
+    
+    /* 텍스트 색상 */
+    --super-text-primary: #212529;
+    --super-text-secondary: #6c757d;
+    --super-text-light: #ffffff;
+    
+    /* 간격 */
+    --super-spacing-xs: 0.25rem;
+    --super-spacing-sm: 0.5rem;
+    --super-spacing-md: 1rem;
+    --super-spacing-lg: 1.5rem;
+    --super-spacing-xl: 3rem;
+    
+    /* 폰트 */
+    --super-font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --super-font-size-base: 1rem;
+    
+    /* 테두리 */
+    --super-border-radius: 0.25rem;
+    --super-border-radius-lg: 0.5rem;
+    --super-border-color: #dee2e6;
+}
+
+/* ========================================
+   2. 전체 레이아웃
+   ======================================== */
+body {
+    background: linear-gradient(135deg, #dc3545 0%, #c82333 100%);
+    min-height: 100vh;
+    font-family: var(--super-font-family);
+}
+
+.super-container {
+    max-width: 1600px;
+    margin: 0 auto;
+    padding: var(--super-spacing-md);
+}
+
+.super-header {
+    background: linear-gradient(135deg, var(--super-primary-color) 0%, #c82333 100%);
+    color: var(--super-text-light);
+    padding: var(--super-spacing-xl);
+    margin-bottom: var(--super-spacing-lg);
+    border-radius: var(--super-border-radius-lg);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.15);
+}
+
+.super-main-content {
+    background-color: var(--super-bg-primary);
+    padding: var(--super-spacing-xl);
+    border-radius: var(--super-border-radius-lg);
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.1);
+    margin-bottom: var(--super-spacing-lg);
+}
+
+/* ========================================
+   3. 통계 카드
+   ======================================== */
+.super-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: var(--super-spacing-md);
+    margin-bottom: var(--super-spacing-lg);
+}
+
+.super-stat-card {
+    background: linear-gradient(135deg, var(--super-bg-primary) 0%, var(--super-bg-secondary) 100%);
+    padding: var(--super-spacing-lg);
+    border-radius: var(--super-border-radius-lg);
+    border-left: 4px solid var(--super-primary-color);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.super-stat-label {
+    font-size: 0.875rem;
+    color: var(--super-text-secondary);
+    margin-bottom: var(--super-spacing-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.super-stat-value {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--super-primary-color);
+}
+
+/* ========================================
+   4. 매장 카드
+   ======================================== */
+.super-store-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: var(--super-spacing-md);
+}
+
+.super-store-card {
+    background: var(--super-bg-primary);
+    border: 1px solid var(--super-border-color);
+    border-radius: var(--super-border-radius-lg);
+    padding: var(--super-spacing-md);
+    transition: all 0.3s ease;
+}
+
+.super-store-card:hover {
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    transform: translateY(-2px);
+}
+
+.super-store-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: var(--super-spacing-sm);
+    padding-bottom: var(--super-spacing-sm);
+    border-bottom: 1px solid var(--super-border-color);
+}
+
+.super-store-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--super-text-primary);
+}
+
+.super-store-status {
+    padding: var(--super-spacing-xs) var(--super-spacing-sm);
+    border-radius: var(--super-border-radius);
+    font-size: 0.875rem;
+    font-weight: 600;
+}
+
+.super-store-status.active {
+    background-color: var(--super-success-color);
+    color: var(--super-text-light);
+}
+
+.super-store-status.expired {
+    background-color: var(--super-warning-color);
+    color: var(--super-text-primary);
+}
+
+.super-store-info {
+    margin: var(--super-spacing-sm) 0;
+    font-size: 0.875rem;
+    color: var(--super-text-secondary);
+}
+
+/* ========================================
+   5. 테이블 스타일
+   ======================================== */
+.super-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--super-bg-primary);
+    border-radius: var(--super-border-radius-lg);
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+.super-table thead {
+    background: linear-gradient(135deg, var(--super-primary-color) 0%, #c82333 100%);
+    color: var(--super-text-light);
+}
+
+.super-table th {
+    padding: var(--super-spacing-md) var(--super-spacing-lg);
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.95rem;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.super-table td {
+    padding: var(--super-spacing-md) var(--super-spacing-lg);
+    border-bottom: 1px solid var(--super-border-color);
+    color: var(--super-text-primary);
+}
+
+.super-table tbody tr {
+    transition: all 0.2s ease;
+}
+
+.super-table tbody tr:hover {
+    background-color: #ffe6e6;
+    transform: scale(1.01);
+}
+
+.super-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* ========================================
+   6. 버튼 스타일
+   ======================================== */
+.super-btn {
+    display: inline-block;
+    padding: 0.75rem 1.5rem;
+    border: none;
+    border-radius: var(--super-border-radius-lg);
+    font-size: var(--super-font-size-base);
+    font-weight: 600;
+    cursor: pointer;
+    text-decoration: none;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.super-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.super-btn-primary {
+    background: linear-gradient(135deg, var(--super-primary-color) 0%, #c82333 100%);
+    color: var(--super-text-light);
+}
+
+.super-btn-primary:hover {
+    background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+    color: var(--super-text-light);
+}
+
+.super-btn-success {
+    background: linear-gradient(135deg, var(--super-success-color) 0%, #218838 100%);
+    color: var(--super-text-light);
+}
+
+.super-btn-success:hover {
+    background: linear-gradient(135deg, #218838 0%, #1e7e34 100%);
+    color: var(--super-text-light);
+}
+
+.super-btn-warning {
+    background: linear-gradient(135deg, var(--super-warning-color) 0%, #e0a800 100%);
+    color: var(--super-text-primary);
+}
+
+.super-btn-warning:hover {
+    background: linear-gradient(135deg, #e0a800 0%, #d39e00 100%);
+    color: var(--super-text-primary);
+}
+
+.super-btn-secondary {
+    background-color: var(--super-secondary-color);
+    color: var(--super-text-light);
+}
+
+.super-btn-secondary:hover {
+    background-color: #5a6268;
+    color: var(--super-text-light);
+}
+
+/* ========================================
+   7. 폼 요소 스타일 (로그인 페이지와 일관성)
+   ======================================== */
+.form-control {
+    border-radius: var(--super-border-radius-lg);
+    border: 2px solid var(--super-border-color);
+    padding: 0.75rem 1rem;
+    transition: all 0.3s ease;
+}
+
+.form-control:focus {
+    border-color: var(--super-primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+    outline: none;
+}
+
+.form-label {
+    font-weight: 600;
+    color: var(--super-text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.btn-danger {
+    background: linear-gradient(135deg, var(--super-primary-color) 0%, #c82333 100%);
+    border: none;
+    border-radius: var(--super-border-radius-lg);
+    padding: 0.75rem 1.5rem;
+    font-weight: 600;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.btn-danger:hover {
+    background: linear-gradient(135deg, #c82333 0%, #a71e2a 100%);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* ========================================
+   8. 제목 및 텍스트 스타일
+   ======================================== */
+h1, h2, h3, h4, h5, h6 {
+    color: var(--super-text-primary);
+    font-weight: 700;
+}
+
+h4 {
+    color: var(--super-primary-color);
+    margin-bottom: var(--super-spacing-lg);
+    font-size: 1.5rem;
+}
+
+/* ========================================
+   9. 반응형 디자인
+   ======================================== */
+@media (max-width: 768px) {
+    .super-stats-grid,
+    .super-store-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .super-container {
+        padding: var(--super-spacing-sm);
+    }
+    
+    .super-main-content {
+        padding: var(--super-spacing-md);
+    }
+}
