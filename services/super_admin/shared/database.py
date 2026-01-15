@@ -1125,33 +1125,88 @@ def approve_store(store_id, approved_by):
                 
                 # 타석 삽입 (ON CONFLICT 처리)
                 try:
-                    cur.execute("""
-                        INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) 
-                        VALUES (%s, %s, 'READY', '', '', %s)
-                        ON CONFLICT (store_id, bay_id) DO UPDATE SET 
-                            bay_code = EXCLUDED.bay_code,
-                            status = 'READY'
-                    """, (store_id, bay_id, bay_code))
+                    # 먼저 기존 타석이 있는지 확인
+                    cur.execute("SELECT COUNT(*) FROM bays WHERE store_id = %s AND bay_id = %s", (store_id, bay_id))
+                    existing_count = cur.fetchone()[0]
+                    
+                    if existing_count > 0:
+                        # 기존 타석 업데이트
+                        cur.execute("""
+                            UPDATE bays 
+                            SET bay_code = %s,
+                                status = 'READY'
+                            WHERE store_id = %s AND bay_id = %s
+                        """, (bay_code, store_id, bay_id))
+                    else:
+                        # 새 타석 삽입
+                        cur.execute("""
+                            INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) 
+                            VALUES (%s, %s, 'READY', '', '', %s)
+                        """, (store_id, bay_id, bay_code))
+                    
+                    # 삽입/업데이트 확인
+                    if cur.rowcount == 0:
+                        error_msg = f"타석 {bay_id} 삽입/업데이트 실패: rowcount=0 (bay_code={bay_code})"
+                        print(f"[ERROR] {error_msg}")
+                        import traceback
+                        traceback.print_exc()
+                        conn.rollback()
+                        return (False, error_msg)
+                    
+                    created_bays.append(bay_id)
+                    print(f"[DEBUG] 타석 {bay_id} 생성 성공 (bay_code={bay_code})")
+                    
                 except psycopg2.errors.UniqueViolation as e:
-                    # bay_code 중복인 경우
-                    error_msg = f"타석 {bay_id} 삽입 실패: bay_code 중복 ({bay_code})"
+                    # bay_code 중복인 경우 - 다른 코드로 재시도
+                    print(f"[WARN] 타석 {bay_id} bay_code 중복 ({bay_code}), 재시도...")
+                    # 다른 코드 생성
+                    for retry in range(5):
+                        new_bay_code = generate_bay_code(store_id, bay_id, cur)
+                        if new_bay_code != bay_code:
+                            try:
+                                cur.execute("""
+                                    INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) 
+                                    VALUES (%s, %s, 'READY', '', '', %s)
+                                """, (store_id, bay_id, new_bay_code))
+                                created_bays.append(bay_id)
+                                print(f"[DEBUG] 타석 {bay_id} 생성 성공 (재시도, bay_code={new_bay_code})")
+                                break
+                            except psycopg2.errors.UniqueViolation:
+                                if retry == 4:
+                                    error_msg = f"타석 {bay_id} 삽입 실패: bay_code 중복 (5회 재시도 실패)"
+                                    print(f"[ERROR] {error_msg}")
+                                    import traceback
+                                    traceback.print_exc()
+                                    conn.rollback()
+                                    return (False, error_msg)
+                                continue
+                    else:
+                        error_msg = f"타석 {bay_id} 삽입 실패: bay_code 중복 (재시도 실패)"
+                        print(f"[ERROR] {error_msg}")
+                        import traceback
+                        traceback.print_exc()
+                        conn.rollback()
+                        return (False, error_msg)
+                        
+                except psycopg2.errors.NotNullViolation as e:
+                    # 필수 컬럼 누락
+                    error_msg = f"타석 {bay_id} 삽입 실패: 필수 컬럼 누락 - {str(e)}"
                     print(f"[ERROR] {error_msg}")
                     import traceback
                     traceback.print_exc()
                     conn.rollback()
                     return (False, error_msg)
-                except psycopg2.errors.NotNullViolation as e:
-                    # 필수 컬럼 누락
-                    error_msg = f"타석 {bay_id} 삽입 실패: 필수 컬럼 누락"
+                except psycopg2.Error as e:
+                    # 기타 PostgreSQL 오류
+                    error_msg = f"타석 {bay_id} 삽입 실패: PostgreSQL 오류 - {str(e)}"
                     print(f"[ERROR] {error_msg}")
                     import traceback
                     traceback.print_exc()
                     conn.rollback()
                     return (False, error_msg)
                 
-                created_bays.append(bay_id)
             except Exception as e:
-                error_msg = f"타석 {bay_id} 생성 실패: {str(e)}"
+                error_msg = f"타석 {bay_id} 생성 실패: 예외 발생 - {type(e).__name__}: {str(e)}"
                 print(f"[ERROR] {error_msg}")
                 import traceback
                 traceback.print_exc()
