@@ -31,7 +31,6 @@
                     <thead>
                         <tr>
                             <th>매장명</th>
-                            <th>타석(룸)번호</th>
                             <th>타석(룸) 이름</th>
                             <th>등록일</th>
                             <th>사용기간</th>
@@ -45,8 +44,7 @@
                         {% for pc in pcs %}
                         <tr>
                             <td><strong style="font-size: 1.1em;">{{ pc.store_name }}</strong></td>
-                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_display }}</strong></td>
-                            <td><strong>{{ pc.pc_name }}</strong></td>
+                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.pc_name or pc.bay_display }}</strong></td>
                             <td>{{ pc.registered_at.split(' ')[0] if pc.registered_at else "-" }}</td>
                             <td>
                                 {% if pc.usage_start_date and pc.usage_end_date %}
@@ -96,7 +94,7 @@
         <div class="modal-dialog">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">PC 승인</h5>
+                    <h5 class="modal-title">타석(룸) 승인</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
                 <div class="modal-body">
@@ -269,7 +267,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('PC 승인 완료');
+                    alert('타석(룸) 승인 완료');
                     location.reload();
                 } else {
                     alert('승인 실패: ' + data.message);
