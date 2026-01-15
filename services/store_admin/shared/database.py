@@ -699,13 +699,17 @@ def get_shots_by_bay(store_id, bay_id):
     return [dict(row) for row in rows]
 
 def create_store(store_id, store_name, password, contact=None, business_number=None, owner_name=None, birth_date=None, email=None, address=None, bays_count=1):
+    """
+    매장 등록 함수 - 완전한 오류 처리 및 검증 포함
+    """
     conn = None
     cur = None
+    
+    # 1단계: 입력값 검증
     try:
-        # store_id를 대문자로 변환
-        store_id = store_id.upper().strip()
-        # store_name에서 띄어쓰기 제거하지 않음 (매장명은 띄어쓰기 가능해야 함)
-        store_name = store_name.strip()
+        store_id = str(store_id).upper().strip() if store_id else ""
+        store_name = str(store_name).strip() if store_name else ""
+        password = str(password).strip() if password else ""
         
         if not store_id:
             return False, "매장코드를 입력해주세요."
@@ -713,68 +717,133 @@ def create_store(store_id, store_name, password, contact=None, business_number=N
             return False, "매장명을 입력해주세요."
         if not password:
             return False, "비밀번호를 입력해주세요."
-        if bays_count < 1 or bays_count > 50:
+        if not isinstance(bays_count, int) or bays_count < 1 or bays_count > 50:
             return False, "타석(룸) 수는 1개 이상 50개 이하여야 합니다."
         
+        # None 값 처리 (안전하게)
+        contact = str(contact).strip() if contact else None
+        business_number = str(business_number).strip() if business_number else None
+        owner_name = str(owner_name).strip() if owner_name else None
+        birth_date = str(birth_date).strip() if birth_date else None
+        email = str(email).strip() if email else None
+        address = str(address).strip() if address else None
+        
+    except Exception as e:
+        return False, f"입력값 검증 오류: {str(e)}"
+    
+    # 2단계: 데이터베이스 연결
+    try:
         conn = get_db_connection()
         cur = conn.cursor()
+    except Exception as e:
+        error_msg = f"데이터베이스 연결 실패: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        return False, error_msg
+    
+    # 3단계: 테이블 스키마 확인 및 마이그레이션
+    try:
+        # stores 테이블에 필요한 컬럼이 있는지 확인하고 추가
+        required_columns = {
+            "status": "TEXT",
+            "requested_at": "TEXT",
+            "contact": "TEXT",
+            "business_number": "TEXT",
+            "owner_name": "TEXT",
+            "birth_date": "TEXT",
+            "email": "TEXT",
+            "address": "TEXT"
+        }
         
-        # status와 requested_at 컬럼이 없으면 추가 (안전장치)
-        try:
-            cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS status TEXT")
-            cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS requested_at TEXT")
-            conn.commit()
-        except Exception as e:
-            print(f"컬럼 추가 시도 중 오류 (무시 가능): {e}")
-            conn.rollback()
+        for col_name, col_type in required_columns.items():
+            try:
+                cur.execute(f"ALTER TABLE stores ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
+            except Exception as e:
+                # 컬럼이 이미 존재하거나 다른 오류 (무시 가능)
+                pass
         
-        # 기존 타석 삭제
+        conn.commit()
+    except Exception as e:
+        print(f"[WARN] 스키마 마이그레이션 중 오류 (계속 진행): {e}")
+        conn.rollback()
+    
+    # 4단계: 트랜잭션 시작
+    try:
+        # 기존 타석 삭제 (트랜잭션 내에서)
         try:
             cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
         except Exception as e:
-            print(f"기존 타석 삭제 중 오류 (무시 가능): {e}")
+            print(f"[WARN] 기존 타석 삭제 중 오류 (계속 진행): {e}")
         
         # 매장 정보 삽입/업데이트
-        try:
-            cur.execute("""
-                INSERT INTO stores (store_id, store_name, admin_pw, bays_count, contact, business_number, owner_name, birth_date, email, address, status, requested_at) 
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP)
-                ON CONFLICT (store_id) DO UPDATE SET
-                    store_name = EXCLUDED.store_name,
-                    admin_pw = EXCLUDED.admin_pw,
-                    bays_count = EXCLUDED.bays_count,
-                    contact = EXCLUDED.contact,
-                    business_number = EXCLUDED.business_number,
-                    owner_name = EXCLUDED.owner_name,
-                    birth_date = EXCLUDED.birth_date,
-                    email = EXCLUDED.email,
-                    address = EXCLUDED.address,
-                    status = CASE 
-                        WHEN stores.status = 'approved' THEN 'approved'  -- 이미 승인된 경우 유지
-                        ELSE 'pending'  -- 새 요청이면 pending
-                    END,
-                    requested_at = CASE 
-                        WHEN stores.status = 'approved' THEN stores.requested_at  -- 이미 승인된 경우 유지
-                        ELSE CURRENT_TIMESTAMP  -- 새 요청이면 현재 시간
-                    END
-            """, (store_id, store_name, password, bays_count, contact, business_number, owner_name, birth_date, email, address))
-        except Exception as e:
-            error_msg = f"매장 정보 저장 실패: {str(e)}"
-            print(f"[ERROR] {error_msg}")
-            import traceback
-            traceback.print_exc()
-            conn.rollback()
-            return False, error_msg
+        # PostgreSQL에서 CURRENT_TIMESTAMP는 TIMESTAMP를 반환하므로 TEXT로 변환
+        from datetime import datetime
+        current_timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         
-        # 타석 생성
+        # 기존 매장 상태 확인
+        cur.execute("SELECT status, requested_at FROM stores WHERE store_id = %s", (store_id,))
+        existing_store = cur.fetchone()
+        
+        # 매장 정보 삽입/업데이트
+        # ON CONFLICT에서 CASE 문을 사용하여 기존 상태 유지
+        cur.execute("""
+            INSERT INTO stores (
+                store_id, store_name, admin_pw, bays_count, 
+                contact, business_number, owner_name, birth_date, email, address, 
+                status, requested_at
+            ) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', %s)
+            ON CONFLICT (store_id) DO UPDATE SET
+                store_name = EXCLUDED.store_name,
+                admin_pw = EXCLUDED.admin_pw,
+                bays_count = EXCLUDED.bays_count,
+                contact = EXCLUDED.contact,
+                business_number = EXCLUDED.business_number,
+                owner_name = EXCLUDED.owner_name,
+                birth_date = EXCLUDED.birth_date,
+                email = EXCLUDED.email,
+                address = EXCLUDED.address,
+                status = CASE 
+                    WHEN stores.status = 'approved' THEN 'approved'
+                    ELSE 'pending'
+                END,
+                requested_at = CASE 
+                    WHEN stores.status = 'approved' THEN stores.requested_at
+                    ELSE %s
+                END
+        """, (
+            store_id, store_name, password, bays_count,
+            contact, business_number, owner_name, birth_date, email, address,
+            current_timestamp,  # INSERT의 requested_at
+            current_timestamp   # UPDATE의 requested_at (새 요청인 경우)
+        ))
+        
+        # 5단계: 타석 생성
+        created_bays = []
         for i in range(1, bays_count + 1):
+            bay_id = f"{i:02d}"
             try:
-                bay_id = f"{i:02d}"
-                bay_code = generate_bay_code(store_id, bay_id, cur)
-                cur.execute(
-                    "INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) VALUES (%s, %s, 'READY', '', '', %s) ON CONFLICT (store_id, bay_id) DO UPDATE SET bay_code = EXCLUDED.bay_code",
-                    (store_id, bay_id, bay_code)
-                )
+                # bay_code 생성 (중복 방지 포함)
+                max_attempts = 10
+                bay_code = None
+                for attempt in range(max_attempts):
+                    bay_code = generate_bay_code(store_id, bay_id, cur)
+                    # 중복 확인
+                    cur.execute("SELECT COUNT(*) FROM bays WHERE bay_code = %s", (bay_code,))
+                    if cur.fetchone()[0] == 0:
+                        break
+                    if attempt == max_attempts - 1:
+                        return False, f"타석 {bay_id}의 고유 코드 생성 실패 (중복)"
+                
+                # 타석 삽입
+                cur.execute("""
+                    INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code) 
+                    VALUES (%s, %s, 'READY', '', '', %s)
+                    ON CONFLICT (store_id, bay_id) DO UPDATE SET 
+                        bay_code = EXCLUDED.bay_code,
+                        status = 'READY'
+                """, (store_id, bay_id, bay_code))
+                
+                created_bays.append(bay_id)
             except Exception as e:
                 error_msg = f"타석 {bay_id} 생성 실패: {str(e)}"
                 print(f"[ERROR] {error_msg}")
@@ -783,8 +852,27 @@ def create_store(store_id, store_name, password, contact=None, business_number=N
                 conn.rollback()
                 return False, error_msg
         
+        # 6단계: 커밋
         conn.commit()
+        print(f"[SUCCESS] 매장 등록 완료: {store_id}, 타석 {len(created_bays)}개 생성")
         return True
+        
+    except psycopg2.IntegrityError as e:
+        error_msg = f"데이터베이스 제약 조건 위반: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
+        return False, error_msg
+    except psycopg2.ProgrammingError as e:
+        error_msg = f"SQL 구문 오류: {str(e)}"
+        print(f"[ERROR] {error_msg}")
+        import traceback
+        traceback.print_exc()
+        if conn:
+            conn.rollback()
+        return False, error_msg
     except Exception as e:
         error_msg = f"매장 등록 오류: {str(e)}"
         print(f"[ERROR] {error_msg}")
