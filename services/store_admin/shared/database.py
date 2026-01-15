@@ -877,17 +877,43 @@ def get_store_pc_by_unique_id(pc_unique_id):
     return dict(result) if result else None
 
 def get_store_pcs_by_store(store_name):
-    """매장별 PC 목록 조회"""
+    """매장별 PC 목록 조회 (bay_id 포함)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute(
-        "SELECT * FROM store_pcs WHERE store_name = %s ORDER BY bay_name, pc_name",
-        (store_name,)
-    )
+    # store_pcs 테이블에 bay_id가 있으면 사용, 없으면 bay_name에서 추출
+    cur.execute("""
+        SELECT sp.*, 
+               CASE 
+                   WHEN sp.bay_id IS NOT NULL THEN sp.bay_id
+                   ELSE NULL
+               END AS bay_id
+        FROM store_pcs sp
+        WHERE sp.store_name = %s 
+        ORDER BY 
+            CASE 
+                WHEN sp.bay_id IS NOT NULL THEN CAST(sp.bay_id AS INTEGER)
+                ELSE 999
+            END,
+            sp.bay_name, 
+            sp.pc_name
+    """, (store_name,))
     rows = cur.fetchall()
+    
+    # bay_id가 없으면 bay_name에서 추출
+    import re
+    result = []
+    for row in rows:
+        pc = dict(row)
+        if not pc.get("bay_id") and pc.get("bay_name"):
+            match = re.search(r'(\d+)', str(pc.get("bay_name", "")))
+            if match:
+                bay_num = int(match.group(1))
+                pc["bay_id"] = f"{bay_num:02d}"
+        result.append(pc)
+    
     cur.close()
     conn.close()
-    return [dict(row) for row in rows]
+    return result
 
 def get_all_store_pcs():
     """모든 매장 PC 목록 조회"""

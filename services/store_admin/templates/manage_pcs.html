@@ -42,7 +42,15 @@
                     <tbody>
                         {% for pc in pcs %}
                         <tr>
-                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.pc_name or pc.bay_display }}</strong></td>
+                            <td>
+                                {% if pc.bay_id %}
+                                    {% set bay_num = pc.bay_id|int %}
+                                    <strong style="font-size: 1.1em; color: #007bff;">{{ "%02d"|format(bay_num) }}번 타석(룸)</strong>
+                                {% else %}
+                                    <strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_display or "-" }}</strong>
+                                {% endif %}
+                            </td>
+                            <td><strong>{{ pc.pc_name or pc.bay_name or "-" }}</strong></td>
                             <td>{{ pc.registered_at.split(' ')[0] if pc.registered_at else "-" }}</td>
                             <td>
                                 {% if pc.usage_start_date and pc.usage_end_date %}
