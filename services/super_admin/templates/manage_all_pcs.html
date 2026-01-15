@@ -295,8 +295,7 @@
 
         function showDetailModal(pcUniqueId, storeName, bayName, pcName, hostname, platform, uniqueId, registeredAt, approvedAt, approvedBy, notes) {
             document.getElementById('detail-store-name').textContent = storeName || '-';
-            document.getElementById('detail-bay-name').textContent = bayName || '-';
-            document.getElementById('detail-pc-name').textContent = pcName || '-';
+            document.getElementById('detail-pc-name').textContent = pcName || bayName || '-';
             document.getElementById('detail-hostname').textContent = hostname || '-';
             document.getElementById('detail-platform').textContent = platform || '-';
             document.getElementById('detail-unique-id').textContent = uniqueId || '-';
