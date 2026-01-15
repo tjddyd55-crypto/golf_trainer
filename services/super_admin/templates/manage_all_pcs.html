@@ -45,7 +45,7 @@
                         {% for pc in pcs %}
                         <tr>
                             <td><strong style="font-size: 1.1em;">{{ pc.store_name }}</strong></td>
-                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_name }}</strong></td>
+                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_display }}</strong></td>
                             <td>{{ pc.pc_name }}</td>
                             <td>{{ pc.registered_at.split(' ')[0] if pc.registered_at else "-" }}</td>
                             <td>
@@ -69,14 +69,14 @@
                             </td>
                             <td>
                                 {% if pc.status == 'pending' %}
-                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}')">승인</button>
-                                    <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}')">거부</button>
+                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}')">승인</button>
+                                    <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}')">거부</button>
                                 {% elif pc.status == 'active' %}
-                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}')">수정</button>
+                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}')">수정</button>
                                 {% endif %}
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name }}', '{{ pc.pc_name }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.pc_unique_id }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.approved_by or '' }}', '{{ pc.notes or '' }}')">상세</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.pc_unique_id }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.approved_by or '' }}', '{{ pc.notes or '' }}')">상세</button>
                             </td>
                         </tr>
                         {% endfor %}

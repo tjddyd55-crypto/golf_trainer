@@ -266,6 +266,41 @@ def clear_all_sessions():
     return jsonify({"success": True, "deleted": deleted})
 
 # =========================
+# 타석 표시 형식 통일 헬퍼 함수
+# =========================
+def format_bay_display(bay_id=None, bay_name=None):
+    """
+    bay_id 또는 bay_name을 "XX번 타석" 형식으로 변환
+    
+    Args:
+        bay_id: 타석 ID (예: "01", "02")
+        bay_name: 타석 이름 (예: "2번룸", "1타석")
+    
+    Returns:
+        "01번 타석" 형식의 문자열
+    """
+    # bay_id가 있으면 우선 사용
+    if bay_id:
+        try:
+            # "01" -> 1 -> "01번 타석"
+            num = int(bay_id)
+            return f"{num:02d}번 타석"
+        except (ValueError, TypeError):
+            pass
+    
+    # bay_name에서 숫자 추출
+    if bay_name:
+        import re
+        # 숫자 추출 (예: "2번룸" -> "2", "1타석" -> "1")
+        match = re.search(r'(\d+)', str(bay_name))
+        if match:
+            num = int(match.group(1))
+            return f"{num:02d}번 타석"
+    
+    # 둘 다 없으면 기본값
+    return "타석 정보 없음"
+
+# =========================
 # 로그아웃
 # =========================
 @app.route("/pcs")
@@ -287,6 +322,10 @@ def manage_pcs():
     
     # 해당 매장의 PC 목록 조회
     pcs = database.get_store_pcs_by_store(store_name)
+    
+    # 각 PC에 표시용 bay_display 추가
+    for pc in pcs:
+        pc["bay_display"] = format_bay_display(pc.get("bay_id"), pc.get("bay_name"))
     
     return render_template("manage_pcs.html",
                          store_id=store_id,

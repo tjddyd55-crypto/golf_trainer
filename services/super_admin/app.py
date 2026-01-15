@@ -24,6 +24,41 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_
 database.init_db()
 
 # =========================
+# 타석 표시 형식 통일 헬퍼 함수
+# =========================
+def format_bay_display(bay_id=None, bay_name=None):
+    """
+    bay_id 또는 bay_name을 "XX번 타석" 형식으로 변환
+    
+    Args:
+        bay_id: 타석 ID (예: "01", "02")
+        bay_name: 타석 이름 (예: "2번룸", "1타석")
+    
+    Returns:
+        "01번 타석" 형식의 문자열
+    """
+    # bay_id가 있으면 우선 사용
+    if bay_id:
+        try:
+            # "01" -> 1 -> "01번 타석"
+            num = int(bay_id)
+            return f"{num:02d}번 타석"
+        except (ValueError, TypeError):
+            pass
+    
+    # bay_name에서 숫자 추출
+    if bay_name:
+        import re
+        # 숫자 추출 (예: "2번룸" -> "2", "1타석" -> "1")
+        match = re.search(r'(\d+)', str(bay_name))
+        if match:
+            num = int(match.group(1))
+            return f"{num:02d}번 타석"
+    
+    # 둘 다 없으면 기본값
+    return "타석 정보 없음"
+
+# =========================
 # 총책임자 로그인
 # =========================
 @app.route("/login", methods=["GET", "POST"])
@@ -34,7 +69,7 @@ def super_admin_login():
         
         # 총책임자 인증 (환경 변수 또는 하드코딩)
         super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-        super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "admin123")
+        super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "endolpin0!")
         
         if username == super_admin_username and password == super_admin_password:
             session["role"] = "super_admin"
@@ -279,6 +314,10 @@ def manage_all_pcs():
         pcs = [dict(row) for row in cur.fetchall()]
         cur.close()
         conn.close()
+        
+        # 각 PC에 표시용 bay_display 추가
+        for pc in pcs:
+            pc["bay_display"] = format_bay_display(pc.get("bay_id"), pc.get("bay_name"))
         
         return render_template("manage_all_pcs.html", pcs=pcs)
     except Exception as e:

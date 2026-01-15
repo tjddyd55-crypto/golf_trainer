@@ -42,7 +42,10 @@
                 {% for bay in bays %}
                 <div class="admin-bay-card {{ 'active' if bay.active_user else '' }}">
                     <div class="admin-bay-card-header">
-                        <div class="admin-bay-number">{{ bay.bay_id }}번 타석</div>
+                        <div class="admin-bay-number">
+                            {% set bay_num = bay.bay_id|int %}
+                            {{ "%02d"|format(bay_num) }}번 타석
+                        </div>
                         <div class="admin-bay-status {{ 'active' if bay.active_user else 'ready' }}">
                             {{ '로그인 중' if bay.active_user else '비어 있음' }}
                         </div>
@@ -97,8 +100,11 @@
                             {% for s in shots[:20] %}
                             <tr>
                                 <td>{{ s.timestamp.split(' ')[1] if s.timestamp else "" }}</td>
-                                <td>{{ s.bay_id }}</td>
-                                <td>{{ s.user_id }}</td>
+                                <td>
+                                    {% set bay_num = s.bay_id|int %}
+                                    {{ "%02d"|format(bay_num) }}번 타석
+                                </td>
+                                <td>{{ "게스트" if s.user_id == "GUEST" else s.user_id }}</td>
                                 <td>{{ s.club_id }}</td>
                                 <td>{{ "%.1f"|format(s.total_distance) if s.total_distance is not none else "" }}</td>
                                 <td>{{ "%.1f"|format(s.carry) if s.carry is not none else "" }}</td>
