@@ -291,7 +291,7 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    alert('PC 거부 완료');
+                    alert('타석(룸) 거부 완료');
                     location.reload();
                 } else {
                     alert('거부 실패: ' + data.message);
