@@ -165,7 +165,7 @@ def store_admin_login():
 @require_role("store_admin")
 def store_admin_dashboard():
     try:
-        from .utils import classify_by_criteria
+        from utils import classify_by_criteria
         
         store_id = session.get("store_id")
         bays = database.get_bays(store_id)
