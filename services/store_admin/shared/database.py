@@ -880,40 +880,46 @@ def get_store_pcs_by_store(store_name):
     """매장별 PC 목록 조회 (bay_id 포함)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    # store_pcs 테이블에 bay_id가 있으면 사용, 없으면 bay_name에서 추출
-    cur.execute("""
-        SELECT sp.*, 
-               CASE 
-                   WHEN sp.bay_id IS NOT NULL THEN sp.bay_id
-                   ELSE NULL
-               END AS bay_id
-        FROM store_pcs sp
-        WHERE sp.store_name = %s 
-        ORDER BY 
-            CASE 
-                WHEN sp.bay_id IS NOT NULL THEN CAST(sp.bay_id AS INTEGER)
-                ELSE 999
-            END,
-            sp.bay_name, 
-            sp.pc_name
-    """, (store_name,))
-    rows = cur.fetchall()
-    
-    # bay_id가 없으면 bay_name에서 추출
-    import re
-    result = []
-    for row in rows:
-        pc = dict(row)
-        if not pc.get("bay_id") and pc.get("bay_name"):
-            match = re.search(r'(\d+)', str(pc.get("bay_name", "")))
-            if match:
-                bay_num = int(match.group(1))
-                pc["bay_id"] = f"{bay_num:02d}"
-        result.append(pc)
-    
-    cur.close()
-    conn.close()
-    return result
+    try:
+        # store_pcs 테이블에서 모든 필드 조회
+        cur.execute("""
+            SELECT sp.*
+            FROM store_pcs sp
+            WHERE sp.store_name = %s 
+            ORDER BY 
+                CASE 
+                    WHEN sp.bay_id IS NOT NULL AND sp.bay_id ~ '^[0-9]+$' 
+                    THEN CAST(sp.bay_id AS INTEGER)
+                    ELSE 999
+                END,
+                sp.bay_name, 
+                sp.pc_name
+        """, (store_name,))
+        rows = cur.fetchall()
+        
+        # bay_id가 없으면 bay_name에서 추출
+        import re
+        result = []
+        for row in rows:
+            pc = dict(row)
+            # bay_id가 없거나 숫자가 아니면 bay_name에서 추출
+            if not pc.get("bay_id") or not str(pc.get("bay_id", "")).isdigit():
+                if pc.get("bay_name"):
+                    match = re.search(r'(\d+)', str(pc.get("bay_name", "")))
+                    if match:
+                        bay_num = int(match.group(1))
+                        pc["bay_id"] = f"{bay_num:02d}"
+            result.append(pc)
+        
+        return result
+    except Exception as e:
+        print(f"get_store_pcs_by_store 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+    finally:
+        cur.close()
+        conn.close()
 
 def get_all_store_pcs():
     """모든 매장 PC 목록 조회"""

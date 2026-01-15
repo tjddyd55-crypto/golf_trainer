@@ -354,30 +354,38 @@ def format_bay_display(bay_id=None, bay_name=None):
 @require_role("store_admin")
 def manage_pcs():
     """매장 타석(룸) 관리"""
-    store_id = session.get("store_id")
-    
-    # 매장 이름 조회
-    from psycopg2.extras import RealDictCursor
-    conn = database.get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
-    store = cur.fetchone()
-    cur.close()
-    conn.close()
-    
-    store_name = store["store_name"] if store else store_id
-    
-    # 해당 매장의 PC 목록 조회
-    pcs = database.get_store_pcs_by_store(store_name)
-    
-    # 각 PC에 표시용 bay_display 추가
-    for pc in pcs:
-        pc["bay_display"] = format_bay_display(pc.get("bay_id"), pc.get("bay_name"))
-    
-    return render_template("manage_pcs.html",
-                         store_id=store_id,
-                         store_name=store_name,
-                         pcs=pcs)
+    try:
+        store_id = session.get("store_id")
+        
+        if not store_id:
+            return redirect(url_for("store_admin_login"))
+        
+        # 매장 이름 조회
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
+        store = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        store_name = store["store_name"] if store else store_id
+        
+        # 해당 매장의 PC 목록 조회
+        pcs = database.get_store_pcs_by_store(store_name)
+        
+        # 각 PC에 표시용 bay_display 추가
+        for pc in pcs:
+            pc["bay_display"] = format_bay_display(pc.get("bay_id"), pc.get("bay_name"))
+        
+        return render_template("manage_pcs.html",
+                             store_id=store_id,
+                             store_name=store_name,
+                             pcs=pcs)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
 
 @app.route("/logout")
 def store_admin_logout():
