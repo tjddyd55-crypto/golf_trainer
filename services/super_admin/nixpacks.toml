@@ -1,0 +1,17 @@
+# Nixpacks 설정 파일
+# Railway에서 자동 생성되는 Dockerfile의 보안 경고를 방지하기 위한 설정
+
+[phases.setup]
+nixPkgs = ["python310", "pip"]
+
+[phases.install]
+cmds = [
+  "pip install --upgrade pip",
+  "pip install -r requirements.txt"
+]
+
+[start]
+cmd = "gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+
+# 환경 변수는 Railway Variables에서 설정
+# FLASK_SECRET_KEY는 환경 변수로만 설정하고 Dockerfile에서는 사용하지 않음
