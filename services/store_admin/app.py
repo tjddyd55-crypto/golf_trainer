@@ -50,6 +50,12 @@ def store_admin_signup():
         store_name = request.form.get("store_name", "").strip()
         contact = request.form.get("contact", "").strip()
         business_number = request.form.get("business_number", "").strip()
+        bays_count = int(request.form.get("bays_count", "1") or "1")
+        
+        # 타석 수 검증
+        if bays_count < 1 or bays_count > 50:
+            return render_template("store_admin_signup.html", 
+                                 error="타석(룸) 수는 1개 이상 50개 이하여야 합니다.")
         
         # 선택 항목
         owner_name = request.form.get("owner_name", "").strip() or None
@@ -76,7 +82,7 @@ def store_admin_signup():
         try:
             if database.create_store(
                 store_id, store_name, password, contact, business_number,
-                owner_name, birth_date, email, address
+                owner_name, birth_date, email, address, bays_count
             ):
                 return render_template("store_admin_signup.html", 
                                      success="매장 등록 요청이 완료되었습니다. 승인 대기 중입니다.")
@@ -180,6 +186,20 @@ def store_admin_dashboard():
         active_sessions = database.get_all_active_sessions(store_id)
         rows = database.get_all_shots_by_store(store_id)
         
+        # 매장 정보 조회 (전체 타석 수)
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
+        store = cur.fetchone()
+        total_bays_count = store["bays_count"] if store else 0
+        cur.close()
+        conn.close()
+        
+        # 유효한 타석 수 계산
+        valid_bays_count = sum(1 for bay in bays if bay.get("is_valid", False))
+        invalid_bays_count = total_bays_count - valid_bays_count
+        
         # 샷 데이터에 색상 클래스 추가
         shots = []
         for r in rows[:20]:  # 최근 20개만
@@ -196,13 +216,26 @@ def store_admin_dashboard():
         for session_info in active_sessions:
             key = f"{session_info['store_id']}_{session_info['bay_id']}"
             bay_active_users[key] = session_info
+        
+        # 각 타석에 활성 사용자 정보 추가
+        for bay in bays:
+            bay_key = f"{store_id}_{bay['bay_id']}"
+            if bay_key in bay_active_users:
+                bay['active_user'] = bay_active_users[bay_key].get('user_id')
+                bay['login_time'] = bay_active_users[bay_key].get('login_time')
+            else:
+                bay['active_user'] = None
+                bay['login_time'] = None
 
         return render_template("store_admin_dashboard.html",
                              store_id=store_id,
                              bays=bays,
                              active_sessions=active_sessions,
                              bay_active_users=bay_active_users,
-                             shots=shots)
+                             shots=shots,
+                             total_bays_count=total_bays_count,
+                             valid_bays_count=valid_bays_count,
+                             invalid_bays_count=invalid_bays_count)
     except Exception as e:
         import traceback
         traceback.print_exc()

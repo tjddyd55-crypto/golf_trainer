@@ -20,8 +20,8 @@
             
             <div class="alert alert-info">
                 <strong>PC 등록 방법:</strong><br>
-                1. 각 타석 PC에서 <code>register_pc.py</code> 실행<br>
-                2. 매장명, 타석명, PC 이름 입력<br>
+                1. 각 타석(룸) PC에서 <code>register_pc.py</code> 실행<br>
+                2. 매장명, 타석(룸)명, PC 이름 입력<br>
                 3. 서버에 자동 등록
             </div>
             
@@ -30,7 +30,7 @@
                 <table class="admin-table">
                     <thead>
                         <tr>
-                            <th>타석번호</th>
+                            <th>타석(룸)번호</th>
                             <th>PC 이름</th>
                             <th>등록일</th>
                             <th>사용기간</th>
@@ -74,7 +74,7 @@
             </div>
             {% else %}
             <div class="alert alert-warning">
-                등록된 PC가 없습니다. 각 타석 PC에서 <code>register_pc.py</code>를 실행하여 등록하세요.
+                등록된 PC가 없습니다. 각 타석(룸) PC에서 <code>register_pc.py</code>를 실행하여 등록하세요.
             </div>
             {% endif %}
         </div>
@@ -91,7 +91,7 @@
                 <div class="modal-body">
                     <table class="table table-bordered">
                         <tr>
-                            <th width="30%">타석번호</th>
+                            <th width="30%">타석(룸)번호</th>
                             <td id="detail-bay-name"></td>
                         </tr>
                         <tr>

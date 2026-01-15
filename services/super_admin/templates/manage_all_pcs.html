@@ -69,10 +69,10 @@
                             </td>
                             <td>
                                 {% if pc.status == 'pending' %}
-                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}')">승인</button>
+                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_id or '' }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}')">승인</button>
                                     <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}')">거부</button>
                                 {% elif pc.status == 'active' %}
-                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}')">수정</button>
+                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_id or '' }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}', '{{ pc.approved_at or '' }}')">수정</button>
                                 {% endif %}
                             </td>
                             <td>
@@ -101,13 +101,15 @@
                 </div>
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="approve-store-name"></span></p>
-                    <p><strong>타석:</strong> <span id="approve-bay-name"></span></p>
+                    <p><strong>타석(룸):</strong> <span id="approve-bay-name"></span></p>
                     <p><strong>PC 이름:</strong> <span id="approve-pc-name"></span></p>
                     <hr>
                     <label>사용 시작일:</label>
                     <input type="date" id="approve-start-date" class="form-control" required>
                     <label>사용 종료일:</label>
                     <input type="date" id="approve-end-date" class="form-control" required>
+                    <label>승인일 (선택, 비워두면 오늘 날짜로 설정):</label>
+                    <input type="date" id="approve-approved-date" class="form-control">
                     <label>메모 (선택):</label>
                     <textarea id="approve-notes" class="form-control" rows="3"></textarea>
                 </div>
@@ -129,7 +131,7 @@
                 </div>
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="reject-store-name"></span></p>
-                    <p><strong>타석:</strong> <span id="reject-bay-name"></span></p>
+                    <p><strong>타석(룸):</strong> <span id="reject-bay-name"></span></p>
                     <p><strong>PC 이름:</strong> <span id="reject-pc-name"></span></p>
                     <hr>
                     <label>거부 사유 (선택):</label>
@@ -206,8 +208,13 @@
     <script>
         let currentPcUniqueId = null;
 
-        function showApproveModal(pcUniqueId, storeName, bayName, pcName, startDate = '', endDate = '') {
+        let currentStoreId = '';
+        let currentBayId = '';
+        
+        function showApproveModal(pcUniqueId, storeId, storeName, bayId, bayName, pcName, startDate = '', endDate = '', approvedDate = '') {
             currentPcUniqueId = pcUniqueId;
+            currentStoreId = storeId || '';
+            currentBayId = bayId || '';
             document.getElementById('approve-store-name').textContent = storeName;
             document.getElementById('approve-bay-name').textContent = bayName;
             document.getElementById('approve-pc-name').textContent = pcName;
@@ -219,6 +226,7 @@
             
             document.getElementById('approve-start-date').value = startDate || today;
             document.getElementById('approve-end-date').value = endDate || oneYearLaterStr;
+            document.getElementById('approve-approved-date').value = approvedDate || today;
             document.getElementById('approve-notes').value = '';
             
             new bootstrap.Modal(document.getElementById('approveModal')).show();
@@ -237,6 +245,7 @@
         function approvePC() {
             const startDate = document.getElementById('approve-start-date').value;
             const endDate = document.getElementById('approve-end-date').value;
+            const approvedDate = document.getElementById('approve-approved-date').value;
             const notes = document.getElementById('approve-notes').value;
             
             if (!startDate || !endDate) {
@@ -249,8 +258,11 @@
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
                     pc_unique_id: currentPcUniqueId,
+                    store_id: currentStoreId,
+                    bay_id: currentBayId,
                     usage_start_date: startDate,
                     usage_end_date: endDate,
+                    approved_date: approvedDate || new Date().toISOString().split('T')[0],
                     notes: notes
                 })
             })

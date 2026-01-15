@@ -101,6 +101,19 @@ body {
     background-color: #d4edda;
 }
 
+.admin-bay-card.bay-valid {
+    border-left: 4px solid var(--admin-success-color);
+}
+
+.admin-bay-card.bay-invalid {
+    border-left: 4px solid var(--admin-warning-color);
+    opacity: 0.8;
+}
+
+.admin-bay-card.bay-invalid:not(.active) {
+    background-color: #fff3cd;
+}
+
 .admin-bay-card-header {
     display: flex;
     justify-content: space-between;

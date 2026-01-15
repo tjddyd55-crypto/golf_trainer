@@ -31,7 +31,14 @@
         
         <div class="admin-main-content">
             <div class="d-flex justify-content-between align-items-center mb-4">
-                <h4>🖥️ 타석 현황</h4>
+                <div>
+                    <h4>🖥️ 타석(룸) 현황</h4>
+                    <div class="mt-2">
+                        <span class="badge bg-success me-2">유효: {{ valid_bays_count }}개</span>
+                        <span class="badge bg-warning me-2">무효: {{ invalid_bays_count }}개</span>
+                        <span class="badge bg-secondary">전체: {{ total_bays_count }}개</span>
+                    </div>
+                </div>
                 <div>
                     <a href="{{ url_for('manage_pcs') }}" class="admin-btn admin-btn-primary me-2">PC 관리</a>
                     <button class="admin-btn admin-btn-danger" onclick="clearAllSessions()">모든 세션 삭제</button>
@@ -40,16 +47,42 @@
             
             <div class="admin-bay-grid">
                 {% for bay in bays %}
-                <div class="admin-bay-card {{ 'active' if bay.active_user else '' }}">
+                <div class="admin-bay-card {{ 'active' if bay.active_user else '' }} {{ 'bay-invalid' if not bay.is_valid else 'bay-valid' }}">
                     <div class="admin-bay-card-header">
                         <div class="admin-bay-number">
                             {% set bay_num = bay.bay_id|int %}
-                            {{ "%02d"|format(bay_num) }}번 타석
+                            {{ "%02d"|format(bay_num) }}번 타석(룸)
                         </div>
                         <div class="admin-bay-status {{ 'active' if bay.active_user else 'ready' }}">
                             {{ '로그인 중' if bay.active_user else '비어 있음' }}
                         </div>
                     </div>
+                    
+                    {% if bay.is_valid %}
+                    <div class="mt-2">
+                        <span class="badge bg-success">✓ 유효</span>
+                        {% if bay.pc_name %}
+                        <small class="text-muted d-block mt-1">{{ bay.pc_name }}</small>
+                        {% endif %}
+                    </div>
+                    {% elif bay.has_pc %}
+                    <div class="mt-2">
+                        <span class="badge bg-warning">⚠ 무효</span>
+                        {% if bay.pc_name %}
+                        <small class="text-muted d-block mt-1">{{ bay.pc_name }}</small>
+                        {% endif %}
+                        <small class="text-danger d-block mt-1">
+                            {% if bay.pc_status == 'pending' %}승인 대기 중
+                            {% elif bay.pc_status == 'rejected' %}승인 거부됨
+                            {% else %}사용 기간 만료
+                            {% endif %}
+                        </small>
+                    </div>
+                    {% else %}
+                    <div class="mt-2">
+                        <span class="badge bg-secondary">PC 미등록</span>
+                    </div>
+                    {% endif %}
                     
                     {% if bay.bay_code %}
                     <div class="admin-bay-code">{{ bay.bay_code }}</div>

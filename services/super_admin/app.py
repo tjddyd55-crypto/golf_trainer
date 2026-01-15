@@ -336,13 +336,14 @@ def manage_all_pcs():
 @app.route("/api/approve_pc", methods=["POST"])
 @require_role("super_admin")
 def approve_pc():
-    """PC 승인 (사용 기간 설정)"""
+    """PC 승인 (사용 기간 설정 및 타석 정보 설정)"""
     data = request.get_json()
     pc_unique_id = data.get("pc_unique_id")
-    store_id = data.get("store_id")
-    bay_id = data.get("bay_id")
+    store_id = data.get("store_id")  # 매장코드
+    bay_id = data.get("bay_id")  # 타석 ID (예: "01", "02")
     usage_start_date = data.get("usage_start_date")  # YYYY-MM-DD 문자열
     usage_end_date = data.get("usage_end_date")  # YYYY-MM-DD 문자열
+    approved_date = data.get("approved_date")  # YYYY-MM-DD 문자열 (선택)
     notes = data.get("notes", "")
     
     # 문자열을 DATE로 변환
@@ -373,6 +374,9 @@ def approve_pc():
         # 토큰 생성
         pc_token = database.generate_pc_token(pc_unique_id, mac_address)
         
+        # 승인일 설정 (제공된 경우 사용, 없으면 오늘)
+        approved_at_value = date.fromisoformat(approved_date) if approved_date else date.today()
+        
         # PC 승인 및 사용 기간 설정
         cur.execute("""
             UPDATE store_pcs 
@@ -382,12 +386,12 @@ def approve_pc():
                 pc_token = %s,
                 usage_start_date = %s,
                 usage_end_date = %s,
-                approved_at = CURRENT_TIMESTAMP,
+                approved_at = %s,
                 approved_by = %s,
                 notes = %s
             WHERE pc_unique_id = %s
         """, (store_id, bay_id, pc_token, start_date, end_date, 
-              session.get("user_id", "super_admin"), notes, pc_unique_id))
+              approved_at_value, session.get("user_id", "super_admin"), notes, pc_unique_id))
         
         conn.commit()
         

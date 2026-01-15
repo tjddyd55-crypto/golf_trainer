@@ -541,25 +541,98 @@ def check_store(store_id, password):
     return dict(store) if store else None
 
 def get_bays(store_id):
+    """매장의 전체 타석 목록 조회 (PC 등록 상태 및 유효성 포함)"""
+    from datetime import date
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
+    
+    # 매장 정보 조회
+    cur.execute("SELECT bays_count, store_name FROM stores WHERE store_id = %s", (store_id,))
     store = cur.fetchone()
     if not store:
         return []
+    
     bays_count = store["bays_count"]
+    store_name = store.get("store_name", "")
+    today = date.today()
+    
+    # 전체 타석 조회 (bays_count만큼)
+    all_bays = []
+    for i in range(1, bays_count + 1):
+        bay_id = f"{i:02d}"
+        bay_dict = {
+            "store_id": store_id,
+            "bay_id": bay_id,
+            "status": "READY",
+            "user_id": "",
+            "last_update": "",
+            "bay_code": None,
+            "has_pc": False,
+            "is_valid": False,
+            "pc_status": None,
+            "pc_name": None
+        }
+        all_bays.append(bay_dict)
+    
+    # DB에 저장된 타석 정보 조회
     cur.execute("""
         SELECT * FROM bays WHERE store_id = %s ORDER BY bay_id
     """, (store_id,))
-    all_bays = cur.fetchall()
+    db_bays = cur.fetchall()
+    
+    # DB 타석 정보로 업데이트
+    for db_bay in db_bays:
+        bay_id = db_bay["bay_id"]
+        bay_num = int(bay_id)
+        if bay_num <= bays_count:
+            for bay in all_bays:
+                if bay["bay_id"] == bay_id:
+                    bay.update(dict(db_bay))
+                    break
+    
+    # 각 타석의 PC 등록 상태 및 유효성 확인
+    cur.execute("""
+        SELECT bay_name, pc_name, status, usage_end_date, approved_at
+        FROM store_pcs
+        WHERE store_name = %s
+    """, (store_name,))
+    pcs = cur.fetchall()
+    
+    # bay_name에서 타석 번호 추출하여 매칭
+    import re
+    for pc in pcs:
+        bay_name = pc.get("bay_name", "")
+        # "2번룸", "02번 타석", "1타석" 등에서 숫자 추출
+        match = re.search(r'(\d+)', str(bay_name))
+        if match:
+            pc_bay_num = int(match.group(1))
+            if 1 <= pc_bay_num <= bays_count:
+                bay_id = f"{pc_bay_num:02d}"
+                for bay in all_bays:
+                    if bay["bay_id"] == bay_id:
+                        bay["has_pc"] = True
+                        bay["pc_status"] = pc.get("status")
+                        bay["pc_name"] = pc.get("pc_name")
+                        # 유효성 판정: status='active'이고 사용 기간이 유효한 경우
+                        if pc.get("status") == "active":
+                            usage_end_date = pc.get("usage_end_date")
+                            if usage_end_date:
+                                if isinstance(usage_end_date, str):
+                                    from datetime import datetime
+                                    try:
+                                        usage_end_date = datetime.strptime(usage_end_date, "%Y-%m-%d").date()
+                                    except:
+                                        usage_end_date = None
+                                if usage_end_date and usage_end_date >= today:
+                                    bay["is_valid"] = True
+                            else:
+                                # 사용 기간이 없으면 무제한으로 간주
+                                bay["is_valid"] = True
+                        break
+    
     cur.close()
     conn.close()
-    filtered_bays = []
-    for bay in all_bays:
-        bay_num = int(bay["bay_id"])
-        if bay_num <= bays_count:
-            filtered_bays.append(dict(bay))
-    return filtered_bays
+    return all_bays
 
 def get_all_shots_by_store(store_id):
     conn = get_db_connection()
