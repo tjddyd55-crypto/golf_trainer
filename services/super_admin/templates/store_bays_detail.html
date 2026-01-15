@@ -62,7 +62,7 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="bay-card {% if bay.is_valid %}bay-valid{% elif bay.has_pc %}bay-invalid{% else %}bay-no-pc{% endif %}">
                         <div class="d-flex justify-content-between align-items-center mb-2">
-                            <h5 class="mb-0">{{ bay.bay_id }}번 타석(룸)</h5>
+                            <h5 class="mb-0">{{ bay.pc_name or (bay.bay_id + '번 타석(룸)') }}</h5>
                             {% if bay.is_valid %}
                             <span class="badge bg-success">✓ 유효</span>
                             {% elif bay.has_pc %}
@@ -71,12 +71,6 @@
                             <span class="badge bg-secondary">타석(룸) 미등록</span>
                             {% endif %}
                         </div>
-                        
-                        {% if bay.pc_name %}
-                        <div class="mb-2">
-                            <strong>타석(룸) 이름:</strong> {{ bay.pc_name }}
-                        </div>
-                        {% endif %}
                         
                         {% if bay.has_pc %}
                         <div class="mb-2">
