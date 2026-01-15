@@ -117,8 +117,13 @@ BRANDS = [
 
 # 설정 파일 경로 (헬퍼 함수 사용)
 def get_config_file():
-    """config.json 파일 경로 반환"""
-    return os.path.join(get_base_path(), "config.json")
+    """config.json 파일 경로 반환 (config/config.json 우선, 없으면 루트의 config.json)"""
+    base_path = get_base_path()
+    config_path = os.path.join(base_path, "config", "config.json")
+    if os.path.exists(config_path):
+        return config_path
+    # fallback: 루트의 config.json
+    return os.path.join(base_path, "config.json")
 
 def load_config():
     """config.json 파일 로드"""
@@ -931,8 +936,19 @@ SESSION_AUTO_LOGOUT_NO_SCREEN = 5 * 60  # 5분 동안 연습 화면이 아니면
 OCR_TIMEOUT_SEC = 1
 
 # 이 값들을 매장 PC에서 상황에 맞게 변경
-DEFAULT_STORE_ID = "gaja"
-DEFAULT_BAY_ID   = "01"
+# config.json에서 store_id와 bay_id를 읽어오고, 없으면 기본값 사용
+def get_store_id():
+    """config.json에서 store_id를 읽어오거나 기본값 반환"""
+    config = load_config()
+    return config.get("store_id") or "gaja"
+
+def get_bay_id():
+    """config.json에서 bay_id를 읽어오거나 기본값 반환"""
+    config = load_config()
+    return config.get("bay_id") or "01"
+
+DEFAULT_STORE_ID = get_store_id()  # 동적으로 설정
+DEFAULT_BAY_ID   = get_bay_id()    # 동적으로 설정
 DEFAULT_CLUB_ID  = "Driver"
 
 # PC 등록 관련 설정
@@ -2386,19 +2402,23 @@ def run(regions=None):
                     if has_text is not None and not has_text:
                         time_since_screen = now - last_screen_detected_time
                         if time_since_screen >= SESSION_AUTO_LOGOUT_NO_SCREEN:
-                            active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                            current_store_id = get_store_id()
+                            current_bay_id = get_bay_id()
+                            active_user = get_active_user(current_store_id, current_bay_id)
                             if active_user:
                                 log(f"⏰ {SESSION_AUTO_LOGOUT_NO_SCREEN//60}분 동안 연습 화면이 감지되지 않음 → 자동 세션 종료")
-                                clear_active_session(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                                clear_active_session(current_store_id, current_bay_id)
                                 last_screen_detected_time = now  # 재체크 방지
                     
                     # 자동 세션 종료 체크 2: 20분 동안 샷이 없는 경우
                     time_since_last_shot = now - last_shot_time
                     if time_since_last_shot >= SESSION_AUTO_LOGOUT_NO_SHOT:
-                        active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                        current_store_id = get_store_id()
+                        current_bay_id = get_bay_id()
+                        active_user = get_active_user(current_store_id, current_bay_id)
                         if active_user:
                             log(f"⏰ {SESSION_AUTO_LOGOUT_NO_SHOT//60}분 동안 샷이 없음 → 자동 세션 종료")
-                            clear_active_session(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                            clear_active_session(current_store_id, current_bay_id)
                             last_shot_time = now  # 재체크 방지
                     
                     if has_text is None:
@@ -2474,7 +2494,10 @@ def run(regions=None):
                         metrics = read_metrics()
                         
                         # 현재 활성 사용자 조회 (OCR 읽기 후 즉시)
-                        active_user = get_active_user(DEFAULT_STORE_ID, DEFAULT_BAY_ID)
+                        # 동적으로 store_id와 bay_id 가져오기
+                        current_store_id = get_store_id()
+                        current_bay_id = get_bay_id()
+                        active_user = get_active_user(current_store_id, current_bay_id)
                         if not active_user:
                             # 로그인하지 않은 경우 게스트로 저장
                             active_user = "GUEST"
@@ -2504,8 +2527,8 @@ def run(regions=None):
                             pc_unique_id = None
                         
                         payload = {
-                            "store_id": DEFAULT_STORE_ID,
-                            "bay_id": DEFAULT_BAY_ID,
+                            "store_id": current_store_id,
+                            "bay_id": current_bay_id,
                             "user_id": active_user,
                             "club_id": DEFAULT_CLUB_ID,
                             "pc_unique_id": pc_unique_id,  # 추가

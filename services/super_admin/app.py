@@ -631,6 +631,42 @@ def approve_pc():
         conn.close()
         return jsonify({"success": False, "message": f"PC 승인 실패: {str(e)}"}), 400
 
+@app.route("/api/delete_pc", methods=["POST"])
+@require_role("super_admin")
+def delete_pc():
+    """PC 삭제"""
+    try:
+        data = request.get_json()
+        pc_unique_id = data.get("pc_unique_id")
+        
+        if not pc_unique_id:
+            return jsonify({
+                "success": False,
+                "message": "pc_unique_id가 필요합니다."
+            }), 400
+        
+        # PC 삭제
+        success = database.delete_pc(pc_unique_id)
+        
+        if success:
+            return jsonify({
+                "success": True,
+                "message": "PC가 삭제되었습니다."
+            })
+        else:
+            return jsonify({
+                "success": False,
+                "message": "PC 삭제에 실패했습니다."
+            }), 500
+            
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "message": f"오류 발생: {str(e)}"
+        }), 500
+
 @app.route("/api/reject_pc", methods=["POST"])
 @require_role("super_admin")
 def reject_pc():
@@ -674,7 +710,7 @@ def create_registration_code():
     
     # 슈퍼 관리자 인증 정보
     super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "admin123")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "endolpin0!")
     
     # 요청 데이터 준비
     data = request.get_json() or {}
@@ -718,7 +754,7 @@ def get_registration_codes():
     
     # 슈퍼 관리자 인증 정보
     super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "admin123")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "endolpin0!")
     
     try:
         # golf-api 호출

@@ -1106,3 +1106,22 @@ def delete_store(store_id):
     finally:
         cur.close()
         conn.close()
+
+def delete_pc(pc_unique_id):
+    """PC 삭제"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        cur.execute("DELETE FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
+        conn.commit()
+        deleted_count = cur.rowcount
+        cur.close()
+        conn.close()
+        return deleted_count > 0
+    except Exception as e:
+        print(f"PC 삭제 오류: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False

@@ -667,8 +667,8 @@ def create_store(store_id, store_name, password, contact=None, business_number=N
         
         cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
         cur.execute("""
-            INSERT INTO stores (store_id, store_name, admin_pw, bays_count, contact, business_number, owner_name, birth_date, email, address) 
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO stores (store_id, store_name, admin_pw, bays_count, contact, business_number, owner_name, birth_date, email, address, status, requested_at) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP)
             ON CONFLICT (store_id) DO UPDATE SET
                 store_name = EXCLUDED.store_name,
                 admin_pw = EXCLUDED.admin_pw,
@@ -678,7 +678,15 @@ def create_store(store_id, store_name, password, contact=None, business_number=N
                 owner_name = EXCLUDED.owner_name,
                 birth_date = EXCLUDED.birth_date,
                 email = EXCLUDED.email,
-                address = EXCLUDED.address
+                address = EXCLUDED.address,
+                status = CASE 
+                    WHEN stores.status = 'approved' THEN 'approved'  -- 이미 승인된 경우 유지
+                    ELSE 'pending'  -- 새 요청이면 pending
+                END,
+                requested_at = CASE 
+                    WHEN stores.status = 'approved' THEN stores.requested_at  -- 이미 승인된 경우 유지
+                    ELSE CURRENT_TIMESTAMP  -- 새 요청이면 현재 시간
+                END
         """, (store_id, store_name, password, bays_count, contact, business_number, owner_name, birth_date, email, address))
         for i in range(1, bays_count + 1):
             bay_id = f"{i:02d}"

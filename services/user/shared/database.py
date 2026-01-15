@@ -574,6 +574,16 @@ def check_store(store_id, password):
     conn.close()
     return dict(store) if store else None
 
+def get_all_stores():
+    """모든 매장 목록 조회"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    cur.execute("SELECT * FROM stores ORDER BY store_id")
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return [dict(row) for row in rows]
+
 def get_bays(store_id):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
