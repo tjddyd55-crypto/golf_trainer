@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 """
-shot_collector GUI - 좌표 선택 및 시작/종료 제어
+shot_collector GUI - 좌표 선택 및 시작/종료 제어 (Supervisor 구조)
 """
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -10,6 +10,8 @@ import os
 import sys
 import threading
 import queue
+import time
+import traceback
 import requests
 
 # 트레이 관련 import
@@ -32,6 +34,40 @@ BRANDS = [
 # 설정 파일 경로
 CONFIG_FILE = os.path.join(os.path.dirname(__file__), "config.json")
 
+# 로그 파일 경로
+RUNTIME_LOG = "runtime.log"
+ERROR_LOG = "error.log"
+
+# 로그 파일 리다이렉트
+def setup_log_redirect():
+    """stdout/stderr를 파일로 리다이렉트"""
+    runtime_log_file = open(RUNTIME_LOG, 'a', encoding='utf-8')
+    error_log_file = open(ERROR_LOG, 'a', encoding='utf-8')
+    
+    class LogWriter:
+        def __init__(self, file_obj, is_error=False):
+            self.file = file_obj
+            self.is_error = is_error
+        
+        def write(self, text):
+            if text:
+                self.file.write(text)
+                self.file.flush()
+                if self.is_error and ERROR_LOG:
+                    error_log_file.write(text)
+                    error_log_file.flush()
+        
+        def flush(self):
+            self.file.flush()
+            if self.is_error:
+                error_log_file.flush()
+        
+        def isatty(self):
+            return False
+    
+    sys.stdout = LogWriter(runtime_log_file, False)
+    sys.stderr = LogWriter(error_log_file, True)
+
 def load_config():
     """config.json 파일 로드"""
     if os.path.exists(CONFIG_FILE):
@@ -51,28 +87,8 @@ def get_api_base_url():
     return "https://golf-api-production-e675.up.railway.app"
 
 # =========================
-# 로그 브리지 클래스 (stdout/stderr 캡처)
+# 로그 브리지 클래스 (GUI 표시용)
 # =========================
-class UILogWriter:
-    """stdout/stderr를 GUI 로그로 리다이렉트하는 클래스"""
-    def __init__(self, log_callback):
-        self.log_callback = log_callback
-        self.buffer = ""
-    
-    def write(self, text):
-        if text:
-            self.buffer += text
-            while '\n' in self.buffer:
-                line, self.buffer = self.buffer.split('\n', 1)
-                if line.strip():
-                    self.log_callback(line)
-    
-    def flush(self):
-        pass
-    
-    def isatty(self):
-        return False
-
 class UILogBridge:
     """GUI Text 위젯에 스레드 안전하게 로그를 전달하는 클래스"""
     def __init__(self, text_widget):
@@ -102,6 +118,74 @@ class UILogBridge:
         except queue.Empty:
             pass
 
+# =========================
+# 시작프로그램 등록
+# =========================
+def register_startup():
+    """시작프로그램 등록 (1회만 실행, 바로가기 방식)"""
+    startup_flag_file = os.path.join(os.path.dirname(__file__), ".startup_registered")
+    if os.path.exists(startup_flag_file):
+        return
+    
+    try:
+        startup_folder = os.path.join(os.getenv("APPDATA"), "Microsoft", "Windows", "Start Menu", "Programs", "Startup")
+        if not os.path.exists(startup_folder):
+            return
+        
+        script_path = __file__ if not getattr(sys, 'frozen', False) else sys.executable
+        shortcut_path = os.path.join(startup_folder, "GolfShotCollector.lnk")
+        
+        if not os.path.exists(shortcut_path):
+            try:
+                import win32com.client
+                shell = win32com.client.Dispatch("WScript.Shell")
+                shortcut = shell.CreateShortCut(shortcut_path)
+                shortcut.Targetpath = script_path
+                shortcut.WorkingDirectory = os.path.dirname(script_path)
+                shortcut.save()
+            except ImportError:
+                pass  # win32com 없으면 스킵
+        
+        # 등록 플래그 파일 생성
+        with open(startup_flag_file, 'w') as f:
+            f.write("registered")
+    except Exception:
+        pass  # 실패해도 계속 진행
+
+# =========================
+# Supervisor 구조
+# =========================
+class Supervisor:
+    def __init__(self, gui_app):
+        self.gui_app = gui_app
+        self.should_exit = False
+        self.collection_thread = None
+    
+    def run_collection_loop(self, regions):
+        """샷 수집 루프 (기능 루프만 담당)"""
+        try:
+            import main
+            main.run(regions=regions)
+        except Exception as e:
+            # 치명적 예외는 raise하여 supervisor가 처리
+            raise
+    
+    def supervisor_loop(self, regions):
+        """Supervisor 루프 (while True 구조)"""
+        while True:
+            try:
+                self.run_collection_loop(regions)
+            except Exception as e:
+                # 예외 발생 시 2초 sleep 후 재시작
+                error_msg = traceback.format_exc()
+                try:
+                    with open(ERROR_LOG, 'a', encoding='utf-8') as f:
+                        f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] Supervisor 오류:\n{error_msg}\n")
+                except Exception:
+                    pass
+                time.sleep(2.0)
+                continue
+
 class ShotCollectorGUI:
     def __init__(self, root):
         self.root = root
@@ -117,27 +201,31 @@ class ShotCollectorGUI:
         self.selected_filename = None
         self.coordinate_files = []
         
-        # OCR 루프 스레드
-        self.collection_thread = None
+        # Supervisor 및 스레드
+        self.supervisor = None
+        self.supervisor_thread = None
         self.is_running = False
         self.tray_icon = None
-        self.downloaded_regions = None  # 다운로드한 좌표 데이터 (세션 동안 고정)
+        self.downloaded_regions = None
         
         # GUI 구성
         self.setup_ui()
         
-        # stdout/stderr 캡처 설정
-        self.old_stdout = sys.stdout
-        self.old_stderr = sys.stderr
+        # 로그 브리지 설정 (GUI 표시용, 파일 로그는 setup_log_redirect에서 처리)
         self.log_bridge = UILogBridge(self.log_text)
-        sys.stdout = UILogWriter(self.log_bridge.append)
-        sys.stderr = UILogWriter(self.log_bridge.append)
-        
-        # 로그 큐 처리 시작
         self.root.after(100, self._process_logs)
         
         # 창 닫기 이벤트
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+        
+        # 시작프로그램 등록 (1회만)
+        register_startup()
+        
+        # 프로그램 시작 시 트레이 상주
+        if TRAY_AVAILABLE:
+            self.create_tray_icon_startup()
+            # 시작 시 GUI 숨김 (트레이로만 표시)
+            self.root.withdraw()
     
     def _process_logs(self):
         """로그 큐 처리 (메인 스레드)"""
@@ -298,9 +386,6 @@ class ShotCollectorGUI:
             self.status_label.config(text=f"브랜드 코드를 찾을 수 없습니다: {brand_name}", fg="red")
             return
         
-        # 디버그: 선택된 브랜드 정보 출력
-        print(f"[DEBUG] 선택된 브랜드: {brand_name} -> 코드: {brand_code}")
-        
         self.selected_brand = brand_code
         self.status_label.config(text="좌표 파일 목록 가져오는 중...", fg="blue")
         self.file_listbox.delete(0, tk.END)
@@ -312,21 +397,13 @@ class ShotCollectorGUI:
         """서버에서 좌표 파일 목록 가져오기"""
         try:
             url = f"{self.api_base_url}/api/coordinates/{brand_code}"
-            print(f"[DEBUG] API 호출: {url}")
             response = requests.get(url, timeout=10)
-            print(f"[DEBUG] 응답 상태: {response.status_code}")
             
             if response.status_code == 200:
                 data = response.json()
-                print(f"[DEBUG] 응답 데이터 타입: {type(data)}")
-                print(f"[DEBUG] 응답 데이터: {data}")
                 
                 if data.get("success"):
                     files = data.get("files", [])
-                    print(f"[DEBUG] 파일 개수: {len(files)}, 타입: {type(files)}")
-                    if files:
-                        print(f"[DEBUG] 파일 목록: {[f.get('filename') for f in files]}")
-                    
                     self.coordinate_files = files
                     
                     # UI 업데이트 (메인 스레드)
@@ -334,56 +411,38 @@ class ShotCollectorGUI:
                     return
                 else:
                     error_msg = data.get("error", "알 수 없는 오류")
-                    print(f"[DEBUG] API 오류: {error_msg}")
                     self.root.after(0, lambda: self.status_label.config(
                         text=f"오류: {error_msg}",
                         fg="red"
                     ))
                     return
             else:
-                # HTTP 오류
                 error_text = response.text[:100] if response.text else "알 수 없는 오류"
-                print(f"[DEBUG] HTTP 오류: {response.status_code}, {error_text}")
                 self.root.after(0, lambda: self.status_label.config(
                     text=f"서버 오류 ({response.status_code}): {error_text}",
                     fg="red"
                 ))
-        except requests.exceptions.RequestException as e:
-            error_msg = str(e)
-            print(f"[DEBUG] 요청 오류: {error_msg}")
-            self.root.after(0, lambda: self.status_label.config(
-                text=f"연결 오류: {error_msg}",
-                fg="red"
-            ))
         except Exception as e:
-            import traceback
-            print(f"[DEBUG] 예외 발생:")
-            traceback.print_exc()
             self.root.after(0, lambda: self.status_label.config(
-                text=f"오류: {str(e)}",
+                text=f"연결 오류: {str(e)}",
                 fg="red"
             ))
     
     def update_file_listbox(self, files):
         """파일 목록 업데이트"""
-        print(f"[DEBUG] update_file_listbox 호출: 파일 개수={len(files) if files else 0}")
         self.file_listbox.delete(0, tk.END)
         for file_info in files:
             filename = file_info.get("filename", "")
             resolution = file_info.get("resolution", "")
-            version = file_info.get("version", 0)
             display_text = f"{filename}"
             if resolution:
                 display_text += f" ({resolution})"
-            print(f"[DEBUG] 리스트박스에 추가: {display_text}")
             self.file_listbox.insert(tk.END, display_text)
         
         if files:
             self.status_label.config(text="좌표 파일을 선택하세요", fg="gray")
-            print(f"[DEBUG] 상태 라벨 업데이트: 좌표 파일을 선택하세요")
         else:
             self.status_label.config(text="좌표 파일이 없습니다", fg="orange")
-            print(f"[DEBUG] 상태 라벨 업데이트: 좌표 파일이 없습니다")
     
     def on_file_selected(self, event=None):
         """좌표 파일 선택"""
@@ -433,13 +492,18 @@ class ShotCollectorGUI:
             coordinate_data = data.get("data")
             regions = coordinate_data.get("regions", {})
             
-            # 좌표를 메모리에 저장 (세션 동안 고정)
+            # 좌표를 메모리에 저장
             self.downloaded_regions = regions
             
-            # OCR 루프 시작 (별도 스레드)
+            # Supervisor 시작
             self.is_running = True
-            self.collection_thread = threading.Thread(target=self.run_collection_loop, daemon=True)
-            self.collection_thread.start()
+            self.supervisor = Supervisor(self)
+            self.supervisor_thread = threading.Thread(
+                target=self.supervisor.supervisor_loop,
+                args=(regions,),
+                daemon=True
+            )
+            self.supervisor_thread.start()
             
             # UI 업데이트
             self.root.after(0, self.on_collection_started)
@@ -447,29 +511,6 @@ class ShotCollectorGUI:
         except Exception as e:
             self.root.after(0, lambda: messagebox.showerror("오류", f"시작 실패: {str(e)}"))
             self.root.after(0, lambda: self.status_label.config(text="시작 실패", fg="red"))
-    
-    def run_collection_loop(self):
-        """샷 수집 루프 실행 (main.py의 run 함수를 직접 호출)"""
-        try:
-            # main.py를 import하여 run 함수 실행
-            import main
-            
-            # 좌표 데이터 전달하여 실행 (기존 코드 그대로)
-            main.run(regions=self.downloaded_regions)
-            
-        except Exception as e:
-            import traceback
-            error_msg = traceback.format_exc()
-            print(f"[ERROR] 샷 수집 루프 오류: {str(e)}")
-            print(error_msg)
-            
-            # 상단 상태 표시 변경
-            self.root.after(0, lambda: self.status_var.set("❌ 오류"))
-            self.root.after(0, lambda: self.running_status_label.config(fg="red"))
-            
-            self.root.after(0, lambda: messagebox.showerror("오류", f"샷 수집 루프 오류: {str(e)}\n\n{error_msg}"))
-            self.is_running = False
-            self.root.after(0, self.on_collection_stopped)
     
     def on_collection_started(self):
         """수집 시작 후 UI 업데이트"""
@@ -482,7 +523,7 @@ class ShotCollectorGUI:
         self.status_var.set("🟢 작동중")
         self.running_status_label.config(fg="green")
         
-        self.status_label.config(text="● 실행 중 - 트레이로 이동합니다", fg="green")
+        self.status_label.config(text="● 실행 중", fg="green")
         
         # 트레이로 이동 (GUI 숨김)
         self.root.after(2000, self.hide_to_tray)
@@ -490,35 +531,42 @@ class ShotCollectorGUI:
     def hide_to_tray(self):
         """트레이로 이동 (GUI 숨김)"""
         if TRAY_AVAILABLE:
-            # GUI 창 숨기기
             self.root.withdraw()
-            
-            # 트레이 아이콘 생성 및 실행
-            self.create_tray_icon()
-        else:
-            # 트레이를 사용할 수 없으면 최소화
-            self.root.iconify()
     
-    def create_tray_icon(self):
-        """시스템 트레이 아이콘 생성"""
+    def create_tray_icon_startup(self):
+        """프로그램 시작 시 트레이 아이콘 생성"""
         if not TRAY_AVAILABLE:
             return
         
-        # 간단한 아이콘 이미지 생성 (골프공 모양)
         image = Image.new('RGB', (64, 64), color='green')
         draw = ImageDraw.Draw(image)
-        # 골프공 모양 그리기
         draw.ellipse([10, 10, 54, 54], fill='white', outline='black', width=2)
         draw.ellipse([20, 20, 44, 44], fill='lightgray')
         
         menu = pystray.Menu(
-            pystray.MenuItem("창 보기", self.show_window, default=True),
+            pystray.MenuItem("열기", self.show_window, default=True),
             pystray.MenuItem("종료", self.quit_from_tray)
         )
         
         self.tray_icon = pystray.Icon("ShotCollector", image, "샷 수집 프로그램", menu)
+        threading.Thread(target=self.tray_icon.run, daemon=True).start()
+    
+    def create_tray_icon(self):
+        """트레이 아이콘 생성 (기존 트레이 아이콘이 없을 때)"""
+        if not TRAY_AVAILABLE or self.tray_icon:
+            return
         
-        # 트레이 아이콘을 별도 스레드에서 실행
+        image = Image.new('RGB', (64, 64), color='green')
+        draw = ImageDraw.Draw(image)
+        draw.ellipse([10, 10, 54, 54], fill='white', outline='black', width=2)
+        draw.ellipse([20, 20, 44, 44], fill='lightgray')
+        
+        menu = pystray.Menu(
+            pystray.MenuItem("열기", self.show_window, default=True),
+            pystray.MenuItem("종료", self.quit_from_tray)
+        )
+        
+        self.tray_icon = pystray.Icon("ShotCollector", image, "샷 수집 프로그램", menu)
         threading.Thread(target=self.tray_icon.run, daemon=True).start()
     
     def show_window(self, icon=None, item=None):
@@ -526,18 +574,14 @@ class ShotCollectorGUI:
         self.root.deiconify()
         self.root.lift()
         self.root.focus_force()
-        
-        # 트레이 아이콘 제거
-        if hasattr(self, 'tray_icon') and self.tray_icon:
-            self.tray_icon.stop()
-            self.tray_icon = None
     
     def quit_from_tray(self, icon=None, item=None):
-        """트레이에서 종료"""
+        """트레이에서 종료 (sys.exit 허용)"""
         self.stop_collection()
-        if hasattr(self, 'tray_icon') and self.tray_icon:
+        if self.tray_icon:
             self.tray_icon.stop()
-        self.root.destroy()
+        self.root.quit()
+        sys.exit(0)
     
     def on_stop_clicked(self):
         """종료 버튼 클릭"""
@@ -548,21 +592,18 @@ class ShotCollectorGUI:
         """샷 수집 종료"""
         self.is_running = False
         
-        # main.py의 should_exit 플래그 설정 (main.py에 있으면)
-        try:
-            import main
-            if hasattr(main, 'should_exit'):
-                main.should_exit = True
-        except Exception:
-            pass
-        
-        # 트레이 아이콘 제거
-        if hasattr(self, 'tray_icon') and self.tray_icon:
-            self.tray_icon.stop()
-            self.tray_icon = None
+        # Supervisor 종료
+        if self.supervisor:
+            self.supervisor.should_exit = True
+            try:
+                import main
+                if hasattr(main, 'should_exit'):
+                    main.should_exit = True
+            except Exception:
+                pass
         
         # GUI 복원
-        self.root.deiconify()  # 창 다시 표시
+        self.root.deiconify()
         
         self.on_collection_stopped()
     
@@ -580,24 +621,14 @@ class ShotCollectorGUI:
         self.status_label.config(text="종료됨", fg="gray")
     
     def on_closing(self):
-        """창 닫기"""
-        # stdout/stderr 복원
-        if hasattr(self, 'old_stdout'):
-            sys.stdout = self.old_stdout
-        if hasattr(self, 'old_stderr'):
-            sys.stderr = self.old_stderr
-        
-        if self.is_running:
-            if messagebox.askyesno("확인", "샷 수집이 실행 중입니다. 종료하시겠습니까?"):
-                self.stop_collection()
-                self.root.destroy()
-        else:
-            # 트레이 아이콘 제거
-            if hasattr(self, 'tray_icon') and self.tray_icon:
-                self.tray_icon.stop()
-            self.root.destroy()
+        """창 닫기 (X 버튼 클릭 시 항상 트레이로 숨김)"""
+        # X 버튼 클릭 시 항상 트레이로 숨김 (종료하지 않음)
+        self.hide_to_tray()
 
 def main():
+    # 로그 파일 리다이렉트 설정
+    setup_log_redirect()
+    
     root = tk.Tk()
     app = ShotCollectorGUI(root)
     root.mainloop()

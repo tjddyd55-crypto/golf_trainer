@@ -325,12 +325,15 @@ def user_shots():
 @app.route("/admin/signup", methods=["GET", "POST"])
 def admin_signup():
     if request.method == "POST":
-        store_id = request.form.get("store_id")
+        store_id = request.form.get("store_id", "").upper()  # 대문자 변환
         store_name = request.form.get("store_name")
         password = request.form.get("password")
         bays_count = int(request.form.get("bays_count", 1))
+        birth_date = request.form.get("birth_date") or None
+        business_number = request.form.get("business_number") or None
+        phone = request.form.get("phone") or None
 
-        if database.create_store(store_id, store_name, password, bays_count):
+        if database.create_store(store_id, store_name, password, bays_count, birth_date, business_number, phone):
             return f"<script>alert('{store_name} 매장 등록 성공!'); location.href='/admin/login';</script>"
         else:
             return "이미 존재하는 매장 코드입니다."
@@ -420,12 +423,18 @@ def admin_main():
         
         shots.append(s)
 
+    # 랭킹 및 오늘 방문 손님 데이터 (임시로 빈 리스트)
+    male_rank = []
+    today_users = []
+    
     return render_template(
         "admin.html",
         store_id=sid,
         bays=bays_with_status,
         shots=shots,
-        server_ip=get_ip_address()
+        server_ip=get_ip_address(),
+        male_rank=male_rank,
+        today_users=today_users
     )
 
 # =========================

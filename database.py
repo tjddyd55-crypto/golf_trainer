@@ -125,6 +125,22 @@ def init_db():
     )
     """)
 
+    # stores 테이블에 생년월일, 사업자번호, 휴대폰번호 컬럼 추가 (없을 때만)
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS birth_date TEXT")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS business_number TEXT")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE stores ADD COLUMN IF NOT EXISTS phone TEXT")
+    except Exception:
+        pass
+
     # 5️⃣ 활성 세션 테이블 (main.py에서 현재 로그인한 사용자 확인용)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS active_sessions (
@@ -402,7 +418,7 @@ def create_user(user_id, password, name=None, phone=None, gender=None):
     cur.close()
     conn.close()
 
-def create_store(store_id, store_name, password, bays_count):
+def create_store(store_id, store_name, password, bays_count, birth_date=None, business_number=None, phone=None):
     """
     매장 등록
     기존 타석이 있으면 삭제하고 새로 생성
@@ -410,20 +426,26 @@ def create_store(store_id, store_name, password, bays_count):
     conn = get_db_connection()
     cur = conn.cursor()
     try:
+        # store_id를 대문자로 변환
+        store_id = store_id.upper()
+        
         # 기존 타석 삭제 (있으면)
         cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
         
         # 매장 정보 저장 (기존 정보가 있으면 업데이트)
         cur.execute(
             """
-            INSERT INTO stores (store_id, store_name, admin_pw, bays_count) 
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO stores (store_id, store_name, admin_pw, bays_count, birth_date, business_number, phone) 
+            VALUES (%s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (store_id) DO UPDATE SET
                 store_name = EXCLUDED.store_name,
                 admin_pw = EXCLUDED.admin_pw,
-                bays_count = EXCLUDED.bays_count
+                bays_count = EXCLUDED.bays_count,
+                birth_date = EXCLUDED.birth_date,
+                business_number = EXCLUDED.business_number,
+                phone = EXCLUDED.phone
             """,
-            (store_id, store_name, password, bays_count)
+            (store_id, store_name, password, bays_count, birth_date, business_number, phone)
         )
         
         # 타석 생성

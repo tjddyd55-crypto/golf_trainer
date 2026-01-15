@@ -9,11 +9,11 @@ echo.
 
 REM 현재 스크립트 위치 확인
 set SCRIPT_DIR=%~dp0
-set EXE_PATH=%SCRIPT_DIR%shot_collector.exe
+set EXE_PATH=%SCRIPT_DIR%GolfShotTracker.exe
 
 REM 실행 파일 존재 확인
 if not exist "%EXE_PATH%" (
-    echo [오류] shot_collector.exe 파일을 찾을 수 없습니다.
+    echo [오류] GolfShotTracker.exe 파일을 찾을 수 없습니다.
     echo 파일 위치: %EXE_PATH%
     echo.
     pause
@@ -30,9 +30,9 @@ set SHORTCUT_NAME=GolfShotCollector.lnk
 echo 시작 프로그램 폴더: %STARTUP_FOLDER%
 echo.
 
-REM PowerShell을 사용하여 바로가기 생성
+REM PowerShell을 사용하여 바로가기 생성 (--autostart 인자 포함)
 echo 바로가기 생성 중...
-powershell -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%STARTUP_FOLDER%\%SHORTCUT_NAME%'); $Shortcut.TargetPath = '%EXE_PATH%'; $Shortcut.WorkingDirectory = '%SCRIPT_DIR%'; $Shortcut.Save()"
+powershell -Command "$WshShell = New-Object -ComObject WScript.Shell; $Shortcut = $WshShell.CreateShortcut('%STARTUP_FOLDER%\%SHORTCUT_NAME%'); $Shortcut.TargetPath = '%EXE_PATH%'; $Shortcut.Arguments = '--autostart'; $Shortcut.WorkingDirectory = '%SCRIPT_DIR%'; $Shortcut.Save()"
 
 if %ERRORLEVEL% EQU 0 (
     echo.
