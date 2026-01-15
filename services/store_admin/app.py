@@ -89,53 +89,72 @@ def store_admin_signup():
 @app.route("/login", methods=["GET", "POST"])
 def store_admin_login():
     if request.method == "POST":
-        store_id = request.form.get("store_id", "").strip()
-        password = request.form.get("password", "")
+        try:
+            store_id = request.form.get("store_id", "").strip()
+            password = request.form.get("password", "")
 
-        # 1️⃣ 매장 계정 검증
-        store = database.check_store(store_id, password)
-        if not store:
-            return render_template("store_admin_login.html", 
-                                 error="매장 코드 또는 비밀번호가 틀렸습니다.")
-        
-        # 매장 상태 확인
-        store_status = store.get("status", "pending")
-        if store_status == "pending":
-            return render_template("store_admin_login.html", 
-                                 error="매장 등록 요청이 승인 대기 중입니다. 승인 후 로그인할 수 있습니다.")
-        elif store_status == "rejected":
-            return render_template("store_admin_login.html", 
-                                 error="매장 등록이 거부되었습니다. 관리자에게 문의하세요.")
+            # 1️⃣ 매장 계정 검증
+            store = database.check_store(store_id, password)
+            if not store:
+                return render_template("store_admin_login.html", 
+                                     error="매장 코드 또는 비밀번호가 틀렸습니다.")
+            
+            # 매장 상태 확인
+            store_status = store.get("status", "pending")
+            if store_status == "pending":
+                return render_template("store_admin_login.html", 
+                                     error="매장 등록 요청이 승인 대기 중입니다. 승인 후 로그인할 수 있습니다.")
+            elif store_status == "rejected":
+                return render_template("store_admin_login.html", 
+                                     error="매장 등록이 거부되었습니다. 관리자에게 문의하세요.")
 
-        # 2️⃣ 타석(PC) 유효성 판정 (최적화된 쿼리)
-        from datetime import date
-        today = date.today()
+            # 2️⃣ 타석(PC) 유효성 판정 (최적화된 쿼리)
+            from datetime import date
+            today = date.today()
+            
+            try:
+                pc_summary = database.get_pc_status_summary(store_id)
+                valid_count = pc_summary.get("valid_count", 0) if pc_summary else 0
+                total_count = pc_summary.get("total_count", 0) if pc_summary else 0
+                last_expiry = pc_summary.get("last_expiry") if pc_summary else None
+            except Exception as e:
+                # PC 상태 조회 실패 시 기본값 사용
+                import traceback
+                print(f"[ERROR] get_pc_status_summary failed: {e}")
+                print(traceback.format_exc())
+                valid_count = 0
+                total_count = 0
+                last_expiry = None
+            
+            # 3️⃣ 로그인 결과 분기
+            session["store_id"] = store_id
+            session["role"] = "store_admin"
+            
+            if valid_count > 0:
+                # Case A: 유효 타석 1개 이상 → 정상 모드
+                session["readonly_mode"] = False
+                return redirect(url_for("store_admin_dashboard"))
+            elif total_count > 0:
+                # Case B: 유효 타석 0개 → 읽기 전용 모드
+                session["readonly_mode"] = True
+                session["readonly_reason"] = "no_valid_pc"
+                if last_expiry:
+                    session["last_expiry"] = last_expiry.isoformat() if hasattr(last_expiry, 'isoformat') else str(last_expiry)
+                return redirect(url_for("store_admin_dashboard"))
+            else:
+                # Case C: 등록된 타석 없음 → 읽기 전용 모드
+                session["readonly_mode"] = True
+                session["readonly_reason"] = "no_pc"
+                return redirect(url_for("store_admin_dashboard"))
         
-        pc_summary = database.get_pc_status_summary(store_id)
-        valid_count = pc_summary.get("valid_count", 0)
-        total_count = pc_summary.get("total_count", 0)
-        last_expiry = pc_summary.get("last_expiry")
-        
-        # 3️⃣ 로그인 결과 분기
-        session["store_id"] = store_id
-        session["role"] = "store_admin"
-        
-        if valid_count > 0:
-            # Case A: 유효 타석 1개 이상 → 정상 모드
-            session["readonly_mode"] = False
-            return redirect(url_for("store_admin_dashboard"))
-        elif total_count > 0:
-            # Case B: 유효 타석 0개 → 읽기 전용 모드
-            session["readonly_mode"] = True
-            session["readonly_reason"] = "no_valid_pc"
-            if last_expiry:
-                session["last_expiry"] = last_expiry.isoformat() if hasattr(last_expiry, 'isoformat') else str(last_expiry)
-            return redirect(url_for("store_admin_dashboard"))
-        else:
-            # Case C: 등록된 타석 없음 → 읽기 전용 모드
-            session["readonly_mode"] = True
-            session["readonly_reason"] = "no_pc"
-            return redirect(url_for("store_admin_dashboard"))
+        except Exception as e:
+            # 로그인 과정에서 발생한 모든 오류 처리
+            import traceback
+            error_msg = str(e)
+            traceback.print_exc()
+            print(f"[ERROR] store_admin_login failed: {error_msg}")
+            return render_template("store_admin_login.html", 
+                                 error=f"로그인 중 오류가 발생했습니다: {error_msg}")
 
     return render_template("store_admin_login.html")
 
