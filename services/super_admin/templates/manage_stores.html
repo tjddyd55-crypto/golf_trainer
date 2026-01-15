@@ -14,8 +14,19 @@
         </div>
         
         <div class="super-main-content">
-            <div class="mb-3">
+            <div class="mb-3 d-flex justify-content-between align-items-center">
                 <a href="{{ url_for('super_admin_dashboard') }}" class="super-btn super-btn-secondary">← 대시보드로 돌아가기</a>
+                <div>
+                    <label for="store-select" class="me-2">매장 선택:</label>
+                    <select id="store-select" class="form-select d-inline-block" style="width: auto;" onchange="location.href=this.value ? '{{ url_for('store_bays_detail', store_id='') }}' + this.value : '{{ url_for('manage_stores') }}'">
+                        <option value="">전체 매장</option>
+                        {% for store in stores %}
+                        <option value="{{ store.store_id }}" {% if request.args.get('store_id') == store.store_id %}selected{% endif %}>
+                            {{ store.store_name or store.store_id }}
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
             </div>
             
             <div class="table-responsive">
@@ -24,7 +35,7 @@
                         <tr>
                             <th>매장 코드</th>
                             <th>매장 이름</th>
-                            <th>타석 수</th>
+                            <th>타석(룸)</th>
                             <th>구독 상태</th>
                             <th>시작일</th>
                             <th>종료일</th>
@@ -36,7 +47,12 @@
                         <tr>
                             <td>{{ store.store_id }}</td>
                             <td>{{ store.store_name or '-' }}</td>
-                            <td>{{ store.bays_count }}</td>
+                            <td>
+                                <a href="{{ url_for('store_bays_detail', store_id=store.store_id) }}" 
+                                   class="text-decoration-none">
+                                    총 타석수: {{ store.valid_bays_count }}/{{ store.total_bays_count }}
+                                </a>
+                            </td>
                             <td>
                                 <span class="super-store-status {{ store.subscription_status or 'active' }}">
                                     {{ store.subscription_status or 'active' }}
@@ -45,10 +61,10 @@
                             <td>{{ store.subscription_start_date or '-' }}</td>
                             <td>{{ store.subscription_end_date or '-' }}</td>
                             <td>
-                                <button class="super-btn super-btn-success btn-sm" 
-                                        onclick="extendSubscription('{{ store.store_id }}', 1)">
-                                    1개월 연장
-                                </button>
+                                <a href="{{ url_for('store_bays_detail', store_id=store.store_id) }}" 
+                                   class="super-btn super-btn-primary btn-sm">
+                                    타석 현황 보기
+                                </a>
                             </td>
                         </tr>
                         {% endfor %}

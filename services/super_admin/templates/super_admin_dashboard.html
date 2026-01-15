@@ -61,7 +61,7 @@
                     </div>
                     <div class="super-store-info">
                         <div>매장 코드: <strong>{{ store.store_id }}</strong></div>
-                        <div>타석 수: {{ store.bays_count }}개</div>
+                        <div>총 타석수: {{ store.valid_bays_count }}/{{ store.total_bays_count }}</div>
                         {% if store.subscription_end_date %}
                         <div>사용기간: {{ store.subscription_end_date }}까지</div>
                         {% endif %}

@@ -95,12 +95,33 @@ def super_admin_login():
 @require_role("super_admin")
 def super_admin_dashboard():
     try:
-        # 모든 매장 조회
+        from datetime import date
         from psycopg2.extras import RealDictCursor
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
         stores = [dict(row) for row in cur.fetchall()]
+        
+        # 각 매장의 유효한 타석 수 계산
+        today = date.today()
+        for store in stores:
+            store_id = store.get("store_id")
+            total_bays = store.get("bays_count", 0)
+            
+            # 유효한 PC 개수 계산 (status='active'이고 사용 기간이 유효한 경우)
+            cur.execute("""
+                SELECT COUNT(*) as valid_count
+                FROM store_pcs
+                WHERE store_id = %s
+                  AND status = 'active'
+                  AND (usage_end_date IS NULL OR usage_end_date >= %s)
+            """, (store_id, today))
+            result = cur.fetchone()
+            valid_count = result['valid_count'] if result else 0
+            
+            store['valid_bays_count'] = valid_count
+            store['total_bays_count'] = total_bays
+        
         cur.close()
         conn.close()
         
@@ -123,15 +144,210 @@ def super_admin_dashboard():
 # =========================
 # 매장 관리
 # =========================
+@app.route("/stores/<store_id>/bays")
+@require_role("super_admin")
+def store_bays_detail(store_id):
+    """매장별 타석 현황 상세 페이지"""
+    try:
+        from datetime import date
+        from psycopg2.extras import RealDictCursor
+        import re
+        
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 매장 정보 조회
+        cur.execute("SELECT * FROM stores WHERE store_id = %s", (store_id,))
+        store = cur.fetchone()
+        if not store:
+            return "매장을 찾을 수 없습니다.", 404
+        
+        store = dict(store)
+        total_bays_count = store.get("bays_count", 0)
+        store_name = store.get("store_name", "")
+        today = date.today()
+        
+        # 전체 타석 목록 생성
+        all_bays = []
+        for i in range(1, total_bays_count + 1):
+            bay_id = f"{i:02d}"
+            bay_dict = {
+                "store_id": store_id,
+                "bay_id": bay_id,
+                "status": "READY",
+                "user_id": "",
+                "last_update": "",
+                "bay_code": None,
+                "has_pc": False,
+                "is_valid": False,
+                "pc_status": None,
+                "pc_name": None,
+                "pc_unique_id": None,
+                "usage_start_date": None,
+                "usage_end_date": None,
+                "approved_at": None,
+                "approved_by": None,
+                "notes": None
+            }
+            all_bays.append(bay_dict)
+        
+        # DB에 저장된 타석 정보 조회
+        cur.execute("""
+            SELECT * FROM bays WHERE store_id = %s ORDER BY bay_id
+        """, (store_id,))
+        db_bays = cur.fetchall()
+        
+        # DB 타석 정보로 업데이트
+        for db_bay in db_bays:
+            bay_id = db_bay["bay_id"]
+            for bay in all_bays:
+                if bay["bay_id"] == bay_id:
+                    bay.update(dict(db_bay))
+                    break
+        
+        # 각 타석의 PC 등록 상태 및 유효성 확인
+        cur.execute("""
+            SELECT bay_name, pc_name, pc_unique_id, status, usage_start_date, usage_end_date, 
+                   approved_at, approved_by, notes
+            FROM store_pcs
+            WHERE store_name = %s OR store_id = %s
+        """, (store_name, store_id))
+        pcs = cur.fetchall()
+        
+        # bay_name에서 타석 번호 추출하여 매칭
+        for pc in pcs:
+            bay_name = pc.get("bay_name", "")
+            match = re.search(r'(\d+)', str(bay_name))
+            if match:
+                pc_bay_num = int(match.group(1))
+                if 1 <= pc_bay_num <= total_bays_count:
+                    bay_id = f"{pc_bay_num:02d}"
+                    for bay in all_bays:
+                        if bay["bay_id"] == bay_id:
+                            bay["has_pc"] = True
+                            bay["pc_status"] = pc.get("status")
+                            bay["pc_name"] = pc.get("pc_name")
+                            bay["pc_unique_id"] = pc.get("pc_unique_id")
+                            bay["usage_start_date"] = pc.get("usage_start_date")
+                            bay["usage_end_date"] = pc.get("usage_end_date")
+                            bay["approved_at"] = pc.get("approved_at")
+                            bay["approved_by"] = pc.get("approved_by")
+                            bay["notes"] = pc.get("notes")
+                            
+                            # 유효성 판정
+                            if pc.get("status") == "active":
+                                usage_end_date = pc.get("usage_end_date")
+                                if usage_end_date:
+                                    if isinstance(usage_end_date, str):
+                                        from datetime import datetime
+                                        try:
+                                            usage_end_date = datetime.strptime(usage_end_date, "%Y-%m-%d").date()
+                                        except:
+                                            usage_end_date = None
+                                    if usage_end_date and usage_end_date >= today:
+                                        bay["is_valid"] = True
+                                else:
+                                    bay["is_valid"] = True
+                            break
+        
+        # 유효한 타석 수 계산
+        valid_bays_count = sum(1 for bay in all_bays if bay.get("is_valid", False))
+        
+        # 모든 매장 목록 (드롭다운용)
+        cur.execute("SELECT store_id, store_name FROM stores ORDER BY store_name, store_id")
+        all_stores = [dict(row) for row in cur.fetchall()]
+        
+        cur.close()
+        conn.close()
+        
+        return render_template("store_bays_detail.html",
+                             store=store,
+                             bays=all_bays,
+                             total_bays_count=total_bays_count,
+                             valid_bays_count=valid_bays_count,
+                             all_stores=all_stores)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return f"오류 발생: {str(e)}", 500
+
+@app.route("/api/update_bay_settings", methods=["POST"])
+@require_role("super_admin")
+def update_bay_settings():
+    """타석 설정 업데이트 (기간, 상태 등)"""
+    try:
+        from datetime import date
+        from psycopg2.extras import RealDictCursor
+        
+        data = request.get_json()
+        pc_unique_id = data.get("pc_unique_id")
+        bay_id = data.get("bay_id")
+        store_id = data.get("store_id")
+        usage_start_date = data.get("usage_start_date")
+        usage_end_date = data.get("usage_end_date")
+        status = data.get("status")
+        notes = data.get("notes", "")
+        
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 날짜 변환
+        start_date = date.fromisoformat(usage_start_date) if usage_start_date else None
+        end_date = date.fromisoformat(usage_end_date) if usage_end_date else None
+        
+        # PC 정보 업데이트
+        cur.execute("""
+            UPDATE store_pcs 
+            SET bay_id = %s,
+                store_id = %s,
+                usage_start_date = %s,
+                usage_end_date = %s,
+                status = %s,
+                notes = %s
+            WHERE pc_unique_id = %s
+        """, (bay_id, store_id, start_date, end_date, status, notes, pc_unique_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({"success": True, "message": "타석 설정이 업데이트되었습니다."})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route("/stores")
 @require_role("super_admin")
 def manage_stores():
     try:
+        from datetime import date
         from psycopg2.extras import RealDictCursor
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         cur.execute("SELECT * FROM stores ORDER BY requested_at DESC NULLS LAST, store_id")
         stores = [dict(row) for row in cur.fetchall()]
+        
+        # 각 매장의 유효한 타석 수 계산
+        today = date.today()
+        for store in stores:
+            store_id = store.get("store_id")
+            total_bays = store.get("bays_count", 0)
+            
+            # 유효한 PC 개수 계산
+            cur.execute("""
+                SELECT COUNT(*) as valid_count
+                FROM store_pcs
+                WHERE store_id = %s
+                  AND status = 'active'
+                  AND (usage_end_date IS NULL OR usage_end_date >= %s)
+            """, (store_id, today))
+            result = cur.fetchone()
+            valid_count = result['valid_count'] if result else 0
+            
+            store['valid_bays_count'] = valid_count
+            store['total_bays_count'] = total_bays
+        
         cur.close()
         conn.close()
         
