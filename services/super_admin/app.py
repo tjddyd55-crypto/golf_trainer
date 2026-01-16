@@ -205,50 +205,55 @@ def store_bays_detail(store_id):
                     bay.update(dict(db_bay))
                     break
         
-        # 각 타석의 PC 등록 상태 및 유효성 확인
+        # 각 타석의 PC 등록 상태 및 유효성 확인 (store_id와 bay_id로 직접 매칭)
         cur.execute("""
-            SELECT bay_name, pc_name, pc_unique_id, status, usage_start_date, usage_end_date, 
+            SELECT bay_id, bay_name, pc_name, pc_unique_id, status, usage_start_date, usage_end_date, 
                    approved_at, approved_by, notes
             FROM store_pcs
-            WHERE store_name = %s OR store_id = %s
-        """, (store_name, store_id))
+            WHERE store_id = %s
+        """, (store_id,))
         pcs = cur.fetchall()
         
-        # bay_name에서 타석 번호 추출하여 매칭
+        # bay_id로 직접 매칭 (더 정확함)
         for pc in pcs:
-            bay_name = pc.get("bay_name", "")
-            match = re.search(r'(\d+)', str(bay_name))
-            if match:
-                pc_bay_num = int(match.group(1))
-                if 1 <= pc_bay_num <= total_bays_count:
-                    bay_id = f"{pc_bay_num:02d}"
-                    for bay in all_bays:
-                        if bay["bay_id"] == bay_id:
-                            bay["has_pc"] = True
-                            bay["pc_status"] = pc.get("status")
-                            bay["pc_name"] = pc.get("pc_name")
-                            bay["pc_unique_id"] = pc.get("pc_unique_id")
-                            bay["usage_start_date"] = pc.get("usage_start_date")
-                            bay["usage_end_date"] = pc.get("usage_end_date")
-                            bay["approved_at"] = pc.get("approved_at")
-                            bay["approved_by"] = pc.get("approved_by")
-                            bay["notes"] = pc.get("notes")
-                            
-                            # 유효성 판정
-                            if pc.get("status") == "active":
-                                usage_end_date = pc.get("usage_end_date")
-                                if usage_end_date:
-                                    if isinstance(usage_end_date, str):
-                                        from datetime import datetime
-                                        try:
-                                            usage_end_date = datetime.strptime(usage_end_date, "%Y-%m-%d").date()
-                                        except:
-                                            usage_end_date = None
-                                    if usage_end_date and usage_end_date >= today:
-                                        bay["is_valid"] = True
-                                else:
-                                    bay["is_valid"] = True
-                            break
+            pc_bay_id = pc.get("bay_id")
+            if not pc_bay_id:
+                # bay_id가 없으면 bay_name에서 추출
+                bay_name = pc.get("bay_name", "")
+                match = re.search(r'(\d+)', str(bay_name))
+                if match:
+                    pc_bay_id = f"{int(match.group(1)):02d}"
+                else:
+                    continue
+            
+            # bay_id로 매칭
+            for bay in all_bays:
+                if bay["bay_id"] == pc_bay_id:
+                    bay["has_pc"] = True
+                    bay["pc_status"] = pc.get("status")
+                    bay["pc_name"] = pc.get("pc_name")
+                    bay["pc_unique_id"] = pc.get("pc_unique_id")
+                    bay["usage_start_date"] = pc.get("usage_start_date")
+                    bay["usage_end_date"] = pc.get("usage_end_date")
+                    bay["approved_at"] = pc.get("approved_at")
+                    bay["approved_by"] = pc.get("approved_by")
+                    bay["notes"] = pc.get("notes")
+                    
+                    # 유효성 판정
+                    if pc.get("status") == "active":
+                        usage_end_date = pc.get("usage_end_date")
+                        if usage_end_date:
+                            if isinstance(usage_end_date, str):
+                                from datetime import datetime
+                                try:
+                                    usage_end_date = datetime.strptime(usage_end_date, "%Y-%m-%d").date()
+                                except:
+                                    usage_end_date = None
+                            if usage_end_date and usage_end_date >= today:
+                                bay["is_valid"] = True
+                        else:
+                            bay["is_valid"] = True
+                    break
         
         # 유효한 타석 수 계산
         valid_bays_count = sum(1 for bay in all_bays if bay.get("is_valid", False))
