@@ -402,14 +402,14 @@ def store_requests():
         # 승인 대기 중인 매장
         pending_stores = database.get_pending_stores()
         
-        # 승인 완료된 매장
+        # 승인 완료된 매장 (status가 'approved'이거나 NULL인 경우도 포함 - 대시보드와 동일하게)
         from psycopg2.extras import RealDictCursor
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
+        # 대시보드와 동일하게 모든 매장 조회 (status 필터 제거)
         cur.execute("""
             SELECT * FROM stores 
-            WHERE status = 'approved' 
-            ORDER BY approved_at DESC NULLS LAST, store_id
+            ORDER BY requested_at DESC NULLS LAST, store_id
         """)
         approved_stores = [dict(row) for row in cur.fetchall()]
         cur.close()
