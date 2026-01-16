@@ -317,9 +317,11 @@ def update_bay_settings():
             # PC가 등록되지 않은 타석인 경우: bays 테이블에 타석이 존재하는지 확인하고 생성
             cur.execute("SELECT COUNT(*) as count FROM bays WHERE store_id = %s AND bay_id = %s", (store_id, bay_id))
             bay_exists = cur.fetchone()
-            if bay_exists and bay_exists.get("count", 0) == 0:
+            bay_exists_count = bay_exists.get("count", 0) if bay_exists else 0
+            if bay_exists_count == 0:
                 # 타석 생성
-                bay_code = database.generate_bay_code(store_id, bay_id, cur)
+                from shared.database import generate_bay_code
+                bay_code = generate_bay_code(store_id, bay_id, cur)
                 cur.execute("""
                     INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code)
                     VALUES (%s, %s, 'READY', '', '', %s)
