@@ -274,7 +274,7 @@ def store_bays_detail(store_id):
 @app.route("/api/update_bay_settings", methods=["POST"])
 @require_role("super_admin")
 def update_bay_settings():
-    """타석 설정 업데이트 (기간, 상태 등)"""
+    """타석 설정 업데이트 (기간, 상태 등) - PC 미등록 타석도 처리"""
     try:
         from datetime import date
         from psycopg2.extras import RealDictCursor
@@ -288,6 +288,9 @@ def update_bay_settings():
         status = data.get("status")
         notes = data.get("notes", "")
         
+        if not bay_id or not store_id:
+            return jsonify({"success": False, "message": "bay_id와 store_id가 필요합니다."}), 400
+        
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
@@ -295,17 +298,41 @@ def update_bay_settings():
         start_date = date.fromisoformat(usage_start_date) if usage_start_date else None
         end_date = date.fromisoformat(usage_end_date) if usage_end_date else None
         
-        # PC 정보 업데이트
+        # PC가 등록된 경우: store_pcs 업데이트
+        if pc_unique_id:
+            cur.execute("""
+                UPDATE store_pcs 
+                SET bay_id = %s,
+                    store_id = %s,
+                    usage_start_date = %s,
+                    usage_end_date = %s,
+                    status = %s,
+                    notes = %s
+                WHERE pc_unique_id = %s
+            """, (bay_id, store_id, start_date, end_date, status, notes, pc_unique_id))
+            
+            if cur.rowcount == 0:
+                return jsonify({"success": False, "message": "등록된 PC를 찾을 수 없습니다."}), 404
+        else:
+            # PC가 등록되지 않은 타석인 경우: bays 테이블에 타석이 존재하는지 확인하고 생성
+            cur.execute("SELECT COUNT(*) as count FROM bays WHERE store_id = %s AND bay_id = %s", (store_id, bay_id))
+            bay_exists = cur.fetchone()
+            if bay_exists and bay_exists.get("count", 0) == 0:
+                # 타석 생성
+                bay_code = database.generate_bay_code(store_id, bay_id, cur)
+                cur.execute("""
+                    INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code)
+                    VALUES (%s, %s, 'READY', '', '', %s)
+                    ON CONFLICT (store_id, bay_id) DO NOTHING
+                """, (store_id, bay_id, bay_code))
+        
+        # bays 테이블의 status 업데이트 (타석 사용 가능 여부)
+        bay_status = "READY" if status == "active" else "BUSY" if status == "pending" else "UNAVAILABLE"
         cur.execute("""
-            UPDATE store_pcs 
-            SET bay_id = %s,
-                store_id = %s,
-                usage_start_date = %s,
-                usage_end_date = %s,
-                status = %s,
-                notes = %s
-            WHERE pc_unique_id = %s
-        """, (bay_id, store_id, start_date, end_date, status, notes, pc_unique_id))
+            UPDATE bays 
+            SET status = %s
+            WHERE store_id = %s AND bay_id = %s
+        """, (bay_status, store_id, bay_id))
         
         conn.commit()
         cur.close()
@@ -315,7 +342,7 @@ def update_bay_settings():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return jsonify({"success": False, "message": str(e)}), 500
+        return jsonify({"success": False, "message": f"타석 설정 업데이트 실패: {str(e)}"}), 500
 
 @app.route("/stores")
 @require_role("super_admin")

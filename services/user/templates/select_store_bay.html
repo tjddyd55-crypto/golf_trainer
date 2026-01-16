@@ -157,12 +157,21 @@
             checkCurrentStatus();
         });
         
-        // 폼 제출 시 상태 메시지 표시
+        // 폼 제출 시 상태 메시지 표시 및 오류 처리
         document.getElementById('selectForm').addEventListener('submit', function(e) {
             const storeId = storeSelect.value;
             const bayId = baySelect.value;
             const storeName = storeSelect.options[storeSelect.selectedIndex].text;
             const bayName = baySelect.options[baySelect.selectedIndex].text;
+            
+            if (!storeId || !bayId) {
+                return; // 폼 검증은 기본 HTML5 검증 사용
+            }
+            
+            // 오류 메시지가 있으면 alert로 표시
+            {% if error %}
+            alert('{{ error }}');
+            {% endif %}
             
             if (storeId && bayId) {
                 statusText.textContent = `${storeName} ${bayName} 이용중`;

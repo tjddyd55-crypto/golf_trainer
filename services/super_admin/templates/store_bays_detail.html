@@ -188,16 +188,12 @@
             const status = document.getElementById('edit-status').value;
             const notes = document.getElementById('edit-notes').value;
             
-            if (!currentPcUniqueId) {
-                alert('타석(룸)이 등록되지 않았습니다. 먼저 타석(룸)을 등록해주세요.');
-                return;
-            }
-            
+            // pc_unique_id가 없어도 저장 가능 (PC 미등록 타석도 설정 가능)
             fetch('{{ url_for("update_bay_settings") }}', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
-                    pc_unique_id: currentPcUniqueId,
+                    pc_unique_id: currentPcUniqueId || null,
                     bay_id: currentBayId,
                     store_id: '{{ store.store_id }}',
                     usage_start_date: startDate,

@@ -126,12 +126,13 @@ def select_store_bay():
             bay_approved = any(bay.get("bay_id") == bay_id for bay in approved_bays)
             
             if not bay_approved:
+                # 승인되지 않았거나 만료된 타석: 간단한 경고 메시지와 함께 폼 재표시
                 stores = database.get_all_stores()
                 return render_template("select_store_bay.html", 
                                      stores=stores,
                                      selected_store_id=store_id,
                                      selected_bay_id=bay_id,
-                                     error=f"{bay_id}번 타석은 승인되지 않았거나 사용할 수 없습니다.")
+                                     error="완료된 타석입니다. 다른 타석을 이용하세요.")
             
             # 타석 사용 가능 여부 확인
             active_user = database.get_bay_active_user_info(store_id, bay_id)
