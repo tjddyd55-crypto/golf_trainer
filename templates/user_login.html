@@ -30,7 +30,7 @@
                 <input type="text" name="store_id" class="form-control bg-secondary text-white border-0" placeholder="매장코드" value="{{ store_id or 'gaja' }}" required>
             </div>
             <div class="mb-3">
-                <label class="form-label text-secondary small">타석번호</label>
+                <label class="form-label text-secondary small">타석(룸)</label>
                 <select name="bay_id" class="form-select bg-secondary text-white border-0" required>
                     {% if bays %}
                         {% for bay in bays %}
