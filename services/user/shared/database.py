@@ -1380,3 +1380,267 @@ def register_pc_with_code(registration_code, store_name, bay_name, pc_name, pc_i
         cur.close()
         conn.close()
         return None, str(e)
+
+# =========================
+# 유저 대시보드 v3 (DRIVER 기준, is_valid=TRUE만)
+# =========================
+
+def get_today_summary_driver(user_id):
+    """오늘 요약 데이터 (DRIVER, is_valid=TRUE만)"""
+    from datetime import datetime
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    today = datetime.now().strftime("%Y-%m-%d")
+    
+    cur.execute("""
+        SELECT 
+            COUNT(*) as shot_count,
+            AVG(carry) as avg_carry,
+            AVG(total_distance) as avg_total_distance,
+            AVG(smash_factor) as avg_smash_factor,
+            AVG(ABS(face_angle)) as avg_face_angle,
+            AVG(ABS(club_path)) as avg_club_path,
+            AVG(ball_speed) as avg_ball_speed,
+            AVG(club_speed) as avg_club_speed,
+            AVG(back_spin) as avg_back_spin,
+            AVG(ABS(side_spin)) as avg_side_spin
+        FROM shots
+        WHERE user_id = %s
+          AND club_id = 'DRIVER'
+          AND is_valid = TRUE
+          AND is_guest = FALSE
+          AND DATE(timestamp) = %s
+    """, (user_id, today))
+    
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if row and row.get("shot_count", 0) > 0:
+        return {
+            "shot_count": int(row.get("shot_count", 0)),
+            "avg_carry": round(float(row.get("avg_carry") or 0), 1),
+            "avg_total_distance": round(float(row.get("avg_total_distance") or 0), 1),
+            "avg_smash_factor": round(float(row.get("avg_smash_factor") or 0), 2),
+            "avg_face_angle": round(float(row.get("avg_face_angle") or 0), 2),
+            "avg_club_path": round(float(row.get("avg_club_path") or 0), 2),
+            "avg_ball_speed": round(float(row.get("avg_ball_speed") or 0), 1),
+            "avg_club_speed": round(float(row.get("avg_club_speed") or 0), 1),
+            "avg_back_spin": round(float(row.get("avg_back_spin") or 0), 0),
+            "avg_side_spin": round(float(row.get("avg_side_spin") or 0), 0)
+        }
+    return {
+        "shot_count": 0,
+        "avg_carry": 0.0,
+        "avg_total_distance": 0.0,
+        "avg_smash_factor": 0.0,
+        "avg_face_angle": 0.0,
+        "avg_club_path": 0.0,
+        "avg_ball_speed": 0.0,
+        "avg_club_speed": 0.0,
+        "avg_back_spin": 0.0,
+        "avg_side_spin": 0.0
+    }
+
+def get_recent_shots_driver(user_id, limit=20):
+    """최근 샷 목록 (DRIVER, is_valid=TRUE만)"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    cur.execute("""
+        SELECT 
+            timestamp,
+            carry,
+            total_distance,
+            smash_factor,
+            face_angle,
+            club_path,
+            ball_speed,
+            club_speed,
+            back_spin,
+            side_spin,
+            launch_angle
+        FROM shots
+        WHERE user_id = %s
+          AND club_id = 'DRIVER'
+          AND is_valid = TRUE
+          AND is_guest = FALSE
+        ORDER BY timestamp DESC
+        LIMIT %s
+    """, (user_id, limit))
+    
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    
+    return [dict(row) for row in rows]
+
+def get_7days_average_driver(user_id):
+    """7일 평균 그래프 데이터 (DRIVER, is_valid=TRUE만)"""
+    from datetime import datetime, timedelta
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # 최근 7일 날짜 목록
+    dates = [(datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+    
+    results = []
+    for date_str in dates:
+        cur.execute("""
+            SELECT 
+                DATE(timestamp) as date,
+                AVG(carry) as avg_carry,
+                AVG(total_distance) as avg_total_distance,
+                AVG(smash_factor) as avg_smash_factor,
+                AVG(ABS(face_angle)) as avg_face_angle,
+                AVG(ABS(club_path)) as avg_club_path,
+                AVG(ball_speed) as avg_ball_speed,
+                AVG(club_speed) as avg_club_speed,
+                AVG(back_spin) as avg_back_spin,
+                AVG(ABS(side_spin)) as avg_side_spin
+            FROM shots
+            WHERE user_id = %s
+              AND club_id = 'DRIVER'
+              AND is_valid = TRUE
+              AND is_guest = FALSE
+              AND DATE(timestamp) = %s
+            GROUP BY DATE(timestamp)
+        """, (user_id, date_str))
+        
+        row = cur.fetchone()
+        if row:
+            results.append({
+                "date": row.get("date"),
+                "avg_carry": round(float(row.get("avg_carry") or 0), 1),
+                "avg_total_distance": round(float(row.get("avg_total_distance") or 0), 1),
+                "avg_smash_factor": round(float(row.get("avg_smash_factor") or 0), 2),
+                "avg_face_angle": round(float(row.get("avg_face_angle") or 0), 2),
+                "avg_club_path": round(float(row.get("avg_club_path") or 0), 2),
+                "avg_ball_speed": round(float(row.get("avg_ball_speed") or 0), 1),
+                "avg_club_speed": round(float(row.get("avg_club_speed") or 0), 1),
+                "avg_back_spin": round(float(row.get("avg_back_spin") or 0), 0),
+                "avg_side_spin": round(float(row.get("avg_side_spin") or 0), 0)
+            })
+        else:
+            results.append({
+                "date": date_str,
+                "avg_carry": 0.0,
+                "avg_total_distance": 0.0,
+                "avg_smash_factor": 0.0,
+                "avg_face_angle": 0.0,
+                "avg_club_path": 0.0,
+                "avg_ball_speed": 0.0,
+                "avg_club_speed": 0.0,
+                "avg_back_spin": 0.0,
+                "avg_side_spin": 0.0
+            })
+    
+    cur.close()
+    conn.close()
+    return results
+
+def get_criteria_compare_driver(user_id):
+    """기준값 비교 데이터 (DRIVER, 최근 7일 평균 vs criteria.json)"""
+    from datetime import datetime, timedelta
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    # 최근 7일 평균 계산
+    cur.execute("""
+        SELECT 
+            AVG(carry) as avg_carry,
+            AVG(total_distance) as avg_total_distance,
+            AVG(smash_factor) as avg_smash_factor,
+            AVG(ABS(face_angle)) as avg_face_angle,
+            AVG(ABS(club_path)) as avg_club_path,
+            AVG(ball_speed) as avg_ball_speed,
+            AVG(club_speed) as avg_club_speed,
+            AVG(back_spin) as avg_back_spin,
+            AVG(ABS(side_spin)) as avg_side_spin
+        FROM shots
+        WHERE user_id = %s
+          AND club_id = 'DRIVER'
+          AND is_valid = TRUE
+          AND is_guest = FALSE
+          AND timestamp >= %s
+    """, (user_id, (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")))
+    
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    
+    if not row or not any(row.values()):
+        return {}
+    
+    # utils 모듈 import
+    try:
+        import sys
+        import os
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        user_dir = os.path.dirname(current_dir)
+        if user_dir not in sys.path:
+            sys.path.insert(0, user_dir)
+        from utils import _get_rule
+    except Exception as e:
+        print(f"[WARNING] utils import 실패: {e}")
+        return {}
+    
+    # criteria.json 기준으로 비교
+    result = {}
+    club_id = "driver"
+    
+    metrics_map = {
+        "smash_factor": "smash_factor",
+        "face_angle": "face_angle",
+        "club_path": "club_path",
+        "back_spin": "back_spin",
+        "side_spin": "side_spin"
+    }
+    
+    for metric_key, rule_key in metrics_map.items():
+        avg_value = row.get(f"avg_{metric_key}")
+        if avg_value is None:
+            continue
+        
+        rule = _get_rule(club_id, rule_key)
+        if not rule:
+            continue
+        
+        good = rule.get("good")
+        warn = rule.get("warn")
+        bad = rule.get("bad")
+        
+        try:
+            v = float(avg_value)
+        except (ValueError, TypeError):
+            continue
+        
+        # face_angle, club_path, side_spin은 절댓값 사용
+        if metric_key in ["face_angle", "club_path", "side_spin"]:
+            v = abs(v)
+        
+        # 기준 충족 여부 확인
+        if isinstance(good, (list, tuple)) and len(good) == 2:
+            low, high = float(good[0]), float(good[1])
+            result[metric_key] = "GOOD" if (low <= v <= high) else "BAD"
+        elif good is not None and bad is not None:
+            g, b = float(good), float(bad)
+            if v >= g:
+                result[metric_key] = "GOOD"
+            elif v <= b:
+                result[metric_key] = "BAD"
+            else:
+                result[metric_key] = "WARN"
+        elif good is not None and warn is not None:
+            g, w = float(good), float(warn)
+            if v <= g:
+                result[metric_key] = "GOOD"
+            elif v <= w:
+                result[metric_key] = "WARN"
+            else:
+                result[metric_key] = "BAD"
+        elif good is not None:
+            g = float(good)
+            result[metric_key] = "GOOD" if v >= g else "BAD"
+    
+    return result

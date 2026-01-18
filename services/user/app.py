@@ -316,6 +316,105 @@ def get_current_user_shots():
 # =========================
 # 보안: USER role이 다른 userId로 접근 시 차단
 # =========================
+@app.route("/api/users/me/dashboard", methods=["GET"])
+@require_login
+def get_user_dashboard():
+    """
+    유저 대시보드 v3 API (DRIVER 기준, is_valid=TRUE만)
+    
+    Query Parameters:
+        club: DRIVER (기본값), IRON_7, WEDGE (현재는 DRIVER만 구현)
+    """
+    try:
+        uid = session["user_id"]
+        if not uid:
+            return jsonify({"error": "로그인이 필요합니다."}), 401
+        
+        club = request.args.get("club", "DRIVER").upper()
+        
+        # 현재는 DRIVER만 구현
+        if club != "DRIVER":
+            return jsonify({"error": "현재는 DRIVER만 지원합니다."}), 400
+        
+        # 1️⃣ 오늘 요약
+        today_summary = database.get_today_summary_driver(uid)
+        
+        # 2️⃣ 최근 샷 (기본 20개)
+        recent_shots = database.get_recent_shots_driver(uid, limit=20)
+        
+        # 3️⃣ 7일 평균 그래프
+        last_7_days = database.get_7days_average_driver(uid)
+        
+        # 4️⃣ 기준값 비교 (최근 7일 평균 vs criteria.json)
+        criteria_compare = database.get_criteria_compare_driver(uid)
+        
+        return jsonify({
+            "today_summary": {
+                "available_metrics": [
+                    "shot_count",
+                    "avg_carry",
+                    "avg_total_distance",
+                    "avg_smash_factor",
+                    "avg_face_angle",
+                    "avg_club_path",
+                    "avg_ball_speed",
+                    "avg_club_speed",
+                    "avg_back_spin",
+                    "avg_side_spin"
+                ],
+                "values": today_summary
+            },
+            "recent_shots": {
+                "available_metrics": [
+                    "carry",
+                    "total_distance",
+                    "smash_factor",
+                    "face_angle",
+                    "club_path",
+                    "ball_speed",
+                    "club_speed",
+                    "back_spin",
+                    "side_spin",
+                    "launch_angle"
+                ],
+                "shots": recent_shots
+            },
+            "last_7_days": {
+                "available_metrics": [
+                    "avg_carry",
+                    "avg_total_distance",
+                    "avg_smash_factor",
+                    "avg_face_angle",
+                    "avg_club_path",
+                    "avg_ball_speed",
+                    "avg_club_speed",
+                    "avg_back_spin",
+                    "avg_side_spin"
+                ],
+                "data": last_7_days
+            },
+            "criteria_compare": {
+                "available_metrics": [
+                    "carry",
+                    "total_distance",
+                    "smash_factor",
+                    "face_angle",
+                    "club_path",
+                    "ball_speed",
+                    "club_speed",
+                    "back_spin",
+                    "side_spin"
+                ],
+                "result": criteria_compare
+            }
+        })
+    except KeyError:
+        return jsonify({"error": "로그인이 필요합니다."}), 401
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
 @app.route("/api/users/<path:user_id>", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
 @require_login
 def block_user_id_access(user_id):
