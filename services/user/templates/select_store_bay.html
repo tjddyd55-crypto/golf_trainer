@@ -110,14 +110,19 @@
                         data.bays.forEach(bay => {
                             const option = document.createElement('option');
                             option.value = bay.bay_id;
-                            // bay_id가 숫자인지 확인하여 표시 형식 결정
-                            const bayIdStr = String(bay.bay_id);
-                            if (bayIdStr.match(/^\d+$/)) {
-                                // 숫자 타석 ID: "03번 타석" 형식
-                                option.textContent = `${parseInt(bayIdStr)}번 타석`;
+                            // bay_name이 있으면 우선 사용 (PC 등록 시 입력한 값), 없으면 bay_id 사용
+                            if (bay.bay_name && bay.bay_name.trim()) {
+                                option.textContent = bay.bay_name;
                             } else {
-                                // 문자열 타석 ID: "능동잡테스트" 형식
-                                option.textContent = bayIdStr;
+                                // bay_name이 없으면 bay_id 사용
+                                const bayIdStr = String(bay.bay_id);
+                                if (bayIdStr.match(/^\d+$/)) {
+                                    // 숫자 타석 ID: "03번 타석" 형식
+                                    option.textContent = `${parseInt(bayIdStr)}번 타석`;
+                                } else {
+                                    // 문자열 타석 ID: "능동잡테스트" 형식
+                                    option.textContent = bayIdStr;
+                                }
                             }
                             baySelect.appendChild(option);
                         });
