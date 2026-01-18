@@ -962,7 +962,7 @@ def get_bays(store_id):
                 COALESCE(sp.store_id, (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1)) as store_id,
                 COALESCE(b.status, 'READY') as status,
                 COALESCE(b.user_id, '') as user_id,
-                COALESCE(b.last_update, CURRENT_TIMESTAMP) as last_update,
+                COALESCE(b.last_update, TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')) as last_update,
                 COALESCE(b.bay_code, CONCAT(COALESCE(sp.store_id, (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1)), '_', sp.bay_id)) as bay_code,
                 sp.bay_name,
                 sp.pc_name,

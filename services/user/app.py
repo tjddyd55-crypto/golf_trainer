@@ -263,7 +263,7 @@ def logout():
         database.clear_active_session(store_id, bay_id)
     
     session.clear()
-    return redirect(url_for("login"))
+    return redirect(url_for("user_login"))
 
 # =========================
 # API: 현재 로그인한 유저 정보 조회 (me 기반)
