@@ -872,7 +872,7 @@ def approve_pc():
                     store_id = store_row[0]
                     print(f"[DEBUG] store_id 자동 추출: {store_id}")
         
-        # bay_id 변환 처리: "3번룸" -> "03" 형식으로 변환
+        # bay_id 변환 처리: "3번룸" -> "03" 형식으로 변환 (문자열 타석 ID는 그대로 유지)
         original_bay_id = bay_id
         if bay_id:
             # None, 빈 문자열, 'null' 문자열 체크
@@ -884,20 +884,26 @@ def approve_pc():
                 if bay_id.isdigit() and len(bay_id) == 2:
                     # 이미 올바른 형식
                     pass
-                # "3번룸", "3번", "3" 같은 형식이면 변환
-                elif '번' in bay_id or not bay_id.isdigit():
+                # "3번룸", "3번", "3" 같은 형식이면 변환 (숫자가 있는 경우만)
+                elif '번' in bay_id:
                     match = re.search(r'(\d+)', bay_id)
                     if match:
                         bay_num = int(match.group(1))
                         bay_id = f"{bay_num:02d}"
                         print(f"[DEBUG] bay_id 변환: '{original_bay_id}' -> '{bay_id}'")
                     else:
-                        # 숫자를 찾을 수 없으면 None으로 설정
-                        bay_id = None
-                # "3" 같은 단일 숫자면 "03"으로 변환
-                elif bay_id.isdigit() and len(bay_id) == 1:
-                    bay_id = f"0{bay_id}"
-                    print(f"[DEBUG] bay_id 변환: '{original_bay_id}' -> '{bay_id}'")
+                        # 숫자를 찾을 수 없으면 원본 그대로 사용 (예: "능동잡테스트")
+                        print(f"[DEBUG] bay_id 숫자 없음, 원본 유지: '{bay_id}'")
+                # 숫자로만 이루어진 경우
+                elif bay_id.isdigit():
+                    if len(bay_id) == 1:
+                        # "3" 같은 단일 숫자면 "03"으로 변환
+                        bay_id = f"0{bay_id}"
+                        print(f"[DEBUG] bay_id 변환: '{original_bay_id}' -> '{bay_id}'")
+                    # 이미 2자리 이상이면 그대로 사용
+                else:
+                    # 숫자와 "번"이 없는 문자열 타석 ID (예: "능동잡테스트") - 원본 그대로 사용
+                    print(f"[DEBUG] bay_id 문자열 타석 ID, 원본 유지: '{bay_id}'")
         else:
             # bay_id가 비어있으면 pc_name이나 bay_name에서 추출 시도
             pc_name = pc_data.get("pc_name", "")
