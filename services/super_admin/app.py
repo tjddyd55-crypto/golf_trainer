@@ -848,8 +848,9 @@ def approve_pc():
                 if store_row:
                     store_id = store_row[0]
         
-        # bay_id가 비어있으면 pc_name이나 bay_name에서 추출 시도
-        if not bay_id or bay_id == '':
+        # bay_id가 비어있거나 "3번룸" 같은 형식이면 변환 시도
+        if not bay_id or bay_id == '' or bay_id == 'null':
+            # 비어있으면 pc_name이나 bay_name에서 추출 시도
             pc_name = pc_data.get("pc_name", "")
             bay_name = pc_data.get("bay_name", "")
             # pc_name 예: "가자스크린골프테스트2-3번룸-PC" 또는 bay_name 예: "3번룸"
@@ -865,6 +866,12 @@ def approve_pc():
                 if match:
                     bay_num = match.group(1)
                     bay_id = f"{int(bay_num):02d}"
+        elif bay_id and isinstance(bay_id, str) and ('번' in bay_id or not bay_id.isdigit()):
+            # bay_id가 "3번룸" 같은 형식이면 "03"으로 변환
+            match = re.search(r'(\d+)번?', bay_id)
+            if match:
+                bay_num = match.group(1)
+                bay_id = f"{int(bay_num):02d}"
         
         # store_id와 bay_id 검증
         if not store_id or store_id == '' or store_id == 'null':
