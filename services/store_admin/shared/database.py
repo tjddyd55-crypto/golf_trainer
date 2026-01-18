@@ -307,51 +307,14 @@ def init_db():
     except Exception:
         pass  # 테이블이 없으면 스킵
 
-    # 기본 매장 생성
-    cur.execute("SELECT COUNT(*) AS c FROM stores WHERE store_id = %s", ("gaja",))
-    row = cur.fetchone()
-    if not row or row[0] == 0:
-        cur.execute(
-            "INSERT INTO stores (store_id, store_name, admin_pw, bays_count) VALUES (%s, %s, %s, %s)",
-            ("gaja", "가자골프", "1111", 5),
-        )
-        # 기본 타석 생성 (코드 포함)
-        for i in range(1, 6):
-            bay_id = f"{i:02d}"
-            bay_code = generate_bay_code("gaja", bay_id, cur)
-            cur.execute(
-                """
-                INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code)
-                VALUES (%s, %s, 'READY', '', '', %s)
-                ON CONFLICT (store_id, bay_id) DO NOTHING
-                """,
-                ("gaja", bay_id, bay_code),
-            )
-    else:
-        cur.execute(
-            "UPDATE stores SET admin_pw = %s WHERE store_id = %s",
-            ("1111", "gaja")
-        )
-        cur.execute(
-            "UPDATE stores SET bays_count = %s WHERE store_id = %s AND bays_count > %s",
-            (5, "gaja", 5)
-        )
-        # 기존 타석에 코드 부여 (없는 경우)
-        for i in range(1, 6):
-            bay_id = f"{i:02d}"
-            cur.execute("SELECT bay_code FROM bays WHERE store_id = %s AND bay_id = %s", ("gaja", bay_id))
-            existing = cur.fetchone()
-            if not existing or not existing[0]:
-                bay_code = generate_bay_code("gaja", bay_id, cur)
-                cur.execute(
-                    "UPDATE bays SET bay_code = %s WHERE store_id = %s AND bay_id = %s",
-                    (bay_code, "gaja", bay_id)
-                )
+    # ⚠️ seed 데이터 생성 로직 제거됨
+    # 기본 매장/타석 생성은 seed_dev_data.py 스크립트로 분리
+    # 운영 환경에서는 절대 자동 실행되지 않음
 
     conn.commit()
     cur.close()
     conn.close()
-    print("✅ DB 준비 완료")
+    print("✅ DB 스키마 초기화 완료 (테이블/인덱스만 생성)")
 
 # ------------------------------------------------
 # 타석 코드 생성
