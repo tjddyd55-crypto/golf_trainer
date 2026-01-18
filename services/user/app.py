@@ -110,7 +110,16 @@ def user_login():
 @app.route("/select-store-bay", methods=["GET", "POST"])
 @require_login
 def select_store_bay():
+    """
+    매장/타석 선택 화면
+    
+    ⚠️ 유저 조회 시 DB 수정 절대 금지
+    - 타석 데이터 변경 없음 (조회만 수행)
+    - active_user 관리만 허용 (set_active_session/clear_active_session)
+    """
     try:
+        # ⚠️ READ-ONLY: 로그인 시 DB 수정 방지 (타석 조회만)
+        print(f"[USER] select_store_bay: user_id={session.get('user_id')}, read-only mode, no bay mutation allowed")
         if request.method == "POST":
             store_id = request.form.get("store_id")
             bay_id = request.form.get("bay_id")
@@ -490,10 +499,18 @@ def check_bay_code():
 @app.route("/api/get_bays", methods=["GET"])
 @require_login
 def get_bays_api():
-    """매장의 타석 목록 조회 API"""
+    """
+    매장의 타석 목록 조회 API (READ-ONLY)
+    
+    ⚠️ 유저 조회 시 DB 수정 절대 금지
+    - 타석 데이터 변경 없음 (조회만 수행)
+    """
     store_id = request.args.get("store_id")
     if not store_id:
         return jsonify({"bays": []}), 400
+    
+    # ⚠️ READ-ONLY: 로그인 시 DB 수정 방지
+    print(f"[USER API] get_bays_api: store_id={store_id}, read-only mode, no bay mutation allowed")
     
     bays = database.get_bays(store_id)
     

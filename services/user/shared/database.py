@@ -891,7 +891,13 @@ def get_all_stores():
     return [dict(row) for row in rows]
 
 def get_bays(store_id):
-    """매장의 승인된 타석 목록만 반환 (store_pcs를 기준으로 조회, bays가 없으면 자동 생성)"""
+    """
+    매장의 승인된 타석 목록만 반환 (store_pcs를 기준으로 조회)
+    
+    ⚠️ READ-ONLY: 유저 조회 시 DB 수정 절대 금지
+    - bays 테이블 자동 생성/수정 로직 제거
+    - 관리자 승인 시에만 bays 테이블 생성/수정
+    """
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
@@ -947,18 +953,9 @@ def get_bays(store_id):
         for bay in approved_bays:
             print(f"[DEBUG] 타석: bay_id={bay.get('bay_id')}, bay_name={bay.get('bay_name')}, pc_name={bay.get('pc_name')}, pc_status={bay.get('pc_status')}, usage_end_date={bay.get('usage_end_date')}")
         
-        # bays 테이블에 없는 타석은 자동 생성
-        for bay in approved_bays:
-            bay_id_val = bay.get("bay_id")
-            if bay_id_val:
-                cur.execute("""
-                    INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code)
-                    VALUES (%s, %s, 'READY', NULL, CURRENT_TIMESTAMP, %s)
-                    ON CONFLICT (store_id, bay_id) DO NOTHING
-                """, (store_id, bay_id_val, f"{store_id}_{bay_id_val}"))
-        
-        if approved_bays:
-            conn.commit()
+        # ⚠️ 유저 조회 시 DB 수정 금지: bays 테이블 자동 생성 로직 제거
+        # bays 테이블은 관리자 승인 시에만 생성/수정됨 (approve_pc)
+        # 유저는 조회만 수행: store_pcs 기준으로 승인된 타석만 반환
         
         cur.close()
         conn.close()
