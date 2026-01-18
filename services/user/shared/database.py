@@ -943,6 +943,17 @@ def get_bays(store_id):
         from datetime import date
         today_str = date.today().strftime("%Y-%m-%d")
         
+        # 디버그: 먼저 store_pcs의 전체 데이터 확인
+        cur.execute("""
+            SELECT store_id, store_name, bay_id, bay_name, status, usage_end_date
+            FROM store_pcs 
+            WHERE store_id = %s OR store_name IN (SELECT store_name FROM stores WHERE store_id = %s)
+        """, (store_id, store_id))
+        all_pcs = cur.fetchall()
+        print(f"[DEBUG] get_bays 전체 store_pcs: store_id={store_id}, 총 {len(all_pcs)}개")
+        for pc in all_pcs:
+            print(f"[DEBUG] PC: store_id={pc.get('store_id')}, store_name={pc.get('store_name')}, bay_id={pc.get('bay_id')}, bay_name={pc.get('bay_name')}, status={pc.get('status')}, usage_end_date={pc.get('usage_end_date')}")
+        
         # store_pcs를 기준으로 조회하고, bays가 없으면 생성
         # store_id 또는 store_name으로 조회 (PC 등록 시 store_name으로 저장될 수 있음)
         cur.execute("""
@@ -954,7 +965,9 @@ def get_bays(store_id):
                 COALESCE(b.last_update, CURRENT_TIMESTAMP) as last_update,
                 COALESCE(b.bay_code, CONCAT(COALESCE(sp.store_id, (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1)), '_', sp.bay_id)) as bay_code,
                 sp.bay_name,
-                sp.pc_name
+                sp.pc_name,
+                sp.status as pc_status,
+                sp.usage_end_date
             FROM store_pcs sp
             LEFT JOIN bays b ON (b.store_id = sp.store_id OR b.store_id = (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1))
                                 AND b.bay_id = sp.bay_id
@@ -962,14 +975,14 @@ def get_bays(store_id):
               AND sp.status = 'active'
               AND sp.bay_id IS NOT NULL
               AND sp.bay_id != ''
-              AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date OR sp.usage_end_date >= %s)
+              AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date)
             ORDER BY sp.bay_id
-        """, (store_id, store_id, today_str, today_str))
+        """, (store_id, store_id, today_str))
         
         approved_bays = cur.fetchall()
-        print(f"[DEBUG] get_bays: store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
+        print(f"[DEBUG] get_bays 최종: store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
         for bay in approved_bays:
-            print(f"[DEBUG] 타석: bay_id={bay.get('bay_id')}, bay_name={bay.get('bay_name')}, pc_name={bay.get('pc_name')}")
+            print(f"[DEBUG] 타석: bay_id={bay.get('bay_id')}, bay_name={bay.get('bay_name')}, pc_name={bay.get('pc_name')}, pc_status={bay.get('pc_status')}, usage_end_date={bay.get('usage_end_date')}")
         
         # bays 테이블에 없는 타석은 자동 생성
         for bay in approved_bays:
