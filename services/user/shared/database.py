@@ -667,6 +667,88 @@ def get_active_user(store_id, bay_id):
 def get_bay_active_user_info(store_id, bay_id):
     return get_active_user(store_id, bay_id)
 
+def update_bay_heartbeat(store_id, bay_id, user_id=None):
+    """타석 heartbeat 업데이트 (last_seen_at 갱신)"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    try:
+        # bays 테이블의 last_update 갱신 (heartbeat)
+        if user_id:
+            # user_id가 제공되면 함께 업데이트
+            cur.execute("""
+                UPDATE bays 
+                SET user_id = %s, last_update = %s
+                WHERE store_id = %s AND bay_id = %s
+            """, (user_id, now, store_id, bay_id))
+        else:
+            # user_id가 없으면 last_update만 갱신
+            cur.execute("""
+                UPDATE bays 
+                SET last_update = %s
+                WHERE store_id = %s AND bay_id = %s
+            """, (now, store_id, bay_id))
+        
+        # active_sessions 테이블도 갱신 (호환성)
+        if user_id:
+            cur.execute("""
+                UPDATE active_sessions 
+                SET login_time = %s
+                WHERE store_id = %s AND bay_id = %s
+            """, (now, store_id, bay_id))
+        
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"[ERROR] update_bay_heartbeat 오류: {e}")
+        conn.rollback()
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+def cleanup_expired_active_users(ttl_minutes=5):
+    """만료된 active_user 자동 정리 (TTL 정책)"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        from datetime import timedelta
+        # TTL 시간 이전의 last_update를 가진 active_user 제거
+        ttl_time = datetime.now() - timedelta(minutes=ttl_minutes)
+        ttl_time_str = ttl_time.strftime("%Y-%m-%d %H:%M:%S")
+        
+        # 1. bays 테이블에서 만료된 active_user 제거
+        cur.execute("""
+            UPDATE bays 
+            SET user_id = '', last_update = CURRENT_TIMESTAMP
+            WHERE user_id IS NOT NULL 
+              AND user_id != '' 
+              AND last_update < %s
+        """, (ttl_time_str,))
+        bays_cleaned = cur.rowcount
+        
+        # 2. active_sessions 테이블에서도 만료된 세션 제거
+        cur.execute("""
+            DELETE FROM active_sessions 
+            WHERE login_time < %s
+        """, (ttl_time_str,))
+        sessions_cleaned = cur.rowcount
+        
+        conn.commit()
+        total_cleaned = bays_cleaned + sessions_cleaned
+        if total_cleaned > 0:
+            print(f"[INFO] 만료된 active_user 정리: {total_cleaned}개 (TTL: {ttl_minutes}분)")
+        return total_cleaned
+    except Exception as e:
+        print(f"[ERROR] cleanup_expired_active_users 오류: {e}")
+        conn.rollback()
+        return 0
+    finally:
+        cur.close()
+        conn.close()
+
 def check_store(store_id, password):
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)

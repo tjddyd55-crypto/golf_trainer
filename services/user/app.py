@@ -139,13 +139,19 @@ def select_store_bay():
             uid = session["user_id"]
             
             if active_user and active_user["user_id"] != uid:
-                # 다른 사용자가 사용 중
+                # 다른 사용자가 사용 중 - 409 Conflict 상황
                 stores = database.get_all_stores()
                 return render_template("select_store_bay.html", 
                                      stores=stores,
                                      selected_store_id=store_id,
                                      selected_bay_id=bay_id,
-                                     error=f"{bay_id}번 타석은 현재 사용 중입니다.")
+                                     error=f"⚠️ {bay_id}번 타석은 현재 다른 사용자가 이용 중입니다. 다른 타석을 선택해주세요."), 409
+            
+            # 이전 타석의 active_user 해제 (타석 변경 시)
+            prev_store_id = session.get("store_id")
+            prev_bay_id = session.get("bay_id")
+            if prev_store_id and prev_bay_id and (prev_store_id != store_id or prev_bay_id != bay_id):
+                database.clear_active_session(prev_store_id, prev_bay_id)
             
             # 매장/타석 선택 완료 - 세션에 저장
             session["store_id"] = store_id
@@ -370,6 +376,7 @@ def get_active_user():
 # =========================
 @app.route("/api/clear_session", methods=["POST"])
 def clear_session():
+    """타석 활성 세션 해제 (로그아웃/종료 시 사용)"""
     data = request.get_json() or {}
     store_id = data.get("store_id") or request.args.get("store_id")
     bay_id = data.get("bay_id") or request.args.get("bay_id")
@@ -378,6 +385,44 @@ def clear_session():
         deleted = database.clear_active_session(store_id, bay_id)
         return jsonify({"success": True, "deleted": deleted})
     return jsonify({"success": False, "error": "store_id and bay_id required"}), 400
+
+# =========================
+# API: 타석 heartbeat (샷 수집 프로그램에서 주기적 호출)
+# =========================
+@app.route("/api/bays/<bay_id>/heartbeat", methods=["POST"])
+def bay_heartbeat(bay_id):
+    """타석 heartbeat API - active_user 상태 유지"""
+    data = request.get_json() or {}
+    store_id = data.get("store_id") or request.args.get("store_id")
+    user_id = data.get("user_id")
+    
+    if not store_id:
+        return jsonify({"error": "store_id required"}), 400
+    
+    # heartbeat 업데이트 (last_seen_at 갱신)
+    success = database.update_bay_heartbeat(store_id, bay_id, user_id)
+    
+    if success:
+        return jsonify({"success": True, "message": "heartbeat updated"})
+    else:
+        return jsonify({"error": "Failed to update heartbeat"}), 500
+
+# =========================
+# API: 만료된 active_user 자동 정리 (TTL 정책)
+# =========================
+@app.route("/api/cleanup_expired_sessions", methods=["POST"])
+def cleanup_expired_sessions():
+    """만료된 active_user 자동 정리 (TTL 정책 적용)"""
+    # TTL: 5분 (300초) - heartbeat가 5분 이상 없으면 해제
+    ttl_minutes = int(request.args.get("ttl_minutes", 5))
+    
+    cleaned_count = database.cleanup_expired_active_users(ttl_minutes)
+    
+    return jsonify({
+        "success": True,
+        "cleaned_count": cleaned_count,
+        "ttl_minutes": ttl_minutes
+    })
 
 # =========================
 # API: 매장 PC 등록
