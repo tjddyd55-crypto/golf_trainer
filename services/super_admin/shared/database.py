@@ -1357,19 +1357,54 @@ def delete_store(store_id):
     cur = conn.cursor()
     
     try:
+        # 먼저 매장 정보 조회 (store_name 확인용)
+        cur.execute("SELECT store_id, store_name FROM stores WHERE store_id = %s", (store_id,))
+        store_info = cur.fetchone()
+        if not store_info:
+            print(f"[WARNING] 매장 삭제 실패: store_id={store_id}가 존재하지 않습니다.")
+            return False
+        
+        store_name = store_info[1] if len(store_info) > 1 else None
+        print(f"[DEBUG] 매장 삭제 시작: store_id={store_id}, store_name={store_name}")
+        
         # 관련 데이터 삭제 (순서 중요: 외래키 참조 제거)
+        # store_pcs는 store_id 또는 store_name으로 저장될 수 있으므로 둘 다 확인
         cur.execute("DELETE FROM active_sessions WHERE store_id = %s", (store_id,))
+        deleted_active_sessions = cur.rowcount
+        
         cur.execute("DELETE FROM bays WHERE store_id = %s", (store_id,))
+        deleted_bays = cur.rowcount
+        
         cur.execute("DELETE FROM shots WHERE store_id = %s", (store_id,))
+        deleted_shots = cur.rowcount
+        
+        # store_pcs: store_id 또는 store_name으로 삭제
         cur.execute("DELETE FROM store_pcs WHERE store_id = %s", (store_id,))
+        deleted_pcs_by_id = cur.rowcount
+        if store_name:
+            cur.execute("DELETE FROM store_pcs WHERE store_name = %s", (store_name,))
+            deleted_pcs_by_name = cur.rowcount
+        else:
+            deleted_pcs_by_name = 0
+        
+        print(f"[DEBUG] 매장 관련 데이터 삭제: active_sessions={deleted_active_sessions}, bays={deleted_bays}, shots={deleted_shots}, store_pcs (by_id)={deleted_pcs_by_id}, store_pcs (by_name)={deleted_pcs_by_name}")
         
         # 매장 삭제
         cur.execute("DELETE FROM stores WHERE store_id = %s", (store_id,))
+        deleted_stores = cur.rowcount
+        
+        if deleted_stores == 0:
+            print(f"[WARNING] 매장 삭제 실패: store_id={store_id}가 존재하지 않습니다.")
+            conn.rollback()
+            return False
         
         conn.commit()
+        print(f"[DEBUG] 매장 삭제 완료: store_id={store_id}")
         return True
     except Exception as e:
-        print(f"매장 삭제 오류: {e}")
+        print(f"[ERROR] 매장 삭제 오류: {e}")
+        import traceback
+        traceback.print_exc()
         conn.rollback()
         return False
     finally:
