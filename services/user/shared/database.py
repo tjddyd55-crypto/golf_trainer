@@ -709,6 +709,11 @@ def set_active_session(store_id, bay_id, user_id):
 
 def clear_active_session(store_id, bay_id):
     """타석의 활성 사용자 제거 (active_sessions + bays 테이블 모두 업데이트)"""
+    # store_id나 bay_id가 None이면 처리하지 않음
+    if not store_id or not bay_id:
+        print(f"[WARNING] clear_active_session: store_id 또는 bay_id가 None입니다. (store_id={store_id}, bay_id={bay_id})")
+        return 0
+    
     conn = get_db_connection()
     cur = conn.cursor()
     
@@ -719,10 +724,10 @@ def clear_active_session(store_id, bay_id):
         """, (store_id, bay_id))
         deleted_count = cur.rowcount
         
-        # 2. bays 테이블에서도 활성 사용자 제거
+        # 2. bays 테이블에서도 활성 사용자 제거 (NULL로 설정)
         cur.execute("""
             UPDATE bays 
-            SET user_id = '', last_update = CURRENT_TIMESTAMP
+            SET user_id = NULL, last_update = CURRENT_TIMESTAMP
             WHERE store_id = %s AND bay_id = %s
         """, (store_id, bay_id))
         
@@ -730,6 +735,8 @@ def clear_active_session(store_id, bay_id):
         return deleted_count
     except Exception as e:
         print(f"[ERROR] clear_active_session 오류: {e}")
+        import traceback
+        traceback.print_exc()
         conn.rollback()
         return 0
     finally:
@@ -957,16 +964,19 @@ def get_bays(store_id):
         cur.close()
         conn.close()
         
-        # 타석 번호로 필터링 (bays_count 이하만)
+        # 타석 번호로 필터링 (bays_count 이하만, 또는 문자열 bay_id도 포함)
         filtered_bays = []
         for bay in approved_bays:
+            bay_id_str = bay.get("bay_id", "")
             try:
-                bay_num = int(bay["bay_id"])
+                # 숫자로 변환 가능하면 bays_count 체크
+                bay_num = int(bay_id_str)
                 if bay_num <= bays_count:
                     filtered_bays.append(dict(bay))
             except (ValueError, TypeError):
-                # bay_id가 숫자가 아닌 경우 건너뛰기
-                continue
+                # bay_id가 숫자가 아닌 경우 (예: "능동잡테스트") - 모두 포함
+                # 문자열 타석 ID는 승인된 것이면 모두 표시
+                filtered_bays.append(dict(bay))
         
         return filtered_bays
         
