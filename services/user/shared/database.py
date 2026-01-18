@@ -111,6 +111,22 @@ def init_db():
         cur.execute("ALTER TABLE shots ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE")
     except Exception:
         pass
+    
+    # is_valid, score 컬럼 추가 (샷 데이터 분석 구조)
+    try:
+        cur.execute("ALTER TABLE shots ADD COLUMN IF NOT EXISTS is_valid BOOLEAN DEFAULT FALSE")
+    except Exception:
+        pass
+    try:
+        cur.execute("ALTER TABLE shots ADD COLUMN IF NOT EXISTS score INTEGER DEFAULT NULL")
+    except Exception:
+        pass
+    
+    # shots 테이블 인덱스 추가 (7일 평균 계산 성능 향상)
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_shots_user_timestamp ON shots(user_id, timestamp)")
+    except Exception:
+        pass
 
     # 3️⃣ 매장 테이블 (확장)
     cur.execute("""
@@ -537,6 +553,25 @@ def save_shot_to_db(data):
         is_guest = True
         print(f"[INFO] 게스트 샷 저장: store_id={store_id}, bay_id={bay_id}")
     
+    # criteria.json 기준으로 샷 평가 (is_valid, score 계산)
+    try:
+        import sys
+        import os
+        # utils.py 경로 추가 (services/user/utils.py)
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        user_dir = os.path.dirname(current_dir)  # services/user/
+        if user_dir not in sys.path:
+            sys.path.insert(0, user_dir)
+        from utils import evaluate_shot_by_criteria
+        club_id = data.get("club_id") or ""
+        is_valid, score = evaluate_shot_by_criteria(data, club_id)
+    except Exception as e:
+        print(f"[WARNING] 샷 평가 실패: {e}")
+        import traceback
+        traceback.print_exc()
+        is_valid = False
+        score = 0
+    
     cur.execute("""
 INSERT INTO shots (
     store_id, bay_id, user_id, club_id,
@@ -545,8 +580,8 @@ INSERT INTO shots (
     smash_factor, face_angle, club_path,
     lateral_offset, direction_angle,
     side_spin, back_spin,
-    feedback, timestamp, is_guest
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    feedback, timestamp, is_guest, is_valid, score
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """, (
         store_id,
         bay_id,
@@ -566,7 +601,9 @@ INSERT INTO shots (
         data.get("back_spin"),
         data.get("feedback"),
         data.get("timestamp") or now,
-        is_guest  # 게스트 샷 표시
+        is_guest,  # 게스트 샷 표시
+        is_valid,  # 기준 충족 여부
+        score  # 점수 (0-100)
     ))
     conn.commit()
     cur.close()

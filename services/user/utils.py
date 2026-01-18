@@ -41,7 +41,7 @@ def score_class(value, good, warn=None):
         return "bg-bad"
 
 def classify_by_criteria(value, club_id, metric, *, fallback_good=None, fallback_warn=None, abs_value=False):
-    """criteria.json 기반 색상 클래스 결정"""
+    """criteria.json 기반 색상 클래스 결정 (조회 시 화면 표시용)"""
     if value is None:
         return "bg-none"
     try:
@@ -81,3 +81,78 @@ def classify_by_criteria(value, club_id, metric, *, fallback_good=None, fallback
     if fallback_good is None:
         return "bg-none"
     return score_class(v, fallback_good, fallback_warn)
+
+def evaluate_shot_by_criteria(shot_data, club_id):
+    """
+    criteria.json 기준으로 샷 평가 (저장 시 사용)
+    
+    Returns:
+        tuple: (is_valid: bool, score: int)
+        - is_valid: 모든 필수 기준을 충족하면 True
+        - score: 0-100 점수 (단순 로직: good 기준 충족 개수 기반)
+    """
+    if not CRITERIA:
+        return False, 0
+    
+    club_id_lower = (club_id or "").lower()
+    
+    # 드라이버는 smash_factor, face_angle, club_path 3가지만 평가
+    if club_id_lower == "driver":
+        metrics_to_check = ["smash_factor", "face_angle", "club_path"]
+    else:
+        # 다른 클럽은 전체 평가
+        metrics_to_check = ["smash_factor", "launch_angle", "face_angle", "club_path", 
+                          "lateral_offset", "direction_angle", "side_spin", "back_spin"]
+    
+    good_count = 0
+    total_count = 0
+    
+    for metric_key in metrics_to_check:
+        value = shot_data.get(metric_key)
+        if value is None:
+            continue
+        
+        try:
+            v = float(value)
+        except (ValueError, TypeError):
+            continue
+        
+        rule = _get_rule(club_id, metric_key)
+        if not rule:
+            continue
+        
+        total_count += 1
+        good = rule.get("good")
+        warn = rule.get("warn")
+        bad = rule.get("bad")
+        
+        # 절댓값이 필요한 메트릭
+        if metric_key in ["face_angle", "club_path", "lateral_offset", "direction_angle"]:
+            v = abs(v)
+        
+        # 기준 충족 여부 확인
+        is_good = False
+        if isinstance(good, (list, tuple)) and len(good) == 2:
+            low, high = float(good[0]), float(good[1])
+            is_good = (low <= v <= high)
+        elif good is not None and bad is not None:
+            g = float(good)
+            b = float(bad)
+            is_good = (v >= g)
+        elif good is not None and warn is not None:
+            g = float(good)
+            is_good = (v <= g)  # 작을수록 좋은 경우 (lateral_offset, direction_angle 등)
+        elif good is not None:
+            g = float(good)
+            is_good = (v >= g)
+        
+        if is_good:
+            good_count += 1
+    
+    # is_valid: 모든 필수 기준을 충족해야 함 (단순 로직: 70% 이상 충족)
+    is_valid = (total_count > 0) and (good_count / total_count >= 0.7)
+    
+    # score: 0-100 (기준 충족 비율 * 100)
+    score = int((good_count / total_count * 100)) if total_count > 0 else 0
+    
+    return is_valid, score
