@@ -928,7 +928,7 @@ def get_all_stores():
     return [dict(row) for row in rows]
 
 def get_bays(store_id):
-    """매장의 승인된 타석 목록만 반환 (store_pcs에서 status='active'인 타석만)"""
+    """매장의 승인된 타석 목록만 반환 (store_pcs를 기준으로 조회, bays가 없으면 자동 생성)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
@@ -946,21 +946,44 @@ def get_bays(store_id):
             except (ValueError, TypeError):
                 bays_count = 0
         
-        # 승인된 PC가 있는 타석만 조회 (store_pcs 테이블과 조인)
+        # 승인된 PC가 있는 타석만 조회 (store_pcs를 기준으로 LEFT JOIN)
         from datetime import date
         today_str = date.today().strftime("%Y-%m-%d")
         
+        # store_pcs를 기준으로 조회하고, bays가 없으면 생성
         cur.execute("""
-            SELECT DISTINCT b.store_id, b.bay_id, b.status, b.user_id, b.last_update, b.bay_code
-            FROM bays b
-            INNER JOIN store_pcs sp ON b.store_id = sp.store_id AND b.bay_id = sp.bay_id
-            WHERE b.store_id = %s
+            SELECT DISTINCT 
+                COALESCE(b.bay_id, sp.bay_id) as bay_id,
+                sp.store_id,
+                COALESCE(b.status, 'READY') as status,
+                COALESCE(b.user_id, '') as user_id,
+                COALESCE(b.last_update, CURRENT_TIMESTAMP) as last_update,
+                COALESCE(b.bay_code, CONCAT(sp.store_id, '_', sp.bay_id)) as bay_code
+            FROM store_pcs sp
+            LEFT JOIN bays b ON b.store_id = sp.store_id AND b.bay_id = sp.bay_id
+            WHERE sp.store_id = %s
               AND sp.status = 'active'
+              AND sp.bay_id IS NOT NULL
+              AND sp.bay_id != ''
               AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date OR sp.usage_end_date >= %s)
-            ORDER BY b.bay_id
+            ORDER BY sp.bay_id
         """, (store_id, today_str, today_str))
         
         approved_bays = cur.fetchall()
+        
+        # bays 테이블에 없는 타석은 자동 생성
+        for bay in approved_bays:
+            bay_id_val = bay.get("bay_id")
+            if bay_id_val:
+                cur.execute("""
+                    INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code)
+                    VALUES (%s, %s, 'READY', NULL, CURRENT_TIMESTAMP, %s)
+                    ON CONFLICT (store_id, bay_id) DO NOTHING
+                """, (store_id, bay_id_val, f"{store_id}_{bay_id_val}"))
+        
+        if approved_bays:
+            conn.commit()
+        
         cur.close()
         conn.close()
         
@@ -975,7 +998,6 @@ def get_bays(store_id):
                     filtered_bays.append(dict(bay))
             except (ValueError, TypeError):
                 # bay_id가 숫자가 아닌 경우 (예: "능동잡테스트") - 모두 포함
-                # 문자열 타석 ID는 승인된 것이면 모두 표시
                 filtered_bays.append(dict(bay))
         
         return filtered_bays
