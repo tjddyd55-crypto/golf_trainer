@@ -38,29 +38,32 @@ database.init_db()
 # =========================
 def format_bay_display(bay_id=None, bay_name=None):
     """
-    타석 표시 형식 (bay_name 우선)
-    bay_name이 있으면 우선 사용, 없으면 bay_id 사용
+    bay_id 또는 bay_name을 "XX번 타석" 형식으로 변환
     
     Args:
-        bay_id: 타석 ID (예: "01", "02", "능동잡테스트")
-        bay_name: 타석 이름 (예: "3번룸", "능동잡테스트") - PC 등록 시 입력한 값
+        bay_id: 타석 ID (예: "01", "02")
+        bay_name: 타석 이름 (예: "2번룸", "1타석")
     
     Returns:
-        bay_name이 있으면 bay_name, 없으면 "01번 타석" 형식의 문자열
+        "01번 타석" 형식의 문자열
     """
-    # bay_name이 있으면 우선 사용 (PC 등록 시 입력한 값)
-    if bay_name and bay_name.strip():
-        return bay_name.strip()
-    
-    # bay_name이 없으면 bay_id 사용
+    # bay_id가 있으면 우선 사용
     if bay_id:
         try:
             # "01" -> 1 -> "01번 타석"
             num = int(bay_id)
             return f"{num:02d}번 타석"
         except (ValueError, TypeError):
-            # 숫자가 아니면 원본 반환 (예: "능동잡테스트")
-            return str(bay_id)
+            pass
+    
+    # bay_name에서 숫자 추출
+    if bay_name:
+        import re
+        # 숫자 추출 (예: "2번룸" -> "2", "1타석" -> "1")
+        match = re.search(r'(\d+)', str(bay_name))
+        if match:
+            num = int(match.group(1))
+            return f"{num:02d}번 타석"
     
     # 둘 다 없으면 기본값
     return "타석 정보 없음"
