@@ -933,18 +933,11 @@ def get_bays(store_id):
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
-        # 매장 정보 조회
-        cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
+        # 매장 존재 여부만 확인 (bays_count 필터링 제거)
+        cur.execute("SELECT store_id FROM stores WHERE store_id = %s", (store_id,))
         store = cur.fetchone()
         if not store:
             return []
-        
-        bays_count = store.get("bays_count", 0)
-        if not isinstance(bays_count, int):
-            try:
-                bays_count = int(bays_count)
-            except (ValueError, TypeError):
-                bays_count = 0
         
         # 승인된 PC가 있는 타석만 조회 (store_pcs를 기준으로 LEFT JOIN)
         from datetime import date
@@ -987,20 +980,9 @@ def get_bays(store_id):
         cur.close()
         conn.close()
         
-        # 타석 번호로 필터링 (bays_count 이하만, 또는 문자열 bay_id도 포함)
-        filtered_bays = []
-        for bay in approved_bays:
-            bay_id_str = bay.get("bay_id", "")
-            try:
-                # 숫자로 변환 가능하면 bays_count 체크
-                bay_num = int(bay_id_str)
-                if bay_num <= bays_count:
-                    filtered_bays.append(dict(bay))
-            except (ValueError, TypeError):
-                # bay_id가 숫자가 아닌 경우 (예: "능동잡테스트") - 모두 포함
-                filtered_bays.append(dict(bay))
-        
-        return filtered_bays
+        # 승인된 타석만 반환 (bays_count 필터링 제거 - 승인된 타석만 표시)
+        # 모든 승인된 타석을 반환 (문자열 bay_id 포함)
+        return [dict(bay) for bay in approved_bays]
         
     except Exception as e:
         print(f"[ERROR] get_bays 오류: {e}")
