@@ -944,25 +944,32 @@ def get_bays(store_id):
         today_str = date.today().strftime("%Y-%m-%d")
         
         # store_pcs를 기준으로 조회하고, bays가 없으면 생성
+        # store_id 또는 store_name으로 조회 (PC 등록 시 store_name으로 저장될 수 있음)
         cur.execute("""
             SELECT DISTINCT 
                 COALESCE(b.bay_id, sp.bay_id) as bay_id,
-                sp.store_id,
+                COALESCE(sp.store_id, (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1)) as store_id,
                 COALESCE(b.status, 'READY') as status,
                 COALESCE(b.user_id, '') as user_id,
                 COALESCE(b.last_update, CURRENT_TIMESTAMP) as last_update,
-                COALESCE(b.bay_code, CONCAT(sp.store_id, '_', sp.bay_id)) as bay_code
+                COALESCE(b.bay_code, CONCAT(COALESCE(sp.store_id, (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1)), '_', sp.bay_id)) as bay_code,
+                sp.bay_name,
+                sp.pc_name
             FROM store_pcs sp
-            LEFT JOIN bays b ON b.store_id = sp.store_id AND b.bay_id = sp.bay_id
-            WHERE sp.store_id = %s
+            LEFT JOIN bays b ON (b.store_id = sp.store_id OR b.store_id = (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1))
+                                AND b.bay_id = sp.bay_id
+            WHERE (sp.store_id = %s OR sp.store_name IN (SELECT store_name FROM stores WHERE store_id = %s))
               AND sp.status = 'active'
               AND sp.bay_id IS NOT NULL
               AND sp.bay_id != ''
               AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date OR sp.usage_end_date >= %s)
             ORDER BY sp.bay_id
-        """, (store_id, today_str, today_str))
+        """, (store_id, store_id, today_str, today_str))
         
         approved_bays = cur.fetchall()
+        print(f"[DEBUG] get_bays: store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
+        for bay in approved_bays:
+            print(f"[DEBUG] 타석: bay_id={bay.get('bay_id')}, bay_name={bay.get('bay_name')}, pc_name={bay.get('pc_name')}")
         
         # bays 테이블에 없는 타석은 자동 생성
         for bay in approved_bays:
