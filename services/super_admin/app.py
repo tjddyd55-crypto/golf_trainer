@@ -823,6 +823,7 @@ def approve_pc():
         }), 400
     
     # PC 토큰 생성
+    from psycopg2.extras import RealDictCursor
     conn = database.get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
