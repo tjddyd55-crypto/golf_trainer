@@ -105,6 +105,12 @@ def init_db():
                 cur.execute(f"ALTER TABLE shots ADD COLUMN IF NOT EXISTS {col} REAL")
         except Exception:
             pass
+    
+    # is_guest 컬럼 추가 (게스트 샷 정책 명문화)
+    try:
+        cur.execute("ALTER TABLE shots ADD COLUMN IF NOT EXISTS is_guest BOOLEAN DEFAULT FALSE")
+    except Exception:
+        pass
 
     # 3️⃣ 매장 테이블 (확장)
     cur.execute("""
@@ -451,7 +457,7 @@ def check_user(user_id, password):
     return dict(user) if user else None
 
 def save_shot_to_db(data):
-    """샷 데이터 저장 (active_user 확인 및 로깅)"""
+    """샷 데이터 저장 (게스트 샷 정책 명문화)"""
     conn = get_db_connection()
     cur = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -460,10 +466,14 @@ def save_shot_to_db(data):
     store_id = data.get("store_id")
     bay_id = data.get("bay_id")
     
-    # active_user가 없으면 경고 로그 (guest로 저장되는 경우)
+    # 게스트 샷 판단: user_id가 NULL이거나 빈 값인 경우
+    is_guest = False
     if not user_id or user_id in ('', 'GUEST', 'guest', None):
-        print(f"[WARNING] 샷 저장: active_user가 없습니다. store_id={store_id}, bay_id={bay_id}, user_id={user_id}")
-        print(f"[WARNING] 타석에 활성 사용자가 등록되지 않았을 수 있습니다. 유저가 타석을 선택했는지 확인하세요.")
+        is_guest = True
+        user_id = None  # 게스트 샷은 user_id = NULL
+        print(f"[INFO] 게스트 샷 저장: store_id={store_id}, bay_id={bay_id}")
+    else:
+        print(f"[INFO] 개인 샷 저장: store_id={store_id}, bay_id={bay_id}, user_id={user_id}")
     
     cur.execute("""
 INSERT INTO shots (
@@ -473,12 +483,12 @@ INSERT INTO shots (
     smash_factor, face_angle, club_path,
     lateral_offset, direction_angle,
     side_spin, back_spin,
-    feedback, timestamp
-) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    feedback, timestamp, is_guest
+) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """, (
         store_id,
         bay_id,
-        user_id,
+        user_id,  # 게스트일 경우 NULL
         data.get("club_id"),
         data.get("total_distance"),
         data.get("carry"),
@@ -493,17 +503,15 @@ INSERT INTO shots (
         data.get("side_spin"),
         data.get("back_spin"),
         data.get("feedback"),
-        data.get("timestamp") or now
+        data.get("timestamp") or now,
+        is_guest  # 게스트 샷 표시
     ))
     conn.commit()
     cur.close()
     conn.close()
-    
-    if user_id and user_id not in ('', 'GUEST', 'guest', None):
-        print(f"[INFO] 샷 저장 완료: store_id={store_id}, bay_id={bay_id}, user_id={user_id}")
 
 def get_last_shot(user_id):
-    """개인 유저의 마지막 샷 조회 (guest 샷 제외)"""
+    """개인 유저의 마지막 샷 조회 (게스트 샷 절대 제외)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute("""
@@ -511,8 +519,7 @@ def get_last_shot(user_id):
         WHERE user_id = %s 
           AND user_id IS NOT NULL 
           AND user_id != '' 
-          AND user_id != 'GUEST' 
-          AND user_id != 'guest'
+          AND (is_guest = FALSE OR is_guest IS NULL)
         ORDER BY timestamp DESC LIMIT 1
     """, (user_id,))
     row = cur.fetchone()
@@ -521,7 +528,7 @@ def get_last_shot(user_id):
     return dict(row) if row else None
 
 def get_user_practice_dates(user_id):
-    """개인 유저의 연습 날짜 목록 조회 (guest 샷 제외)"""
+    """개인 유저의 연습 날짜 목록 조회 (게스트 샷 절대 제외)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute("""
@@ -530,8 +537,7 @@ def get_user_practice_dates(user_id):
         WHERE user_id = %s 
           AND user_id IS NOT NULL 
           AND user_id != '' 
-          AND user_id != 'GUEST' 
-          AND user_id != 'guest'
+          AND (is_guest = FALSE OR is_guest IS NULL)
         ORDER BY d DESC
     """, (user_id,))
     rows = cur.fetchall()
@@ -540,17 +546,16 @@ def get_user_practice_dates(user_id):
     return [dict(row) for row in rows]
 
 def get_all_shots(user_id):
-    """개인 유저의 샷 목록 조회 (guest 샷 제외)"""
+    """개인 유저의 샷 목록 조회 (게스트 샷 절대 제외)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    # guest 샷 제외: user_id가 NULL, 빈 문자열, 'GUEST', 'guest'가 아닌 경우만 조회
+    # 게스트 샷 제외: user_id가 정확히 일치하고, is_guest가 FALSE이거나 NULL인 경우만 조회
     cur.execute("""
         SELECT * FROM shots 
         WHERE user_id = %s 
           AND user_id IS NOT NULL 
           AND user_id != '' 
-          AND user_id != 'GUEST' 
-          AND user_id != 'guest'
+          AND (is_guest = FALSE OR is_guest IS NULL)
         ORDER BY timestamp DESC
     """, (user_id,))
     rows = cur.fetchall()
