@@ -70,3 +70,7 @@ GPT키값.txt
 
 # Local database (로컬 개발용)
 golf_data.db
+
+# Backup folders (리팩토링 후 잔여)
+backup_*/
+backup_*/

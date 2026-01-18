@@ -176,7 +176,11 @@ def select_store_bay():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return f"오류 발생: {str(e)}", 500
+        # HTML 템플릿 엔드포인트는 에러 메시지를 템플릿에 전달
+        stores = database.get_all_stores() if 'stores' not in locals() else stores
+        return render_template("select_store_bay.html", 
+                             stores=stores,
+                             error=f"⚠️ 오류가 발생했습니다: {str(e)}"), 500
 
 # =========================
 # 유저 메인 대시보드
@@ -199,7 +203,13 @@ def user_main():
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return f"오류 발생: {str(e)}", 500
+        # HTML 템플릿 엔드포인트는 에러 메시지를 템플릿에 전달
+        return render_template("user_main.html", 
+                             user={"user_id": "오류"},
+                             last_shot=None,
+                             dates=[],
+                             stores=[],
+                             error=f"⚠️ 오류가 발생했습니다: {str(e)}"), 500
 
 # =========================
 # 유저 전체 샷 리스트
