@@ -31,7 +31,7 @@
                     <thead>
                         <tr>
                             <th>매장명</th>
-                            <th>타석(룸) 이름</th>
+                            <th>타석(룸)</th>
                             <th>등록일</th>
                             <th>사용기간</th>
                             <th>마지막 접속</th>
@@ -44,7 +44,7 @@
                         {% for pc in pcs %}
                         <tr>
                             <td><strong style="font-size: 1.1em;">{{ pc.store_name }}</strong></td>
-                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.pc_name or pc.bay_display }}</strong></td>
+                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_name or pc.bay_display or "-" }}</strong></td>
                             <td>{{ pc.registered_at.split(' ')[0] if pc.registered_at else "-" }}</td>
                             <td>
                                 {% if pc.usage_start_date and pc.usage_end_date %}
@@ -101,7 +101,7 @@
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="approve-store-name"></span></p>
                     <p><strong>타석(룸):</strong> <span id="approve-bay-name"></span></p>
-                    <p><strong>타석(룸) 이름:</strong> <span id="approve-pc-name"></span></p>
+                    <p><strong>타석(룸):</strong> <span id="approve-pc-name"></span></p>
                     <hr>
                     <label>사용 시작일:</label>
                     <input type="date" id="approve-start-date" class="form-control" required>
@@ -131,7 +131,7 @@
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="reject-store-name"></span></p>
                     <p><strong>타석(룸):</strong> <span id="reject-bay-name"></span></p>
-                    <p><strong>타석(룸) 이름:</strong> <span id="reject-pc-name"></span></p>
+                    <p><strong>타석(룸):</strong> <span id="reject-pc-name"></span></p>
                     <hr>
                     <label>거부 사유 (선택):</label>
                     <textarea id="reject-notes" class="form-control" rows="3"></textarea>
@@ -158,7 +158,7 @@
                     </div>
                     <p><strong>매장:</strong> <span id="delete-store-name"></span></p>
                     <p><strong>타석(룸):</strong> <span id="delete-bay-name"></span></p>
-                    <p><strong>타석(룸) 이름:</strong> <span id="delete-pc-name"></span></p>
+                    <p><strong>타석(룸):</strong> <span id="delete-pc-name"></span></p>
                     <hr>
                     <p class="text-danger">
                         이 PC를 삭제하면 해당 매장에서 제거되며, 다시 등록하려면 PC 등록 프로그램을 실행해야 합니다.
@@ -240,7 +240,7 @@
             currentBayId = bayId || '';
             document.getElementById('approve-store-name').textContent = storeName;
             document.getElementById('approve-bay-name').textContent = bayName;
-            document.getElementById('approve-pc-name').textContent = pcName;
+            document.getElementById('approve-pc-name').textContent = bayName || pcName || '-';
             
             const today = new Date().toISOString().split('T')[0];
             const oneYearLater = new Date();
@@ -259,7 +259,7 @@
             currentPcUniqueId = pcUniqueId;
             document.getElementById('reject-store-name').textContent = storeName;
             document.getElementById('reject-bay-name').textContent = bayName;
-            document.getElementById('reject-pc-name').textContent = pcName;
+            document.getElementById('reject-pc-name').textContent = bayName || pcName || '-';
             document.getElementById('reject-notes').value = '';
             
             new bootstrap.Modal(document.getElementById('rejectModal')).show();
@@ -341,7 +341,7 @@
             currentPcUniqueId = pcUniqueId;
             document.getElementById('delete-store-name').textContent = storeName;
             document.getElementById('delete-bay-name').textContent = bayName;
-            document.getElementById('delete-pc-name').textContent = pcName;
+            document.getElementById('delete-pc-name').textContent = bayName || pcName || '-';
             
             new bootstrap.Modal(document.getElementById('deleteModal')).show();
         }
