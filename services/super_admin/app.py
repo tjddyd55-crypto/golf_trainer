@@ -842,10 +842,12 @@ def approve_pc():
     
     # PC 토큰 생성
     from psycopg2.extras import RealDictCursor
-    conn = database.get_db_connection()
-    cur = conn.cursor(cursor_factory=RealDictCursor)
+    conn = None
+    cur = None
     
     try:
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
         # PC 정보 조회
         cur.execute("SELECT * FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
         pc_data = cur.fetchone()
@@ -915,8 +917,10 @@ def approve_pc():
         
         # store_id와 bay_id 검증
         if not store_id or store_id == '' or store_id == 'null':
-            cur.close()
-            conn.close()
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
             return jsonify({
                 "success": False,
                 "message": "매장 정보를 찾을 수 없습니다. store_id가 필요합니다."
