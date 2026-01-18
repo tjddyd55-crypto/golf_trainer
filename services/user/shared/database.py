@@ -976,7 +976,7 @@ def get_bays(store_id):
               AND sp.bay_id IS NOT NULL
               AND sp.bay_id != ''
               AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date)
-            ORDER BY sp.bay_id
+            ORDER BY bay_id
         """, (store_id, store_id, today_str))
         
         approved_bays = cur.fetchall()
