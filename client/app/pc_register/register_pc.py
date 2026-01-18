@@ -10,13 +10,22 @@ import sys
 import os
 import json
 
+# 프로젝트 루트를 sys.path에 추가 (실행 경로 문제 해결)
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_project_root = os.path.abspath(os.path.join(_script_dir, '..', '..', '..'))
+if _project_root not in sys.path:
+    sys.path.insert(0, _project_root)
+
 # pc_identifier 모듈 import
 try:
-    from pc_identifier import get_pc_info
+    from client.core.pc_identifier import get_pc_info
 except ImportError:
-    print("[ERROR] 오류: pc_identifier.py 파일을 찾을 수 없습니다.")
-    print("   register_pc.py와 같은 디렉토리에 pc_identifier.py가 있어야 합니다.")
-    sys.exit(1)
+    try:
+        from ...core.pc_identifier import get_pc_info
+    except ImportError:
+        print("[ERROR] 오류: pc_identifier.py 파일을 찾을 수 없습니다.")
+        print("   client/core/pc_identifier.py 파일이 있어야 합니다.")
+        sys.exit(1)
 
 # 토큰 저장 파일 경로
 TOKEN_FILE = os.path.join(os.path.dirname(__file__), "pc_token.json")

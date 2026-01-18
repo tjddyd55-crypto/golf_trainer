@@ -394,13 +394,41 @@ def manage_pcs():
             traceback.print_exc()
             pcs = []
         
-        # 각 PC에 표시용 bay_display 추가
+        # 각 PC에 표시용 bay_display 추가 및 만료 여부 계산
+        from datetime import date
+        today = date.today()
+        
         for pc in pcs:
             try:
                 pc["bay_display"] = format_bay_display(pc.get("bay_id"), pc.get("bay_name"))
+                
+                # 만료 여부 계산
+                pc["is_expired"] = False
+                usage_end_date = pc.get("usage_end_date")
+                if usage_end_date:
+                    if isinstance(usage_end_date, str):
+                        try:
+                            usage_end_date = date.fromisoformat(usage_end_date.split(' ')[0])
+                        except:
+                            usage_end_date = None
+                    if usage_end_date and usage_end_date < today:
+                        pc["is_expired"] = True
+                
+                # 상태 통일: APPROVED / PENDING / EXPIRED
+                if pc.get("status") == "active" and not pc["is_expired"]:
+                    pc["display_status"] = "APPROVED"
+                elif pc.get("status") == "pending":
+                    pc["display_status"] = "PENDING"
+                elif pc["is_expired"] or pc.get("status") != "active":
+                    pc["display_status"] = "EXPIRED"
+                else:
+                    pc["display_status"] = "PENDING"
+                    
             except Exception as e:
                 print(f"bay_display 생성 오류: {e}")
                 pc["bay_display"] = "타석 정보 없음"
+                pc["is_expired"] = False
+                pc["display_status"] = "PENDING"
         
         return render_template("manage_pcs.html",
                              store_id=store_id,
@@ -412,6 +440,98 @@ def manage_pcs():
         traceback.print_exc()
         print(f"manage_pcs 전체 오류: {error_msg}")
         return f"오류 발생: {error_msg}", 500
+
+# =========================
+# API: PC 연장 요청 (CRITICAL 2 - STORE_ADMIN만)
+# =========================
+@app.route("/api/pcs/<pc_unique_id>/extension-request", methods=["POST"])
+@require_role("store_admin")
+def create_extension_request(pc_unique_id):
+    """PC 연장 요청 생성 - STORE_ADMIN만 가능"""
+    try:
+        store_id = session.get("store_id")
+        requested_by = session.get("store_id")  # store_id를 requested_by로 사용
+        
+        data = request.get_json() or {}
+        requested_until = data.get("requested_until")
+        reason = data.get("reason")
+        
+        if not requested_until:
+            return jsonify({"success": False, "message": "requested_until이 필요합니다."}), 400
+        
+        # PC가 해당 매장 소속인지 확인
+        pc_info = database.get_store_pc_by_unique_id(pc_unique_id)
+        if not pc_info:
+            return jsonify({"success": False, "message": "PC를 찾을 수 없습니다."}), 404
+        
+        pc_store_id = pc_info.get("store_id")
+        if pc_store_id and pc_store_id != store_id:
+            return jsonify({"success": False, "message": "권한이 없습니다."}), 403
+        
+        # 연장 요청 생성
+        request_id, error = database.create_extension_request(
+            pc_unique_id, store_id, requested_by, requested_until, reason
+        )
+        
+        if error:
+            return jsonify({"success": False, "message": error}), 400 if "이미" in error else 409
+        
+        # Audit 로그
+        from flask import request as flask_request
+        database.log_audit(
+            actor_role="store_admin",
+            actor_id=store_id,
+            action="CREATE_EXTENSION_REQUEST",
+            target_type="pc",
+            target_id=pc_unique_id,
+            after_state={"request_id": request_id, "requested_until": requested_until},
+            ip_address=flask_request.remote_addr,
+            user_agent=flask_request.headers.get("User-Agent")
+        )
+        
+        return jsonify({"success": True, "request_id": request_id})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/stores/<store_id>/pc-extension-requests", methods=["GET"])
+@require_role("store_admin")
+def get_extension_requests(store_id):
+    """연장 요청 목록 조회"""
+    try:
+        # STORE_ADMIN은 자신의 매장 요청만 조회 가능
+        current_store_id = session.get("store_id")
+        if store_id != current_store_id:
+            return jsonify({"error": "권한이 없습니다."}), 403
+        
+        requests = database.get_extension_requests(store_id=store_id)
+        return jsonify({"requests": requests})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# =========================
+# 보안: STORE_ADMIN이 직접 승인/기간 변경 차단 (CRITICAL 2)
+# =========================
+@app.route("/api/pcs/<pc_unique_id>/approve", methods=["POST"])
+@require_role("store_admin")
+def block_store_admin_approve(pc_unique_id):
+    """STORE_ADMIN은 직접 승인 불가 - 403 반환"""
+    return jsonify({"error": "매장 관리자는 직접 승인할 수 없습니다. 연장 요청을 사용하세요."}), 403
+
+@app.route("/api/pcs/<pc_unique_id>/reject", methods=["POST"])
+@require_role("store_admin")
+def block_store_admin_reject(pc_unique_id):
+    """STORE_ADMIN은 직접 반려 불가 - 403 반환"""
+    return jsonify({"error": "매장 관리자는 직접 반려할 수 없습니다."}), 403
+
+@app.route("/api/pcs/<pc_unique_id>/update-usage", methods=["POST", "PUT"])
+@require_role("store_admin")
+def block_store_admin_update_usage(pc_unique_id):
+    """STORE_ADMIN은 직접 기간 변경 불가 - 403 반환"""
+    return jsonify({"error": "매장 관리자는 직접 기간을 변경할 수 없습니다. 연장 요청을 사용하세요."}), 403
 
 @app.route("/logout")
 def store_admin_logout():

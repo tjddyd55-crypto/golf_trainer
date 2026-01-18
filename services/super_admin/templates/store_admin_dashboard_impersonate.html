@@ -3,44 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>매장 관리자 대시보드 - {{ store_id }}</title>
+    <title>매장 관리자 대시보드 - {{ store_id }} (대리 조회)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/store_admin.css') }}?v=2.0">
 </head>
 <body>
     <div class="admin-container">
-        {% if isImpersonating %}
-        <div class="alert alert-danger mb-0" role="alert" style="border-radius: 0;">
+        <div class="alert alert-danger mb-0" role="alert" style="border-radius: 0; position: sticky; top: 0; z-index: 1000;">
             <strong>🔍 슈퍼 관리자 대리 조회 중</strong> - 읽기 전용 모드입니다.
-            <a href="{{ url_for('super_admin_dashboard') if isImpersonating else url_for('store_admin_dashboard') }}" class="float-end text-white">
+            <a href="{{ url_for('super_admin_dashboard') }}" class="float-end text-white text-decoration-none">
                 ← 대시보드로 돌아가기
             </a>
         </div>
-        {% endif %}
         <div class="admin-header">
             <div class="d-flex justify-content-between align-items-center">
                 <div>
                     <h1 class="text-white mb-0">⛳ {{ store_id }} 관리 시스템</h1>
-                    <span class="badge bg-info">매장 관리자</span>
+                    <span class="badge bg-warning">슈퍼 관리자 대리 조회</span>
                 </div>
-                {% if not isImpersonating %}
-                <a href="{{ url_for('store_admin_logout') }}" class="admin-btn admin-btn-danger">로그아웃</a>
-                {% endif %}
             </div>
         </div>
-        
-        {% if readonly_mode %}
-        <div class="alert alert-warning m-3" role="alert">
-            <h5 class="alert-heading">⚠️ 읽기 전용 모드</h5>
-            {% if readonly_reason == "no_valid_pc" %}
-            <p>유효한 타석이 없습니다. PC를 등록하거나 사용 기간을 연장해주세요.</p>
-            {% elif readonly_reason == "no_pc" %}
-            <p>등록된 타석이 없습니다. 먼저 PC를 등록해주세요.</p>
-            {% endif %}
-            <hr>
-            <p class="mb-0">이 모드에서는 샷 데이터 조회, 통계, 보고서 기능이 제한됩니다.</p>
-        </div>
-        {% endif %}
         
         <div class="admin-main-content">
             <div class="d-flex justify-content-between align-items-center mb-4">
@@ -52,12 +34,6 @@
                         <span class="badge bg-secondary">전체: {{ total_bays_count }}개</span>
                     </div>
                 </div>
-                {% if not readOnly %}
-                <div>
-                    <a href="{{ url_for('manage_pcs') }}" class="admin-btn admin-btn-primary me-2">타석(룸) 관리</a>
-                    <button class="admin-btn admin-btn-danger" onclick="clearAllSessions()">모든 세션 삭제</button>
-                </div>
-                {% endif %}
             </div>
             
             <div class="admin-bay-grid">
@@ -99,18 +75,10 @@
                     </div>
                     {% endif %}
                     
-                    
                     {% if bay.active_user %}
                     <div class="mt-2">
                         <strong>{{ bay.active_user }} 님</strong><br>
                         <small class="text-muted">로그인: {{ bay.login_time.split(' ')[1] if bay.login_time else '' }}</small>
-                        <br>
-                        {% if not readOnly %}
-                        <button class="admin-btn admin-btn-danger btn-sm mt-2" 
-                                onclick="clearSession('{{ store_id }}', '{{ bay.bay_id }}')">
-                            세션 삭제
-                        </button>
-                        {% endif %}
                     </div>
                     {% else %}
                     <div class="mt-2 text-muted">대기 중...</div>
@@ -168,28 +136,5 @@
             </div>
         </div>
     </div>
-    
-    <script>
-        function clearSession(storeId, bayId) {
-            if (confirm('세션을 삭제하시겠습니까?')) {
-                fetch('{{ url_for("clear_session") }}', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({store_id: storeId, bay_id: bayId})
-                })
-                .then(() => location.reload());
-            }
-        }
-        
-        function clearAllSessions() {
-            if (confirm('모든 세션을 삭제하시겠습니까?')) {
-                fetch('{{ url_for("clear_all_sessions") }}', {
-                    method: 'POST',
-                    headers: {'Content-Type': 'application/json'}
-                })
-                .then(() => location.reload());
-            }
-        }
-    </script>
 </body>
 </html>

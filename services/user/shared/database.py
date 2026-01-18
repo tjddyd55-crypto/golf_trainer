@@ -562,7 +562,7 @@ def save_shot_to_db(data):
         user_dir = os.path.dirname(current_dir)  # services/user/
         if user_dir not in sys.path:
             sys.path.insert(0, user_dir)
-        from utils import evaluate_shot_by_criteria
+        from utils import evaluate_shot_by_criteria, get_criteria_key
         
         # 유저 성별 조회 (성별 없으면 male 기준)
         gender = None
@@ -572,6 +572,10 @@ def save_shot_to_db(data):
                 gender = user.get("gender")
         
         club_id = data.get("club_id") or ""
+        # criteria 키 결정 로그 (초기 점검용)
+        criteria_key = get_criteria_key(club_id, gender)
+        print(f"[CRITERIA] club={club_id}, gender={gender} → key={criteria_key}")
+        
         is_valid, score = evaluate_shot_by_criteria(data, club_id, gender=gender)
     except Exception as e:
         print(f"[WARNING] 샷 평가 실패: {e}")
@@ -1594,14 +1598,18 @@ def get_criteria_compare_driver(user_id):
         user_dir = os.path.dirname(current_dir)
         if user_dir not in sys.path:
             sys.path.insert(0, user_dir)
-        from utils import _get_rule
+        from utils import _get_rule, get_criteria_key
     except Exception as e:
         print(f"[WARNING] utils import 실패: {e}")
         return {}
     
+    # criteria 키 결정 로그 (초기 점검용)
+    club_id = "driver"
+    criteria_key = get_criteria_key(club_id, gender)
+    print(f"[CRITERIA] club={club_id}, gender={gender} → key={criteria_key}")
+    
     # criteria.json 기준으로 비교 (성별 기준 적용)
     result = {}
-    club_id = "driver"
     
     metrics_map = {
         "smash_factor": "smash_factor",

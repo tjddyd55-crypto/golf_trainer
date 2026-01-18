@@ -9,7 +9,7 @@ import shutil
 
 # 빌드 설정
 APP_NAME = "register_pc_gui"
-MAIN_SCRIPT = "register_pc_gui.py"
+MAIN_SCRIPT = "client/app/pc_register/register_pc_gui.py"
 ICON_FILE = None  # 아이콘 파일이 있으면 경로 지정
 
 # 빌드 옵션

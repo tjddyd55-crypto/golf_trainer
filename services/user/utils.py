@@ -18,23 +18,23 @@ def get_criteria_key(club_id, gender=None):
     
     우선순위:
     1. club + gender (female)
-    2. club + male
+    2. club + male (성별 없음 포함)
     3. club
     4. default
     """
     cid = (club_id or "").lower()
     
-    # 성별 없음 or male → male 기준
-    if gender is None or gender in ["남", "M", "male"]:
-        key = f"{cid}_male"
-        if key in CRITERIA:
-            return key
-    
-    # female → female 기준
+    # female → female 기준 (우선 체크)
     if gender in ["여", "F", "female"]:
         key = f"{cid}_female"
         if key in CRITERIA:
             return key
+    
+    # 성별 없음 or male → male 기준 (기본값)
+    # (female이 아니면 모두 male 기준)
+    key = f"{cid}_male"
+    if key in CRITERIA:
+        return key
     
     # club 기준 (fallback)
     if cid in CRITERIA:

@@ -251,6 +251,56 @@ def init_db():
     except Exception:
         pass
     
+    # 🔟 PC 연장 요청 테이블 (CRITICAL 2: 요청 기반 봉합)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS pc_extension_requests (
+        id SERIAL PRIMARY KEY,
+        pc_id TEXT NOT NULL,
+        pc_unique_id TEXT,
+        store_id TEXT NOT NULL,
+        requested_by TEXT NOT NULL,
+        requested_until DATE,
+        status TEXT DEFAULT 'REQUESTED' CHECK(status IN ('REQUESTED', 'APPROVED', 'REJECTED')),
+        decided_by TEXT,
+        decided_at TEXT,
+        reason TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (pc_unique_id) REFERENCES store_pcs(pc_unique_id) ON DELETE CASCADE
+    )
+    """)
+    
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_extension_request_pc ON pc_extension_requests(pc_unique_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_extension_request_store ON pc_extension_requests(store_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_extension_request_status ON pc_extension_requests(status)")
+    except Exception:
+        pass
+    
+    # 1️⃣1️⃣ Audit 로그 테이블 (CRITICAL: 모든 중요 액션 기록)
+    cur.execute("""
+    CREATE TABLE IF NOT EXISTS audit_logs (
+        id SERIAL PRIMARY KEY,
+        actor_role TEXT NOT NULL,
+        actor_id TEXT NOT NULL,
+        action TEXT NOT NULL,
+        target_type TEXT,
+        target_id TEXT,
+        before_state JSONB,
+        after_state JSONB,
+        ip_address TEXT,
+        user_agent TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+    """)
+    
+    try:
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_actor ON audit_logs(actor_role, actor_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_action ON audit_logs(action)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_target ON audit_logs(target_type, target_id)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_audit_created ON audit_logs(created_at)")
+    except Exception:
+        pass
+    
     # 기존 테이블 마이그레이션 (pc_registration_keys → pc_registration_codes)
     try:
         cur.execute("""
@@ -1340,6 +1390,216 @@ def delete_pc(pc_unique_id):
         return deleted_count > 0
     except Exception as e:
         print(f"PC 삭제 오류: {e}")
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False
+
+# ------------------------------------------------
+# PC 연장 요청 관리 (CRITICAL 2) - store_admin과 동일
+# ------------------------------------------------
+def create_extension_request(pc_unique_id, store_id, requested_by, requested_until, reason=None):
+    """PC 연장 요청 생성"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # 중복 요청 체크 (REQUESTED 상태인 요청이 있으면 실패)
+        cur.execute("""
+            SELECT id FROM pc_extension_requests 
+            WHERE pc_unique_id = %s AND status = 'REQUESTED'
+        """, (pc_unique_id,))
+        existing = cur.fetchone()
+        if existing:
+            cur.close()
+            conn.close()
+            return None, "이미 대기 중인 연장 요청이 있습니다."
+        
+        # PC 정보 조회
+        cur.execute("SELECT id, store_id FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
+        pc = cur.fetchone()
+        if not pc:
+            cur.close()
+            conn.close()
+            return None, "PC를 찾을 수 없습니다."
+        
+        pc_id = str(pc["id"])
+        pc_store_id = pc.get("store_id") or store_id
+        
+        # 연장 요청 생성
+        cur.execute("""
+            INSERT INTO pc_extension_requests 
+            (pc_id, pc_unique_id, store_id, requested_by, requested_until, reason, status)
+            VALUES (%s, %s, %s, %s, %s, %s, 'REQUESTED')
+            RETURNING id
+        """, (pc_id, pc_unique_id, pc_store_id, requested_by, requested_until, reason))
+        
+        request_id = cur.fetchone()["id"]
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return request_id, None
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return None, f"연장 요청 생성 실패: {str(e)}"
+
+def get_extension_requests(store_id=None, pc_unique_id=None, status=None):
+    """연장 요청 목록 조회"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        conditions = []
+        params = []
+        
+        if store_id:
+            conditions.append("er.store_id = %s")
+            params.append(store_id)
+        if pc_unique_id:
+            conditions.append("er.pc_unique_id = %s")
+            params.append(pc_unique_id)
+        if status:
+            conditions.append("er.status = %s")
+            params.append(status)
+        
+        where_clause = " AND ".join(conditions) if conditions else "1=1"
+        
+        cur.execute(f"""
+            SELECT er.*, sp.pc_name, sp.bay_name, sp.bay_id
+            FROM pc_extension_requests er
+            LEFT JOIN store_pcs sp ON er.pc_unique_id = sp.pc_unique_id
+            WHERE {where_clause}
+            ORDER BY er.created_at DESC
+        """, params)
+        
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [dict(row) for row in rows]
+    except Exception as e:
+        cur.close()
+        conn.close()
+        return []
+
+def approve_extension_request(request_id, decided_by, approved_until, reason=None):
+    """연장 요청 승인"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # 요청 조회
+        cur.execute("SELECT * FROM pc_extension_requests WHERE id = %s", (request_id,))
+        request = cur.fetchone()
+        if not request:
+            cur.close()
+            conn.close()
+            return False, "요청을 찾을 수 없습니다."
+        
+        if request["status"] != "REQUESTED":
+            cur.close()
+            conn.close()
+            return False, "이미 처리된 요청입니다."
+        
+        pc_unique_id = request["pc_unique_id"]
+        
+        # PC 사용 기간 업데이트
+        cur.execute("""
+            UPDATE store_pcs 
+            SET usage_end_date = %s,
+                status = 'active'
+            WHERE pc_unique_id = %s
+        """, (approved_until, pc_unique_id))
+        
+        # 요청 상태 업데이트
+        cur.execute("""
+            UPDATE pc_extension_requests 
+            SET status = 'APPROVED',
+                decided_by = %s,
+                decided_at = CURRENT_TIMESTAMP,
+                reason = %s
+            WHERE id = %s
+        """, (decided_by, reason, request_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True, None
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False, f"승인 실패: {str(e)}"
+
+def reject_extension_request(request_id, decided_by, reason=None):
+    """연장 요청 반려"""
+    conn = get_db_connection()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
+    
+    try:
+        # 요청 조회
+        cur.execute("SELECT * FROM pc_extension_requests WHERE id = %s", (request_id,))
+        request = cur.fetchone()
+        if not request:
+            cur.close()
+            conn.close()
+            return False, "요청을 찾을 수 없습니다."
+        
+        if request["status"] != "REQUESTED":
+            cur.close()
+            conn.close()
+            return False, "이미 처리된 요청입니다."
+        
+        # 요청 상태 업데이트
+        cur.execute("""
+            UPDATE pc_extension_requests 
+            SET status = 'REJECTED',
+                decided_by = %s,
+                decided_at = CURRENT_TIMESTAMP,
+                reason = %s
+            WHERE id = %s
+        """, (decided_by, reason, request_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True, None
+    except Exception as e:
+        conn.rollback()
+        cur.close()
+        conn.close()
+        return False, f"반려 실패: {str(e)}"
+
+# ------------------------------------------------
+# Audit 로그 관리 (CRITICAL) - store_admin과 동일
+# ------------------------------------------------
+def log_audit(actor_role, actor_id, action, target_type=None, target_id=None, 
+              before_state=None, after_state=None, ip_address=None, user_agent=None):
+    """Audit 로그 기록"""
+    conn = get_db_connection()
+    cur = conn.cursor()
+    
+    try:
+        import json
+        before_json = json.dumps(before_state) if before_state else None
+        after_json = json.dumps(after_state) if after_state else None
+        
+        cur.execute("""
+            INSERT INTO audit_logs 
+            (actor_role, actor_id, action, target_type, target_id, 
+             before_state, after_state, ip_address, user_agent)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """, (actor_role, actor_id, action, target_type, target_id, 
+              before_json, after_json, ip_address, user_agent))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"Audit 로그 기록 실패: {e}")
         conn.rollback()
         cur.close()
         conn.close()

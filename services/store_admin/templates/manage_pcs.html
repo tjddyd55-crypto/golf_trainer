@@ -25,6 +25,14 @@
                 3. 서버에 자동 등록
             </div>
             
+            <!-- 연장 요청 이력 섹션 -->
+            <div class="mt-4">
+                <h4>📋 연장 요청 이력</h4>
+                <div id="extension-requests-container">
+                    <p class="text-muted">로딩 중...</p>
+                </div>
+            </div>
+            
             {% if pcs %}
             <div class="table-responsive">
                 <table class="admin-table">
@@ -63,16 +71,23 @@
                             </td>
                             <td>{{ pc.last_seen_at.split(' ')[0] if pc.last_seen_at else "-" }}</td>
                             <td>
-                                <span class="badge {{ 'bg-success' if pc.status == 'active' else 'bg-warning' if pc.status == 'pending' else 'bg-danger' }}">
-                                    {% if pc.status == 'pending' %}대기
-                                    {% elif pc.status == 'active' %}활성
-                                    {% elif pc.status == 'rejected' %}거부
-                                    {% else %}{{ pc.status or '대기' }}
-                                    {% endif %}
-                                </span>
+                                {% if pc.display_status == 'APPROVED' %}
+                                    <span class="badge bg-success">APPROVED</span>
+                                {% elif pc.display_status == 'PENDING' %}
+                                    <span class="badge bg-warning">PENDING</span>
+                                {% elif pc.display_status == 'EXPIRED' %}
+                                    <span class="badge bg-danger">EXPIRED</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">{{ pc.display_status or 'PENDING' }}</span>
+                                {% endif %}
                             </td>
                             <td>
                                 <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}')">상세</button>
+                                {% if pc.display_status == 'EXPIRED' %}
+                                    <button class="btn btn-sm btn-primary ms-1" onclick="requestExtension('{{ pc.pc_unique_id }}', '{{ pc.bay_display }}')">사용 기간 연장 요청</button>
+                                {% elif pc.display_status == 'PENDING' %}
+                                    <span class="badge bg-info ms-1">연장 요청 처리 중</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -134,8 +149,121 @@
         </div>
     </div>
 
+    <!-- 연장 요청 모달 -->
+    <div class="modal fade" id="extensionRequestModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">사용 기간 연장 요청</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <p><strong id="extension-pc-name"></strong></p>
+                    <div class="mb-3">
+                        <label for="requested-until" class="form-label">희망 만료일</label>
+                        <input type="date" class="form-control" id="requested-until" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="extension-reason" class="form-label">사유 (선택)</label>
+                        <textarea class="form-control" id="extension-reason" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">취소</button>
+                    <button type="button" class="btn btn-primary" onclick="submitExtensionRequest()">요청 제출</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        let currentPcUniqueId = null;
+        
+        function requestExtension(pcUniqueId, bayName) {
+            currentPcUniqueId = pcUniqueId;
+            document.getElementById('extension-pc-name').textContent = bayName;
+            document.getElementById('requested-until').value = '';
+            document.getElementById('extension-reason').value = '';
+            new bootstrap.Modal(document.getElementById('extensionRequestModal')).show();
+        }
+        
+        function submitExtensionRequest() {
+            const requestedUntil = document.getElementById('requested-until').value;
+            const reason = document.getElementById('extension-reason').value;
+            
+            if (!requestedUntil) {
+                alert('희망 만료일을 입력해주세요.');
+                return;
+            }
+            
+            fetch(`/api/pcs/${currentPcUniqueId}/extension-request`, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    requested_until: requestedUntil,
+                    reason: reason || null
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    alert('연장 요청이 제출되었습니다.');
+                    bootstrap.Modal.getInstance(document.getElementById('extensionRequestModal')).hide();
+                    loadExtensionRequests();
+                    location.reload();
+                } else {
+                    alert('연장 요청 실패: ' + (data.message || '알 수 없는 오류'));
+                }
+            })
+            .catch(error => {
+                alert('연장 요청 중 오류 발생: ' + error);
+            });
+        }
+        
+        function loadExtensionRequests() {
+            fetch(`/api/stores/{{ store_id }}/pc-extension-requests`)
+                .then(response => response.json())
+                .then(data => {
+                    const container = document.getElementById('extension-requests-container');
+                    if (!data.requests || data.requests.length === 0) {
+                        container.innerHTML = '<p class="text-muted">연장 요청 이력이 없습니다.</p>';
+                        return;
+                    }
+                    
+                    let html = '<div class="table-responsive"><table class="table table-sm table-bordered">';
+                    html += '<thead><tr><th>PC ID</th><th>요청 일시</th><th>요청 기간</th><th>상태</th><th>반려 사유</th></tr></thead><tbody>';
+                    
+                    data.requests.forEach(req => {
+                        const statusClass = {
+                            'REQUESTED': 'bg-warning',
+                            'APPROVED': 'bg-success',
+                            'REJECTED': 'bg-danger'
+                        }[req.status] || 'bg-secondary';
+                        
+                        html += `<tr>
+                            <td><code>${req.pc_unique_id || req.pc_id || '-'}</code></td>
+                            <td>${req.created_at ? req.created_at.split(' ')[0] : '-'}</td>
+                            <td>${req.requested_until || '-'}</td>
+                            <td><span class="badge ${statusClass}">${req.status}</span></td>
+                            <td>${req.reason || (req.status === 'REJECTED' ? '-' : '')}</td>
+                        </tr>`;
+                    });
+                    
+                    html += '</tbody></table></div>';
+                    container.innerHTML = html;
+                })
+                .catch(error => {
+                    document.getElementById('extension-requests-container').innerHTML = 
+                        '<p class="text-danger">연장 요청 이력을 불러오는 중 오류가 발생했습니다.</p>';
+                });
+        }
+        
+        // 페이지 로드 시 연장 요청 이력 로드
+        document.addEventListener('DOMContentLoaded', function() {
+            loadExtensionRequests();
+        });
+        
         function showDetailModal(pcUniqueId, bayName, pcName, hostname, platform, registeredAt, approvedAt, usageStartDate, usageEndDate) {
             document.getElementById('detail-pc-name').textContent = pcName || bayName || '-';
             document.getElementById('detail-hostname').textContent = hostname || '-';

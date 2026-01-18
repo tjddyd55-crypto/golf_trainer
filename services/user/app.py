@@ -336,6 +336,41 @@ def get_user_dashboard():
         if club != "DRIVER":
             return jsonify({"error": "현재는 DRIVER만 지원합니다."}), 400
         
+        # 유저 성별 조회 (로그용)
+        user = database.get_user(uid)
+        gender = user.get("gender") if user else None
+        
+        # 유효 샷 개수 조회 (로그용)
+        from datetime import datetime
+        from psycopg2.extras import RealDictCursor
+        today = datetime.now().strftime("%Y-%m-%d")
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        cur.execute("""
+            SELECT COUNT(*) as count
+            FROM shots
+            WHERE user_id = %s AND club_id = 'DRIVER' 
+              AND is_valid = TRUE AND is_guest = FALSE 
+              AND DATE(timestamp) = %s
+        """, (uid, today))
+        valid_shots_row = cur.fetchone()
+        valid_shots_count = valid_shots_row.get("count", 0) if valid_shots_row else 0
+        cur.close()
+        conn.close()
+        
+        # criteria 키 결정 로그 (초기 점검용)
+        try:
+            import sys
+            import os
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            if current_dir not in sys.path:
+                sys.path.insert(0, current_dir)
+            from utils import get_criteria_key
+            criteria_key = get_criteria_key("DRIVER", gender)
+            print(f"[DASHBOARD] user_id={uid}, club={club}, gender={gender}, criteria_key={criteria_key}, valid_shots={valid_shots_count}")
+        except Exception as e:
+            print(f"[WARNING] criteria key 로그 실패: {e}")
+        
         # 1️⃣ 오늘 요약
         today_summary = database.get_today_summary_driver(uid)
         
