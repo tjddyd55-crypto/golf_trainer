@@ -496,7 +496,16 @@ def get_bays_api():
         return jsonify({"bays": []}), 400
     
     bays = database.get_bays(store_id)
-    return jsonify({"bays": bays})
+    
+    # 임시 디버그: API 응답에 디버그 정보 포함
+    debug_info = {
+        "store_id": store_id,
+        "bays_count": len(bays),
+        "bay_ids": [bay.get("bay_id") for bay in bays] if bays else []
+    }
+    print(f"[DEBUG API] get_bays_api: {debug_info}")
+    
+    return jsonify({"bays": bays, "_debug": debug_info})
 
 # =========================
 # API: 샷 데이터 저장 (main.py에서 사용)
