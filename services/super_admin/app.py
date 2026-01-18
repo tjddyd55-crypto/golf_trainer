@@ -2,6 +2,8 @@
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import sys
 import os
+import re
+import traceback
 from datetime import datetime
 
 # 공유 모듈 경로 추가
@@ -133,7 +135,11 @@ def super_admin_dashboard():
             "pending_stores": len([s for s in stores if s.get("status") == "pending"]),
         }
         
+        # Emergency 모드 상태 전달
+        emergency_mode = session.get("emergency_mode", False)
+        
         return render_template("super_admin_dashboard.html",
+                             emergency_mode=emergency_mode,
                              stores=stores,
                              stats=stats)
     except Exception as e:
@@ -265,22 +271,221 @@ def store_bays_detail(store_id):
         cur.close()
         conn.close()
         
-        return render_template("store_bays_detail.html",
-                             store=store,
+        # 슈퍼 관리자 대리 조회: 매장 관리자 대시보드 템플릿 재사용
+        # store_admin의 dashboard 로직과 동일하게 데이터 준비
+        from datetime import date
+        today = date.today()
+        
+        # 활성 세션 조회
+        active_sessions = database.get_all_active_sessions(store_id)
+        
+        # 샷 데이터 조회
+        rows = database.get_all_shots_by_store(store_id)
+        shots = []
+        for r in rows[:20]:  # 최근 20개만
+            s = dict(r)
+            shots.append(s)
+        
+        # 타석별 활성 사용자 매핑
+        bay_active_users = {}
+        for session_info in active_sessions:
+            key = f"{session_info['store_id']}_{session_info['bay_id']}"
+            bay_active_users[key] = session_info
+        
+        # 각 타석에 활성 사용자 정보 추가
+        for bay in all_bays:
+            bay_key = f"{store_id}_{bay['bay_id']}"
+            if bay_key in bay_active_users:
+                bay['active_user'] = bay_active_users[bay_key].get('user_id')
+                bay['login_time'] = bay_active_users[bay_key].get('login_time')
+            else:
+                bay['active_user'] = None
+                bay['login_time'] = None
+        
+        # 슈퍼 관리자 대리 조회: 매장 관리자 대시보드 템플릿 재사용
+        return render_template("store_admin_dashboard_impersonate.html",
+                             store_id=store_id,
                              bays=all_bays,
+                             active_sessions=active_sessions,
+                             bay_active_users=bay_active_users,
+                             shots=shots,
                              total_bays_count=total_bays_count,
                              valid_bays_count=valid_bays_count,
-                             all_stores=all_stores)
+                             invalid_bays_count=total_bays_count - valid_bays_count,
+                             isImpersonating=True,
+                             readOnly=True)
     except Exception as e:
         import traceback
         traceback.print_exc()
         return f"오류 발생: {str(e)}", 500
 
+# =========================
+# API: PC 연장 요청 승인/반려 (CRITICAL 2 - SUPER_ADMIN만)
+# =========================
+@app.route("/api/pcs/<pc_unique_id>/approve", methods=["POST"])
+@require_role("super_admin")
+def approve_pc_extension(pc_unique_id):
+    """PC 연장 요청 승인 - SUPER_ADMIN만 가능"""
+    try:
+        data = request.get_json() or {}
+        approved_until = data.get("approved_until")
+        reason = data.get("reason")
+        request_id = data.get("request_id")  # 특정 요청 ID (선택)
+        
+        if not approved_until:
+            return jsonify({"success": False, "message": "approved_until이 필요합니다."}), 400
+        
+        decided_by = session.get("user_id", "super_admin")
+        
+        # request_id가 있으면 해당 요청 승인, 없으면 가장 최근 REQUESTED 요청 승인
+        if request_id:
+            success, error = database.approve_extension_request(request_id, decided_by, approved_until, reason)
+        else:
+            # 가장 최근 REQUESTED 요청 찾기
+            requests = database.get_extension_requests(pc_unique_id=pc_unique_id, status="REQUESTED")
+            if not requests:
+                return jsonify({"success": False, "message": "승인할 요청이 없습니다."}), 404
+            request_id = requests[0]["id"]
+            success, error = database.approve_extension_request(request_id, decided_by, approved_until, reason)
+        
+        if not success:
+            return jsonify({"success": False, "message": error}), 400
+        
+        # Audit 로그
+        from flask import request as flask_request
+        database.log_audit(
+            actor_role="super_admin",
+            actor_id=decided_by,
+            action="APPROVE_EXTENSION_REQUEST",
+            target_type="pc",
+            target_id=pc_unique_id,
+            after_state={"request_id": request_id, "approved_until": approved_until},
+            ip_address=flask_request.remote_addr,
+            user_agent=flask_request.headers.get("User-Agent")
+        )
+        
+        return jsonify({"success": True, "message": "연장 요청이 승인되었습니다."})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/pcs/<pc_unique_id>/reject", methods=["POST"])
+@require_role("super_admin")
+def reject_pc_extension(pc_unique_id):
+    """PC 연장 요청 반려 - SUPER_ADMIN만 가능"""
+    try:
+        data = request.get_json() or {}
+        reason = data.get("reason")
+        request_id = data.get("request_id")  # 특정 요청 ID (선택)
+        
+        decided_by = session.get("user_id", "super_admin")
+        
+        # request_id가 있으면 해당 요청 반려, 없으면 가장 최근 REQUESTED 요청 반려
+        if request_id:
+            success, error = database.reject_extension_request(request_id, decided_by, reason)
+        else:
+            # 가장 최근 REQUESTED 요청 찾기
+            requests = database.get_extension_requests(pc_unique_id=pc_unique_id, status="REQUESTED")
+            if not requests:
+                return jsonify({"success": False, "message": "반려할 요청이 없습니다."}), 404
+            request_id = requests[0]["id"]
+            success, error = database.reject_extension_request(request_id, decided_by, reason)
+        
+        if not success:
+            return jsonify({"success": False, "message": error}), 400
+        
+        # Audit 로그
+        from flask import request as flask_request
+        database.log_audit(
+            actor_role="super_admin",
+            actor_id=decided_by,
+            action="REJECT_EXTENSION_REQUEST",
+            target_type="pc",
+            target_id=pc_unique_id,
+            after_state={"request_id": request_id, "reason": reason},
+            ip_address=flask_request.remote_addr,
+            user_agent=flask_request.headers.get("User-Agent")
+        )
+        
+        return jsonify({"success": True, "message": "연장 요청이 반려되었습니다."})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+
+@app.route("/api/stores/<store_id>/pc-extension-requests", methods=["GET"])
+@require_role("super_admin")
+def get_all_extension_requests(store_id):
+    """모든 연장 요청 목록 조회 - SUPER_ADMIN만"""
+    try:
+        requests = database.get_extension_requests(store_id=store_id if store_id != "all" else None)
+        return jsonify({"requests": requests})
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# =========================
+# Emergency 모드 토글 (CRITICAL 3)
+# =========================
+@app.route("/api/toggle-emergency", methods=["POST"])
+@require_role("super_admin")
+def toggle_emergency():
+    """Emergency 모드 토글"""
+    try:
+        current_mode = session.get("emergency_mode", False)
+        new_mode = not current_mode
+        
+        session["emergency_mode"] = new_mode
+        
+        # Audit 로그
+        from flask import request as flask_request
+        actor_id = session.get("user_id", "super_admin")
+        database.log_audit(
+            actor_role="super_admin",
+            actor_id=actor_id,
+            action="TOGGLE_EMERGENCY_MODE",
+            target_type="system",
+            after_state={"emergency_mode": new_mode},
+            ip_address=flask_request.remote_addr,
+            user_agent=flask_request.headers.get("User-Agent")
+        )
+        
+        return jsonify({
+            "success": True,
+            "emergency_mode": new_mode,
+            "message": "Emergency 모드가 활성화되었습니다." if new_mode else "Emergency 모드가 비활성화되었습니다."
+        })
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"success": False, "message": str(e)}), 500
+
 @app.route("/api/update_bay_settings", methods=["POST"])
 @require_role("super_admin")
 def update_bay_settings():
-    """타석 설정 업데이트 (기간, 상태 등) - PC 미등록 타석도 처리"""
+    """타석 설정 업데이트 (기간, 상태 등) - Emergency 모드에서만 허용 (CRITICAL 3)"""
     try:
+        # Emergency 모드 체크
+        emergency_mode = session.get("emergency_mode", False)
+        if not emergency_mode:
+            return jsonify({
+                "success": False, 
+                "message": "Emergency 모드에서만 직접 수정이 가능합니다. 기본 모드에서는 읽기 전용입니다."
+            }), 403
+        
+        # Emergency 모드 사용 시 Audit 로그
+        from flask import request as flask_request
+        actor_id = session.get("user_id", "super_admin")
+        database.log_audit(
+            actor_role="super_admin",
+            actor_id=actor_id,
+            action="EMERGENCY_UPDATE_BAY_SETTINGS",
+            target_type="bay",
+            ip_address=flask_request.remote_addr,
+            user_agent=flask_request.headers.get("User-Agent")
+        )
         from datetime import date
         from psycopg2.extras import RealDictCursor
         
@@ -631,11 +836,55 @@ def approve_pc():
         pc_data = dict(pc_data)
         mac_address = pc_data.get("mac_address")
         
+        # store_id와 bay_id가 비어있으면 기존 데이터에서 추출 시도
+        if not store_id or store_id == '':
+            # pc_name에서 store_id 추출 시도 (예: "가자스크린골프테스트2-3번룸-PC" -> "가자스크린골프테스트2")
+            pc_name = pc_data.get("pc_name", "")
+            store_name_from_pc = pc_data.get("store_name", "")
+            if store_name_from_pc:
+                # store_name에서 store_id 찾기
+                cur.execute("SELECT store_id FROM stores WHERE store_name = %s LIMIT 1", (store_name_from_pc,))
+                store_row = cur.fetchone()
+                if store_row:
+                    store_id = store_row[0]
+        
+        # bay_id가 비어있으면 pc_name이나 bay_name에서 추출 시도
+        if not bay_id or bay_id == '':
+            pc_name = pc_data.get("pc_name", "")
+            bay_name = pc_data.get("bay_name", "")
+            # pc_name 예: "가자스크린골프테스트2-3번룸-PC" 또는 bay_name 예: "3번룸"
+            if bay_name:
+                # "3번룸" -> "03"
+                match = re.search(r'(\d+)번', bay_name)
+                if match:
+                    bay_num = match.group(1)
+                    bay_id = f"{int(bay_num):02d}"
+            elif pc_name:
+                # "가자스크린골프테스트2-3번룸-PC" -> "03"
+                match = re.search(r'(\d+)번', pc_name)
+                if match:
+                    bay_num = match.group(1)
+                    bay_id = f"{int(bay_num):02d}"
+        
+        # store_id와 bay_id 검증
+        if not store_id or store_id == '' or store_id == 'null':
+            return jsonify({
+                "success": False,
+                "message": "매장 정보를 찾을 수 없습니다. store_id가 필요합니다."
+            }), 400
+        
+        # bay_id는 선택사항이지만 있으면 검증
+        if bay_id == 'null':
+            bay_id = None
+        
         # 토큰 생성
         pc_token = database.generate_pc_token(pc_unique_id, mac_address)
         
         # 승인일 설정 (제공된 경우 사용, 없으면 오늘)
-        approved_at_value = date.fromisoformat(approved_date) if approved_date else date.today()
+        try:
+            approved_at_value = date.fromisoformat(approved_date) if approved_date else date.today()
+        except (ValueError, TypeError):
+            approved_at_value = date.today()
         
         # PC 승인 및 사용 기간 설정
         cur.execute("""
@@ -668,12 +917,27 @@ def approve_pc():
             "pc": dict(pc_data)
         })
     except Exception as e:
-        import traceback
-        traceback.print_exc()
-        conn.rollback()
-        cur.close()
-        conn.close()
-        return jsonify({"success": False, "message": f"PC 승인 실패: {str(e)}"}), 400
+        error_msg = str(e)
+        error_trace = traceback.format_exc()
+        print(f"[ERROR] approve_pc 오류: {error_msg}")
+        print(f"[ERROR] Traceback:\n{error_trace}")
+        try:
+            conn.rollback()
+        except:
+            pass
+        try:
+            cur.close()
+        except:
+            pass
+        try:
+            conn.close()
+        except:
+            pass
+        return jsonify({
+            "success": False, 
+            "message": f"PC 승인 실패: {error_msg}",
+            "error": error_trace
+        }), 500
 
 @app.route("/api/delete_pc", methods=["POST"])
 @require_role("super_admin")
