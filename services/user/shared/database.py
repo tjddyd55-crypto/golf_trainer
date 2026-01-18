@@ -451,9 +451,20 @@ def check_user(user_id, password):
     return dict(user) if user else None
 
 def save_shot_to_db(data):
+    """샷 데이터 저장 (active_user 확인 및 로깅)"""
     conn = get_db_connection()
     cur = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    user_id = data.get("user_id")
+    store_id = data.get("store_id")
+    bay_id = data.get("bay_id")
+    
+    # active_user가 없으면 경고 로그 (guest로 저장되는 경우)
+    if not user_id or user_id in ('', 'GUEST', 'guest', None):
+        print(f"[WARNING] 샷 저장: active_user가 없습니다. store_id={store_id}, bay_id={bay_id}, user_id={user_id}")
+        print(f"[WARNING] 타석에 활성 사용자가 등록되지 않았을 수 있습니다. 유저가 타석을 선택했는지 확인하세요.")
+    
     cur.execute("""
 INSERT INTO shots (
     store_id, bay_id, user_id, club_id,
@@ -465,9 +476,9 @@ INSERT INTO shots (
     feedback, timestamp
 ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
 """, (
-        data.get("store_id"),
-        data.get("bay_id"),
-        data.get("user_id"),
+        store_id,
+        bay_id,
+        user_id,
         data.get("club_id"),
         data.get("total_distance"),
         data.get("carry"),
@@ -487,12 +498,22 @@ INSERT INTO shots (
     conn.commit()
     cur.close()
     conn.close()
+    
+    if user_id and user_id not in ('', 'GUEST', 'guest', None):
+        print(f"[INFO] 샷 저장 완료: store_id={store_id}, bay_id={bay_id}, user_id={user_id}")
 
 def get_last_shot(user_id):
+    """개인 유저의 마지막 샷 조회 (guest 샷 제외)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute("""
-        SELECT * FROM shots WHERE user_id=%s ORDER BY timestamp DESC LIMIT 1
+        SELECT * FROM shots 
+        WHERE user_id = %s 
+          AND user_id IS NOT NULL 
+          AND user_id != '' 
+          AND user_id != 'GUEST' 
+          AND user_id != 'guest'
+        ORDER BY timestamp DESC LIMIT 1
     """, (user_id,))
     row = cur.fetchone()
     cur.close()
@@ -500,10 +521,18 @@ def get_last_shot(user_id):
     return dict(row) if row else None
 
 def get_user_practice_dates(user_id):
+    """개인 유저의 연습 날짜 목록 조회 (guest 샷 제외)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     cur.execute("""
-        SELECT DISTINCT date(timestamp) AS d FROM shots WHERE user_id=%s ORDER BY d DESC
+        SELECT DISTINCT date(timestamp) AS d 
+        FROM shots 
+        WHERE user_id = %s 
+          AND user_id IS NOT NULL 
+          AND user_id != '' 
+          AND user_id != 'GUEST' 
+          AND user_id != 'guest'
+        ORDER BY d DESC
     """, (user_id,))
     rows = cur.fetchall()
     cur.close()
@@ -511,10 +540,18 @@ def get_user_practice_dates(user_id):
     return [dict(row) for row in rows]
 
 def get_all_shots(user_id):
+    """개인 유저의 샷 목록 조회 (guest 샷 제외)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
+    # guest 샷 제외: user_id가 NULL, 빈 문자열, 'GUEST', 'guest'가 아닌 경우만 조회
     cur.execute("""
-        SELECT * FROM shots WHERE user_id=%s ORDER BY timestamp DESC
+        SELECT * FROM shots 
+        WHERE user_id = %s 
+          AND user_id IS NOT NULL 
+          AND user_id != '' 
+          AND user_id != 'GUEST' 
+          AND user_id != 'guest'
+        ORDER BY timestamp DESC
     """, (user_id,))
     rows = cur.fetchall()
     cur.close()
@@ -522,42 +559,110 @@ def get_all_shots(user_id):
     return [dict(row) for row in rows]
 
 def set_active_session(store_id, bay_id, user_id):
+    """타석에 활성 사용자 등록 (active_sessions + bays 테이블 모두 업데이트)"""
     conn = get_db_connection()
     cur = conn.cursor()
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    cur.execute("""
-        INSERT INTO active_sessions (store_id, bay_id, user_id, login_time)
-        VALUES (%s, %s, %s, %s)
-        ON CONFLICT (store_id, bay_id) DO UPDATE SET
-            user_id = EXCLUDED.user_id,
-            login_time = EXCLUDED.login_time
-    """, (store_id, bay_id, user_id, now))
-    conn.commit()
-    cur.close()
-    conn.close()
+    
+    try:
+        # 1. active_sessions 테이블에 등록
+        cur.execute("""
+            INSERT INTO active_sessions (store_id, bay_id, user_id, login_time)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (store_id, bay_id) DO UPDATE SET
+                user_id = EXCLUDED.user_id,
+                login_time = EXCLUDED.login_time
+        """, (store_id, bay_id, user_id, now))
+        
+        # 2. bays 테이블에도 활성 사용자 등록 (샷 수집 프로그램이 조회할 수 있도록)
+        cur.execute("""
+            UPDATE bays 
+            SET user_id = %s, last_update = %s
+            WHERE store_id = %s AND bay_id = %s
+        """, (user_id, now, store_id, bay_id))
+        
+        conn.commit()
+        print(f"[DEBUG] 활성 사용자 등록: store_id={store_id}, bay_id={bay_id}, user_id={user_id}")
+    except Exception as e:
+        print(f"[ERROR] set_active_session 오류: {e}")
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
 
 def clear_active_session(store_id, bay_id):
+    """타석의 활성 사용자 제거 (active_sessions + bays 테이블 모두 업데이트)"""
     conn = get_db_connection()
     cur = conn.cursor()
-    cur.execute("""
-        DELETE FROM active_sessions WHERE store_id = %s AND bay_id = %s
-    """, (store_id, bay_id))
-    conn.commit()
-    deleted_count = cur.rowcount
-    cur.close()
-    conn.close()
-    return deleted_count
+    
+    try:
+        # 1. active_sessions 테이블에서 제거
+        cur.execute("""
+            DELETE FROM active_sessions WHERE store_id = %s AND bay_id = %s
+        """, (store_id, bay_id))
+        deleted_count = cur.rowcount
+        
+        # 2. bays 테이블에서도 활성 사용자 제거
+        cur.execute("""
+            UPDATE bays 
+            SET user_id = '', last_update = CURRENT_TIMESTAMP
+            WHERE store_id = %s AND bay_id = %s
+        """, (store_id, bay_id))
+        
+        conn.commit()
+        return deleted_count
+    except Exception as e:
+        print(f"[ERROR] clear_active_session 오류: {e}")
+        conn.rollback()
+        return 0
+    finally:
+        cur.close()
+        conn.close()
 
 def get_active_user(store_id, bay_id):
+    """타석의 활성 사용자 조회 (bays 테이블 우선, 없으면 active_sessions 확인)"""
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
-    cur.execute("""
-        SELECT user_id, login_time FROM active_sessions WHERE store_id = %s AND bay_id = %s
-    """, (store_id, bay_id))
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-    return dict(row) if row else None
+    
+    try:
+        # 1. bays 테이블에서 조회 (샷 수집 프로그램이 조회하는 방식)
+        cur.execute("""
+            SELECT user_id, last_update as login_time 
+            FROM bays 
+            WHERE store_id = %s AND bay_id = %s AND user_id IS NOT NULL AND user_id != ''
+        """, (store_id, bay_id))
+        row = cur.fetchone()
+        
+        if row and row.get("user_id"):
+            result = dict(row)
+            cur.close()
+            conn.close()
+            return result
+        
+        # 2. bays 테이블에 없으면 active_sessions 테이블 확인 (하위 호환)
+        cur.execute("""
+            SELECT user_id, login_time FROM active_sessions WHERE store_id = %s AND bay_id = %s
+        """, (store_id, bay_id))
+        row = cur.fetchone()
+        
+        # active_sessions에 있으면 bays 테이블에도 동기화
+        if row and row.get("user_id"):
+            cur.execute("""
+                UPDATE bays 
+                SET user_id = %s, last_update = %s
+                WHERE store_id = %s AND bay_id = %s
+            """, (row["user_id"], row.get("login_time", datetime.now().strftime("%Y-%m-%d %H:%M:%S")), store_id, bay_id))
+            conn.commit()
+            return dict(row)
+        
+        return None
+    except Exception as e:
+        print(f"[ERROR] get_active_user 오류: {e}")
+        return None
+    finally:
+        cur.close()
+        conn.close()
 
 def get_bay_active_user_info(store_id, bay_id):
     return get_active_user(store_id, bay_id)
