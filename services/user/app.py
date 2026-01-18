@@ -504,6 +504,7 @@ def get_bays_api():
     
     ⚠️ 유저 조회 시 DB 수정 절대 금지
     - 타석 데이터 변경 없음 (조회만 수행)
+    - 모든 승인된 타석 반환 (LIMIT 없음)
     """
     store_id = request.args.get("store_id")
     if not store_id:
@@ -513,6 +514,13 @@ def get_bays_api():
     print(f"[USER API] get_bays_api: store_id={store_id}, read-only mode, no bay mutation allowed")
     
     bays = database.get_bays(store_id)
+    
+    # ✅ 1. 유저 로그인 API 응답 로그 (반드시 확인)
+    print(f"[USER API] user bays count: {len(bays)}")
+    if bays:
+        print(f"[USER API] bay_ids: {[bay.get('bay_id') for bay in bays]}")
+    else:
+        print(f"[USER API] WARNING: bays is empty or None")
     
     # 임시 디버그: API 응답에 디버그 정보 포함
     debug_info = {

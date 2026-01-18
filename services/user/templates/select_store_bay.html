@@ -98,15 +98,18 @@
                     return response.json();
                 })
                 .then(data => {
-                    // 디버그 정보 출력
-                    console.log('[DEBUG] get_bays API 응답:', data);
+                    // ✅ 3. 프론트 렌더링 방식 확인 로그
+                    console.log('[FRONTEND] get_bays API 응답:', data);
                     if (data._debug) {
-                        console.log('[DEBUG] 타석 조회 정보:', data._debug);
+                        console.log('[FRONTEND] 타석 조회 정보:', data._debug);
+                        console.log('[FRONTEND] 백엔드에서 반환된 타석 개수:', data._debug.bays_count);
                     }
                     
                     baySelect.innerHTML = '<option value="">타석을 선택하세요</option>';
                     if (data.bays && data.bays.length > 0) {
-                        console.log('[DEBUG] 조회된 타석 개수:', data.bays.length);
+                        console.log('[FRONTEND] 조회된 타석 개수:', data.bays.length);
+                        console.log('[FRONTEND] ✅ map 렌더링 사용 (bays[0] 사용 안 함)');
+                        // ✅ 모든 타석 렌더링 (bays[0] 사용 안 함)
                         data.bays.forEach(bay => {
                             const option = document.createElement('option');
                             option.value = bay.bay_id;

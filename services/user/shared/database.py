@@ -949,9 +949,12 @@ def get_bays(store_id):
         """, (store_id, store_id, today_str))
         
         approved_bays = cur.fetchall()
-        print(f"[DEBUG] get_bays 최종: store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
+        
+        # ✅ 2. 유저 타석 조회 SQL 원본 확인 로그
+        print(f"[SQL RESULT] get_bays 최종: store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
+        print(f"[SQL RESULT] SQL 쿼리: SELECT DISTINCT ... FROM store_pcs ... (LIMIT 없음, 모든 타석 반환)")
         for bay in approved_bays:
-            print(f"[DEBUG] 타석: bay_id={bay.get('bay_id')}, bay_name={bay.get('bay_name')}, pc_name={bay.get('pc_name')}, pc_status={bay.get('pc_status')}, usage_end_date={bay.get('usage_end_date')}")
+            print(f"[SQL RESULT] 타석: bay_id={bay.get('bay_id')}, bay_name={bay.get('bay_name')}, pc_name={bay.get('pc_name')}, pc_status={bay.get('pc_status')}, usage_end_date={bay.get('usage_end_date')}")
         
         # ⚠️ 유저 조회 시 DB 수정 금지: bays 테이블 자동 생성 로직 제거
         # bays 테이블은 관리자 승인 시에만 생성/수정됨 (approve_pc)
