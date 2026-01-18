@@ -457,23 +457,85 @@ def check_user(user_id, password):
     return dict(user) if user else None
 
 def save_shot_to_db(data):
-    """샷 데이터 저장 (게스트 샷 정책 명문화)"""
+    """
+    샷 데이터 저장 (최근 샷 10분 기준 active_user 판단)
+    
+    active_user는 최근 샷으로만 유지된다.
+    최근 샷이 10분간 없으면 자동 로그아웃 처리된다.
+    프로그램 생존 여부는 판단 기준이 아니다.
+    """
     conn = get_db_connection()
-    cur = conn.cursor()
+    cur = conn.cursor(cursor_factory=RealDictCursor)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
-    user_id = data.get("user_id")
     store_id = data.get("store_id")
     bay_id = data.get("bay_id")
     
-    # 게스트 샷 판단: user_id가 NULL이거나 빈 값인 경우
-    is_guest = False
-    if not user_id or user_id in ('', 'GUEST', 'guest', None):
+    # 최근 샷 10분 기준으로 active_user 유효성 확인
+    from datetime import timedelta
+    ttl_minutes = 10
+    ttl_time = datetime.now() - timedelta(minutes=ttl_minutes)
+    ttl_time_str = ttl_time.strftime("%Y-%m-%d %H:%M:%S")
+    
+    # 해당 타석의 최근 샷 시간 확인 (user_id가 있고 게스트가 아닌 샷)
+    cur.execute("""
+        SELECT MAX(timestamp) as last_shot_time
+        FROM shots
+        WHERE store_id = %s 
+          AND bay_id = %s
+          AND user_id IS NOT NULL 
+          AND user_id != '' 
+          AND (is_guest = FALSE OR is_guest IS NULL)
+    """, (store_id, bay_id))
+    
+    last_shot_row = cur.fetchone()
+    last_shot_time = last_shot_row.get("last_shot_time") if last_shot_row else None
+    
+    # active_user 확인 (bays 테이블)
+    cur.execute("""
+        SELECT user_id, last_update as login_time 
+        FROM bays 
+        WHERE store_id = %s AND bay_id = %s AND user_id IS NOT NULL AND user_id != ''
+    """, (store_id, bay_id))
+    active_user_row = cur.fetchone()
+    active_user_id = active_user_row.get("user_id") if active_user_row else None
+    
+    # 최근 샷 10분 기준으로 active_user 판단
+    user_id = None
+    is_guest = True
+    
+    if active_user_id and last_shot_time:
+        # timestamp 문자열 비교 (YYYY-MM-DD HH:MM:SS 형식)
+        if last_shot_time >= ttl_time_str:
+            # 최근 샷이 10분 이내면 active_user 유지
+            user_id = active_user_id
+            is_guest = False
+            print(f"[INFO] 개인 샷 저장: store_id={store_id}, bay_id={bay_id}, user_id={user_id} (최근 샷 {last_shot_time} 기준)")
+        else:
+            # 최근 샷이 10분 초과면 active_user 해제하고 게스트 샷으로 저장
+            cur.execute("""
+                UPDATE bays SET user_id = '', last_update = CURRENT_TIMESTAMP
+                WHERE store_id = %s AND bay_id = %s
+            """, (store_id, bay_id))
+            cur.execute("DELETE FROM active_sessions WHERE store_id = %s AND bay_id = %s", (store_id, bay_id))
+            user_id = None
+            is_guest = True
+            print(f"[INFO] active_user 자동 해제 후 게스트 샷 저장: store_id={store_id}, bay_id={bay_id} (최근 샷 {last_shot_time}, {ttl_minutes}분 초과)")
+    elif active_user_id and not last_shot_time:
+        # active_user는 있지만 최근 샷이 없으면 해제하고 게스트 샷
+        cur.execute("""
+            UPDATE bays SET user_id = '', last_update = CURRENT_TIMESTAMP
+            WHERE store_id = %s AND bay_id = %s
+        """, (store_id, bay_id))
+        cur.execute("DELETE FROM active_sessions WHERE store_id = %s AND bay_id = %s", (store_id, bay_id))
+        user_id = None
         is_guest = True
-        user_id = None  # 게스트 샷은 user_id = NULL
-        print(f"[INFO] 게스트 샷 저장: store_id={store_id}, bay_id={bay_id}")
+        print(f"[INFO] active_user 자동 해제 후 게스트 샷 저장: store_id={store_id}, bay_id={bay_id} (최근 샷 없음)")
     else:
-        print(f"[INFO] 개인 샷 저장: store_id={store_id}, bay_id={bay_id}, user_id={user_id}")
+        # active_user가 없으면 게스트 샷
+        user_id = None
+        is_guest = True
+        print(f"[INFO] 게스트 샷 저장: store_id={store_id}, bay_id={bay_id}")
     
     cur.execute("""
 INSERT INTO shots (
@@ -672,43 +734,76 @@ def get_active_user(store_id, bay_id):
 def get_bay_active_user_info(store_id, bay_id):
     return get_active_user(store_id, bay_id)
 
-def update_bay_heartbeat(store_id, bay_id, user_id=None):
-    """타석 heartbeat 업데이트 (last_seen_at 갱신)"""
+def cleanup_expired_active_users_by_last_shot(ttl_minutes=10):
+    """만료된 active_user 자동 정리 (최근 샷 10분 기준) - heartbeat 제거"""
+    """
+    active_user는 최근 샷으로만 유지된다.
+    최근 샷이 10분간 없으면 자동 로그아웃 처리된다.
+    프로그램 생존 여부는 판단 기준이 아니다.
+    """
     conn = get_db_connection()
     cur = conn.cursor()
-    now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     
     try:
-        # bays 테이블의 last_update 갱신 (heartbeat)
-        if user_id:
-            # user_id가 제공되면 함께 업데이트
-            cur.execute("""
-                UPDATE bays 
-                SET user_id = %s, last_update = %s
-                WHERE store_id = %s AND bay_id = %s
-            """, (user_id, now, store_id, bay_id))
-        else:
-            # user_id가 없으면 last_update만 갱신
-            cur.execute("""
-                UPDATE bays 
-                SET last_update = %s
-                WHERE store_id = %s AND bay_id = %s
-            """, (now, store_id, bay_id))
+        from datetime import timedelta
+        # TTL 시간 이전을 기준으로 최근 샷 확인
+        ttl_time = datetime.now() - timedelta(minutes=ttl_minutes)
+        ttl_time_str = ttl_time.strftime("%Y-%m-%d %H:%M:%S")
         
-        # active_sessions 테이블도 갱신 (호환성)
-        if user_id:
-            cur.execute("""
-                UPDATE active_sessions 
-                SET login_time = %s
-                WHERE store_id = %s AND bay_id = %s
-            """, (now, store_id, bay_id))
+        # 1. shots 테이블에서 각 타석의 최근 샷 시간 확인
+        # user_id가 있고 게스트가 아닌 최근 샷만 확인
+        cur.execute("""
+            SELECT store_id, bay_id, MAX(timestamp) as last_shot_time
+            FROM shots
+            WHERE user_id IS NOT NULL 
+              AND user_id != '' 
+              AND (is_guest = FALSE OR is_guest IS NULL)
+              AND timestamp >= %s
+            GROUP BY store_id, bay_id
+        """, (ttl_time_str,))
+        
+        active_bays = {f"{row[0]}_{row[1]}": row[2] for row in cur.fetchall()}
+        
+        # 2. bays 테이블에서 active_user가 있는 타석 확인
+        cur.execute("""
+            SELECT store_id, bay_id, user_id
+            FROM bays
+            WHERE user_id IS NOT NULL AND user_id != ''
+        """)
+        
+        bays_with_active_user = cur.fetchall()
+        cleaned_count = 0
+        
+        for store_id, bay_id, user_id in bays_with_active_user:
+            bay_key = f"{store_id}_{bay_id}"
+            last_shot_time = active_bays.get(bay_key)
+            
+            # 최근 샷이 없거나 10분 이상 지났으면 해제
+            if not last_shot_time or last_shot_time < ttl_time_str:
+                # active_user 해제
+                cur.execute("""
+                    UPDATE bays 
+                    SET user_id = '', last_update = CURRENT_TIMESTAMP
+                    WHERE store_id = %s AND bay_id = %s
+                """, (store_id, bay_id))
+                
+                # active_sessions도 제거
+                cur.execute("""
+                    DELETE FROM active_sessions 
+                    WHERE store_id = %s AND bay_id = %s
+                """, (store_id, bay_id))
+                
+                cleaned_count += 1
+                print(f"[INFO] active_user 자동 해제: store_id={store_id}, bay_id={bay_id}, user_id={user_id} (최근 샷 없음 또는 {ttl_minutes}분 초과)")
         
         conn.commit()
-        return True
+        if cleaned_count > 0:
+            print(f"[INFO] 만료된 active_user 정리 완료: {cleaned_count}개 (최근 샷 {ttl_minutes}분 기준)")
+        return cleaned_count
     except Exception as e:
-        print(f"[ERROR] update_bay_heartbeat 오류: {e}")
+        print(f"[ERROR] cleanup_expired_active_users_by_last_shot 오류: {e}")
         conn.rollback()
-        return False
+        return 0
     finally:
         cur.close()
         conn.close()

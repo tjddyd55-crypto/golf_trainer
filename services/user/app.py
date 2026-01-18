@@ -134,15 +134,15 @@ def select_store_bay():
                                      selected_bay_id=bay_id,
                                      error="완료된 타석입니다. 다른 타석을 이용하세요.")
             
-            # 타석 사용 가능 여부 확인 (TTL 확인 포함)
+            # 타석 사용 가능 여부 확인 (최근 샷 10분 기준)
             active_user = database.get_bay_active_user_info(store_id, bay_id)
             uid = session["user_id"]
             
-            # TTL 정책 적용: 만료된 active_user가 있으면 자동 해제 (10분 무활동)
-            ttl_minutes = 10  # 시나리오 기준: 10분
-            database.cleanup_expired_active_users(ttl_minutes)
+            # 최근 샷 기준 정리: 최근 샷이 10분 이상 없으면 active_user 해제
+            ttl_minutes = 10  # 최근 샷 10분 기준
+            database.cleanup_expired_active_users_by_last_shot(ttl_minutes)
             
-            # TTL 정리 후 다시 조회
+            # 정리 후 다시 조회
             active_user = database.get_bay_active_user_info(store_id, bay_id)
             
             if active_user and active_user["user_id"] != uid:
@@ -394,36 +394,15 @@ def clear_session():
     return jsonify({"success": False, "error": "store_id and bay_id required"}), 400
 
 # =========================
-# API: 타석 heartbeat (샷 수집 프로그램에서 주기적 호출)
-# =========================
-@app.route("/api/bays/<bay_id>/heartbeat", methods=["POST"])
-def bay_heartbeat(bay_id):
-    """타석 heartbeat API - active_user 상태 유지"""
-    data = request.get_json() or {}
-    store_id = data.get("store_id") or request.args.get("store_id")
-    user_id = data.get("user_id")
-    
-    if not store_id:
-        return jsonify({"error": "store_id required"}), 400
-    
-    # heartbeat 업데이트 (last_seen_at 갱신)
-    success = database.update_bay_heartbeat(store_id, bay_id, user_id)
-    
-    if success:
-        return jsonify({"success": True, "message": "heartbeat updated"})
-    else:
-        return jsonify({"error": "Failed to update heartbeat"}), 500
-
-# =========================
-# API: 만료된 active_user 자동 정리 (TTL 정책)
+# API: 만료된 active_user 자동 정리 (최근 샷 10분 기준)
 # =========================
 @app.route("/api/cleanup_expired_sessions", methods=["POST"])
 def cleanup_expired_sessions():
-    """만료된 active_user 자동 정리 (TTL 정책 적용)"""
-    # TTL: 5분 (300초) - heartbeat가 5분 이상 없으면 해제
-    ttl_minutes = int(request.args.get("ttl_minutes", 5))
+    """만료된 active_user 자동 정리 (최근 샷 10분 기준)"""
+    # TTL: 10분 - 최근 샷이 10분 이상 없으면 해제
+    ttl_minutes = int(request.args.get("ttl_minutes", 10))
     
-    cleaned_count = database.cleanup_expired_active_users(ttl_minutes)
+    cleaned_count = database.cleanup_expired_active_users_by_last_shot(ttl_minutes)
     
     return jsonify({
         "success": True,

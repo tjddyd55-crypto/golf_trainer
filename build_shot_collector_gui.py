@@ -8,7 +8,7 @@ import shutil
 
 # 빌드 설정
 APP_NAME = "shot_collector_gui"
-MAIN_SCRIPT = "shot_collector_gui.py"
+MAIN_SCRIPT = "client/app/collector/shot_collector_gui.py"
 ICON_FILE = None  # 아이콘 파일이 있으면 경로 지정
 
 # 빌드 옵션
@@ -21,11 +21,13 @@ build_options = [
     "--noconfirm",
 ]
 
-# 추가 파일 포함
+# 추가 파일 포함 (기준: golf_trainer/config/criteria.json)
 build_options.extend([
-    "--add-data", f"pc_identifier.py;.",
-    "--add-data", "config;config",
-    "--add-data", "regions;regions",
+    "--add-data", "client/core/pc_identifier.py;client/core",
+    # 프로젝트 루트의 config/criteria.json을 번들링 (실행 시 실행 경로로 복사됨)
+    "--add-data", "config/criteria.json;config/criteria.json",
+    "--add-data", "client/app/collector/config;client/app/collector/config",
+    "--add-data", "client/app/collector/regions;client/app/collector/regions",
 ])
 
 # 아이콘 파일이 있으면 추가
@@ -42,7 +44,8 @@ hidden_imports = [
     "PIL",
     "PIL.Image",
     "PIL.ImageDraw",
-    "main",  # main.py를 import하므로 포함
+    "client.app.collector.main",  # main.py를 import하므로 포함
+    "client.core.pc_identifier",  # pc_identifier 포함
 ]
 
 for imp in hidden_imports:
