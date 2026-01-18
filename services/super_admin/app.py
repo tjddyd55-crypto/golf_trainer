@@ -321,6 +321,10 @@ def store_bays_detail(store_id):
 def bay_shots(store_id, bay_id):
     """타석별 샷 기록 조회 (Super Admin)"""
     try:
+        # store_admin의 utils 사용
+        store_admin_dir = os.path.join(current_dir, '../store_admin')
+        if store_admin_dir not in sys.path:
+            sys.path.insert(0, store_admin_dir)
         from utils import classify_by_criteria
         
         rows = database.get_shots_by_bay(store_id, bay_id)
