@@ -802,25 +802,43 @@ def manage_all_pcs():
 @require_role("super_admin")
 def approve_pc():
     """PC 승인 (사용 기간 설정 및 타석 정보 설정)"""
-    data = request.get_json()
-    pc_unique_id = data.get("pc_unique_id")
-    store_id = data.get("store_id")  # 매장코드
-    bay_id = data.get("bay_id")  # 타석 ID (예: "01", "02")
-    usage_start_date = data.get("usage_start_date")  # YYYY-MM-DD 문자열
-    usage_end_date = data.get("usage_end_date")  # YYYY-MM-DD 문자열
-    approved_date = data.get("approved_date")  # YYYY-MM-DD 문자열 (선택)
-    notes = data.get("notes", "")
-    
-    # 문자열을 DATE로 변환
-    from datetime import date
     try:
-        start_date = date.fromisoformat(usage_start_date) if usage_start_date else None
-        end_date = date.fromisoformat(usage_end_date) if usage_end_date else None
-    except (ValueError, TypeError, AttributeError):
+        data = request.get_json()
+        if not data:
+            return jsonify({"success": False, "message": "요청 데이터가 없습니다."}), 400
+        
+        pc_unique_id = data.get("pc_unique_id")
+        store_id = data.get("store_id")  # 매장코드
+        bay_id = data.get("bay_id")  # 타석 ID (예: "01", "02" 또는 "3번룸")
+        usage_start_date = data.get("usage_start_date")  # YYYY-MM-DD 문자열
+        usage_end_date = data.get("usage_end_date")  # YYYY-MM-DD 문자열
+        approved_date = data.get("approved_date")  # YYYY-MM-DD 문자열 (선택)
+        notes = data.get("notes", "") or ""
+        
+        print(f"[DEBUG] approve_pc 요청: pc_unique_id={pc_unique_id}, store_id={store_id}, bay_id={bay_id}")
+        
+        if not pc_unique_id:
+            return jsonify({"success": False, "message": "pc_unique_id가 필요합니다."}), 400
+        
+        # 문자열을 DATE로 변환
+        from datetime import date
+        try:
+            start_date = date.fromisoformat(usage_start_date) if usage_start_date else None
+            end_date = date.fromisoformat(usage_end_date) if usage_end_date else None
+        except (ValueError, TypeError, AttributeError) as e:
+            print(f"[ERROR] 날짜 파싱 오류: {e}")
+            return jsonify({
+                "success": False,
+                "message": "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)"
+            }), 400
+    except Exception as e:
+        print(f"[ERROR] approve_pc 초기 단계 오류: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({
             "success": False,
-            "message": "날짜 형식이 올바르지 않습니다. (YYYY-MM-DD)"
-        }), 400
+            "message": f"요청 처리 중 오류가 발생했습니다: {str(e)}"
+        }), 500
     
     # PC 토큰 생성
     from psycopg2.extras import RealDictCursor
@@ -837,10 +855,12 @@ def approve_pc():
         pc_data = dict(pc_data)
         mac_address = pc_data.get("mac_address")
         
+        print(f"[DEBUG] PC 데이터 조회 완료: store_name={pc_data.get('store_name')}, pc_name={pc_data.get('pc_name')}")
+        
         # store_id와 bay_id가 비어있으면 기존 데이터에서 추출 시도
-        if not store_id or store_id == '':
+        if not store_id or store_id == '' or store_id == 'null' or store_id is None:
+            store_id = None
             # pc_name에서 store_id 추출 시도 (예: "가자스크린골프테스트2-3번룸-PC" -> "가자스크린골프테스트2")
-            pc_name = pc_data.get("pc_name", "")
             store_name_from_pc = pc_data.get("store_name", "")
             if store_name_from_pc:
                 # store_name에서 store_id 찾기
@@ -848,42 +868,65 @@ def approve_pc():
                 store_row = cur.fetchone()
                 if store_row:
                     store_id = store_row[0]
+                    print(f"[DEBUG] store_id 자동 추출: {store_id}")
         
-        # bay_id가 비어있거나 "3번룸" 같은 형식이면 변환 시도
-        if not bay_id or bay_id == '' or bay_id == 'null':
-            # 비어있으면 pc_name이나 bay_name에서 추출 시도
+        # bay_id 변환 처리: "3번룸" -> "03" 형식으로 변환
+        original_bay_id = bay_id
+        if bay_id:
+            # None, 빈 문자열, 'null' 문자열 체크
+            if bay_id in ('', 'null', None):
+                bay_id = None
+            # "3번룸" 같은 형식인지 확인하고 변환
+            elif isinstance(bay_id, str):
+                # 이미 "01", "02" 같은 숫자 형식이면 그대로 사용
+                if bay_id.isdigit() and len(bay_id) == 2:
+                    # 이미 올바른 형식
+                    pass
+                # "3번룸", "3번", "3" 같은 형식이면 변환
+                elif '번' in bay_id or not bay_id.isdigit():
+                    match = re.search(r'(\d+)', bay_id)
+                    if match:
+                        bay_num = int(match.group(1))
+                        bay_id = f"{bay_num:02d}"
+                        print(f"[DEBUG] bay_id 변환: '{original_bay_id}' -> '{bay_id}'")
+                    else:
+                        # 숫자를 찾을 수 없으면 None으로 설정
+                        bay_id = None
+                # "3" 같은 단일 숫자면 "03"으로 변환
+                elif bay_id.isdigit() and len(bay_id) == 1:
+                    bay_id = f"0{bay_id}"
+                    print(f"[DEBUG] bay_id 변환: '{original_bay_id}' -> '{bay_id}'")
+        else:
+            # bay_id가 비어있으면 pc_name이나 bay_name에서 추출 시도
             pc_name = pc_data.get("pc_name", "")
             bay_name = pc_data.get("bay_name", "")
-            # pc_name 예: "가자스크린골프테스트2-3번룸-PC" 또는 bay_name 예: "3번룸"
             if bay_name:
-                # "3번룸" -> "03"
                 match = re.search(r'(\d+)번', bay_name)
                 if match:
-                    bay_num = match.group(1)
-                    bay_id = f"{int(bay_num):02d}"
+                    bay_num = int(match.group(1))
+                    bay_id = f"{bay_num:02d}"
+                    print(f"[DEBUG] bay_id bay_name에서 추출: '{bay_name}' -> '{bay_id}'")
             elif pc_name:
-                # "가자스크린골프테스트2-3번룸-PC" -> "03"
                 match = re.search(r'(\d+)번', pc_name)
                 if match:
-                    bay_num = match.group(1)
-                    bay_id = f"{int(bay_num):02d}"
-        elif bay_id and isinstance(bay_id, str) and ('번' in bay_id or not bay_id.isdigit()):
-            # bay_id가 "3번룸" 같은 형식이면 "03"으로 변환
-            match = re.search(r'(\d+)번?', bay_id)
-            if match:
-                bay_num = match.group(1)
-                bay_id = f"{int(bay_num):02d}"
+                    bay_num = int(match.group(1))
+                    bay_id = f"{bay_num:02d}"
+                    print(f"[DEBUG] bay_id pc_name에서 추출: '{pc_name}' -> '{bay_id}'")
         
         # store_id와 bay_id 검증
         if not store_id or store_id == '' or store_id == 'null':
+            cur.close()
+            conn.close()
             return jsonify({
                 "success": False,
                 "message": "매장 정보를 찾을 수 없습니다. store_id가 필요합니다."
             }), 400
         
-        # bay_id는 선택사항이지만 있으면 검증
-        if bay_id == 'null':
+        # bay_id 정리 (None으로 설정된 경우)
+        if bay_id in ('null', '', None):
             bay_id = None
+        
+        print(f"[DEBUG] 최종 변환 후: store_id={store_id}, bay_id={bay_id}")
         
         # 토큰 생성
         pc_token = database.generate_pc_token(pc_unique_id, mac_address)
