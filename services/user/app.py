@@ -243,6 +243,71 @@ def logout():
     return redirect(url_for("login"))
 
 # =========================
+# API: 현재 로그인한 유저 정보 조회 (me 기반)
+# =========================
+@app.route("/api/users/me", methods=["GET"])
+@require_login
+def get_current_user():
+    """현재 로그인한 유저 정보 조회 - 세션의 user_id만 사용"""
+    try:
+        uid = session["user_id"]
+        user = database.get_user(uid)
+        if not user:
+            return jsonify({"error": "사용자를 찾을 수 없습니다."}), 404
+        
+        # 비밀번호 제외
+        user_data = {k: v for k, v in user.items() if k != "password"}
+        return jsonify(user_data)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/users/me/shots", methods=["GET"])
+@require_login
+def get_current_user_shots():
+    """
+    현재 로그인한 유저의 샷 목록 조회 - 세션의 user_id만 사용
+    - path/query로 user_id를 절대 받지 않음 (보안 강화)
+    - guest 샷은 자동으로 제외됨
+    - 빈 배열도 정상 응답 (오류 아님)
+    """
+    try:
+        uid = session["user_id"]
+        if not uid:
+            return jsonify({"error": "로그인이 필요합니다."}), 401
+        
+        # 개인 샷 조회 (guest 샷 제외)
+        shots = database.get_all_shots(uid)
+        
+        # 빈 배열도 정상 응답
+        return jsonify({"shots": shots if shots else []})
+    except KeyError:
+        # 세션 만료
+        return jsonify({"error": "로그인이 필요합니다."}), 401
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# =========================
+# 보안: USER role이 다른 userId로 접근 시 차단
+# =========================
+@app.route("/api/users/<path:user_id>", methods=["GET", "POST", "PUT", "DELETE", "PATCH"])
+@require_login
+def block_user_id_access(user_id):
+    """USER role은 다른 userId로 접근 불가 - 403 반환"""
+    current_user_id = session.get("user_id")
+    user_role = session.get("role", "user")
+    
+    # USER role이면 무조건 차단 (자신의 데이터는 /me로 접근)
+    if user_role == "user":
+        return jsonify({"error": "접근 권한이 없습니다. /api/users/me를 사용하세요."}), 403
+    
+    # SUPER_ADMIN이나 STORE_ADMIN은 허용 (향후 확장 가능)
+    return jsonify({"error": "이 엔드포인트는 사용할 수 없습니다."}), 404
+
+# =========================
 # API: 타석 코드 확인
 # =========================
 @app.route("/api/check_bay_code", methods=["POST"])
