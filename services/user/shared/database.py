@@ -553,7 +553,7 @@ def save_shot_to_db(data):
         is_guest = True
         print(f"[INFO] 게스트 샷 저장: store_id={store_id}, bay_id={bay_id}")
     
-    # criteria.json 기준으로 샷 평가 (is_valid, score 계산)
+    # criteria.json 기준으로 샷 평가 (is_valid, score 계산, 성별 기준 적용)
     try:
         import sys
         import os
@@ -563,8 +563,16 @@ def save_shot_to_db(data):
         if user_dir not in sys.path:
             sys.path.insert(0, user_dir)
         from utils import evaluate_shot_by_criteria
+        
+        # 유저 성별 조회 (성별 없으면 male 기준)
+        gender = None
+        if user_id:
+            user = get_user(user_id)
+            if user:
+                gender = user.get("gender")
+        
         club_id = data.get("club_id") or ""
-        is_valid, score = evaluate_shot_by_criteria(data, club_id)
+        is_valid, score = evaluate_shot_by_criteria(data, club_id, gender=gender)
     except Exception as e:
         print(f"[WARNING] 샷 평가 실패: {e}")
         import traceback
@@ -1572,6 +1580,12 @@ def get_criteria_compare_driver(user_id):
     if not row or not any(row.values()):
         return {}
     
+    # 유저 성별 조회 (성별 없으면 male 기준)
+    gender = None
+    user = get_user(user_id)
+    if user:
+        gender = user.get("gender")
+    
     # utils 모듈 import
     try:
         import sys
@@ -1585,7 +1599,7 @@ def get_criteria_compare_driver(user_id):
         print(f"[WARNING] utils import 실패: {e}")
         return {}
     
-    # criteria.json 기준으로 비교
+    # criteria.json 기준으로 비교 (성별 기준 적용)
     result = {}
     club_id = "driver"
     
@@ -1602,7 +1616,7 @@ def get_criteria_compare_driver(user_id):
         if avg_value is None:
             continue
         
-        rule = _get_rule(club_id, rule_key)
+        rule = _get_rule(club_id, rule_key, gender=gender)
         if not rule:
             continue
         

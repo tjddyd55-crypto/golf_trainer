@@ -1,32 +1,83 @@
 {
-  "iron": {
-    "smash_factor":    { "good": 1.35, "bad": 1.25 },
-    "launch_angle":    { "good": [18, 24] },
-    "face_angle":      { "good": [-2, 2] },
-    "club_path":       { "good": [-3, 3] },
-    "lateral_offset":  { "good": 3, "warn": 6 },
-    "direction_angle": { "good": 3, "warn": 6 },
-    "side_spin":       { "good": 300, "warn": 600 },
-    "back_spin":       { "good": [2000, 3500] }
+  "driver_male": {
+    "carry": { "good": [200, 235] },
+    "total_distance": { "good": [215, 260] },
+    "club_speed": { "good": [95, 108] },
+    "ball_speed": { "good": [135, 155] },
+    "smash_factor": { "good": 1.45, "bad": 1.30 },
+    "launch_angle": { "good": [11, 15] },
+    "face_angle": { "good": [-2, 2] },
+    "club_path": { "good": [-3, 3] },
+    "lateral_offset": { "good": 5, "warn": 10 },
+    "direction_angle": { "good": 5, "warn": 10 },
+    "side_spin": { "good": 300, "warn": 600 },
+    "back_spin": { "good": [2200, 3200] }
+  },
+  "driver_female": {
+    "carry": { "good": [165, 195] },
+    "total_distance": { "good": [180, 215] },
+    "club_speed": { "good": [75, 90] },
+    "ball_speed": { "good": [110, 130] },
+    "smash_factor": { "good": 1.42, "bad": 1.25 },
+    "launch_angle": { "good": [12, 16] },
+    "face_angle": { "good": [-2, 2] },
+    "club_path": { "good": [-3, 3] },
+    "lateral_offset": { "good": 6, "warn": 12 },
+    "direction_angle": { "good": 6, "warn": 12 },
+    "side_spin": { "good": 350, "warn": 700 },
+    "back_spin": { "good": [2400, 3400] }
+  },
+  "iron_male": {
+    "carry": { "good": [125, 155] },
+    "total_distance": { "good": [130, 165] },
+    "club_speed": { "good": [80, 95] },
+    "ball_speed": { "good": [105, 125] },
+    "smash_factor": { "good": 1.33, "bad": 1.20 },
+    "launch_angle": { "good": [18, 24] },
+    "face_angle": { "good": [-2, 2] },
+    "club_path": { "good": [-3, 3] },
+    "lateral_offset": { "good": 4, "warn": 8 },
+    "direction_angle": { "good": 4, "warn": 8 },
+    "side_spin": { "good": 350, "warn": 700 },
+    "back_spin": { "good": [2000, 3500] }
+  },
+  "iron_female": {
+    "carry": { "good": [95, 125] },
+    "total_distance": { "good": [100, 135] },
+    "club_speed": { "good": [65, 80] },
+    "ball_speed": { "good": [85, 105] },
+    "smash_factor": { "good": 1.30, "bad": 1.15 },
+    "launch_angle": { "good": [20, 26] },
+    "face_angle": { "good": [-2, 2] },
+    "club_path": { "good": [-3, 3] },
+    "lateral_offset": { "good": 5, "warn": 10 },
+    "direction_angle": { "good": 5, "warn": 10 },
+    "side_spin": { "good": 400, "warn": 800 },
+    "back_spin": { "good": [2200, 3600] }
   },
   "driver": {
-    "smash_factor":    { "good": 1.48, "bad": 1.35 },
-    "launch_angle":    { "good": [12, 16] },
-    "face_angle":      { "good": [-1.5, 1.5] },
-    "club_path":       { "good": [-3, 3] },
-    "lateral_offset":  { "good": 4, "warn": 8 },
+    "smash_factor": { "good": 1.48, "bad": 1.35 },
+    "launch_angle": { "good": [12, 16] },
+    "face_angle": { "good": [-1.5, 1.5] },
+    "club_path": { "good": [-3, 3] },
+    "lateral_offset": { "good": 4, "warn": 8 },
     "direction_angle": { "good": 4, "warn": 8 },
-    "side_spin":       { "good": 250, "warn": 500 },
-    "back_spin":       { "good": [2200, 3200] }
+    "side_spin": { "good": 250, "warn": 500 },
+    "back_spin": { "good": [2200, 3200] }
+  },
+  "iron": {
+    "smash_factor": { "good": 1.35, "bad": 1.25 },
+    "launch_angle": { "good": [18, 24] },
+    "face_angle": { "good": [-2, 2] },
+    "club_path": { "good": [-3, 3] },
+    "lateral_offset": { "good": 3, "warn": 6 },
+    "direction_angle": { "good": 3, "warn": 6 },
+    "side_spin": { "good": 300, "warn": 600 },
+    "back_spin": { "good": [2000, 3500] }
   },
   "default": {
-    "ball_speed":      { "good": 60 },
-    "smash_factor":    { "good": 1.45 },
-    "face_angle":      { "good": [-2, 2] },
-    "club_path":       { "good": [-3, 3] },
-    "lateral_offset":  { "good": 3, "warn": 6 },
-    "direction_angle": { "good": 3, "warn": 6 },
-    "side_spin":       { "good": 300, "warn": 600 },
-    "back_spin":       { "good": [2000, 3500] }
+    "smash_factor": { "good": 1.40 },
+    "face_angle": { "good": [-3, 3] },
+    "club_path": { "good": [-4, 4] }
   }
 }

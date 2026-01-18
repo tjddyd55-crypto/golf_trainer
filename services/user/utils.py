@@ -12,10 +12,41 @@ try:
 except Exception:
     CRITERIA = {}
 
-def _get_rule(club_id, metric):
-    """criteria.json에서 클럽/지표별 기준값 가져오기"""
+def get_criteria_key(club_id, gender=None):
+    """
+    성별 기준으로 criteria.json 키 결정
+    
+    우선순위:
+    1. club + gender (female)
+    2. club + male
+    3. club
+    4. default
+    """
     cid = (club_id or "").lower()
-    club_cfg = CRITERIA.get(cid, {})
+    
+    # 성별 없음 or male → male 기준
+    if gender is None or gender in ["남", "M", "male"]:
+        key = f"{cid}_male"
+        if key in CRITERIA:
+            return key
+    
+    # female → female 기준
+    if gender in ["여", "F", "female"]:
+        key = f"{cid}_female"
+        if key in CRITERIA:
+            return key
+    
+    # club 기준 (fallback)
+    if cid in CRITERIA:
+        return cid
+    
+    # default
+    return "default"
+
+def _get_rule(club_id, metric, gender=None):
+    """criteria.json에서 클럽/성별/지표별 기준값 가져오기"""
+    criteria_key = get_criteria_key(club_id, gender)
+    club_cfg = CRITERIA.get(criteria_key, {})
     if metric in club_cfg:
         return club_cfg[metric]
     default_cfg = CRITERIA.get("default", {})
@@ -82,9 +113,14 @@ def classify_by_criteria(value, club_id, metric, *, fallback_good=None, fallback
         return "bg-none"
     return score_class(v, fallback_good, fallback_warn)
 
-def evaluate_shot_by_criteria(shot_data, club_id):
+def evaluate_shot_by_criteria(shot_data, club_id, gender=None):
     """
-    criteria.json 기준으로 샷 평가 (저장 시 사용)
+    criteria.json 기준으로 샷 평가 (저장 시 사용, 성별 기준 적용)
+    
+    Args:
+        shot_data: 샷 데이터 딕셔너리
+        club_id: 클럽 ID (예: "DRIVER", "IRON")
+        gender: 성별 ("여"/"F"/"female" 또는 "남"/"M"/"male" 또는 None → male)
     
     Returns:
         tuple: (is_valid: bool, score: int)
@@ -117,7 +153,7 @@ def evaluate_shot_by_criteria(shot_data, club_id):
         except (ValueError, TypeError):
             continue
         
-        rule = _get_rule(club_id, metric_key)
+        rule = _get_rule(club_id, metric_key, gender=gender)
         if not rule:
             continue
         
