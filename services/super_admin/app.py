@@ -957,6 +957,23 @@ def approve_pc():
         """, (store_id, bay_id, pc_token, start_date, end_date, 
               approved_at_value, session.get("user_id", "super_admin"), notes, pc_unique_id))
         
+        # bays 테이블에 타석이 없으면 생성 (get_bays()에서 조회 가능하도록)
+        if bay_id:
+            cur.execute("""
+                SELECT COUNT(*) as count FROM bays 
+                WHERE store_id = %s AND bay_id = %s
+            """, (store_id, bay_id))
+            bay_exists = cur.fetchone()
+            if bay_exists and bay_exists["count"] == 0:
+                # bays 테이블에 타석 생성
+                bay_code = f"{store_id}_{bay_id}"
+                cur.execute("""
+                    INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code)
+                    VALUES (%s, %s, 'READY', '', CURRENT_TIMESTAMP, %s)
+                    ON CONFLICT (store_id, bay_id) DO NOTHING
+                """, (store_id, bay_id, bay_code))
+                print(f"[DEBUG] bays 테이블에 타석 생성: store_id={store_id}, bay_id={bay_id}")
+        
         conn.commit()
         
         # 승인된 PC 정보 조회
