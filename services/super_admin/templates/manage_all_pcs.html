@@ -44,7 +44,7 @@
                         {% for pc in pcs %}
                         <tr>
                             <td><strong style="font-size: 1.1em;">{{ pc.store_name }}</strong></td>
-                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_name or pc.bay_display or pc.pc_name or "-" }}</strong></td>
+                            <td><strong style="font-size: 1.1em; color: #007bff;">{{ pc.pc_name or pc.bay_display }}</strong></td>
                             <td>{{ pc.registered_at.split(' ')[0] if pc.registered_at else "-" }}</td>
                             <td>
                                 {% if pc.usage_start_date and pc.usage_end_date %}

@@ -316,6 +316,50 @@ def store_bays_detail(store_id):
         traceback.print_exc()
         return f"오류 발생: {str(e)}", 500
 
+@app.route("/bay/<store_id>/<bay_id>")
+@require_role("super_admin")
+def bay_shots(store_id, bay_id):
+    """타석별 샷 기록 조회 (Super Admin)"""
+    try:
+        from utils import classify_by_criteria
+        
+        rows = database.get_shots_by_bay(store_id, bay_id)
+        shots = []
+        for r in rows:
+            s = dict(r)
+            club_id = s.get("club_id") or ""
+            
+            # 색상 클래스 추가
+            bs = s.get("ball_speed")
+            sf = s.get("smash_factor")
+            fa = s.get("face_angle")
+            cp = s.get("club_path")
+            lo = s.get("lateral_offset")
+            da = s.get("direction_angle")
+            ss = s.get("side_spin")
+            bk = s.get("back_spin")
+            
+            s["ball_speed_class"] = classify_by_criteria(bs, club_id, "ball_speed", fallback_good=60)
+            s["smash_class"] = classify_by_criteria(sf, club_id, "smash_factor", fallback_good=1.45)
+            s["face_class"] = classify_by_criteria(fa, club_id, "face_angle", abs_value=True, fallback_good=2.0, fallback_warn=4.0)
+            s["path_class"] = classify_by_criteria(cp, club_id, "club_path", abs_value=True, fallback_good=2.0, fallback_warn=4.0)
+            s["lateral_class"] = classify_by_criteria(lo, club_id, "lateral_offset", abs_value=True, fallback_good=3.0, fallback_warn=6.0)
+            s["direction_class"] = classify_by_criteria(da, club_id, "direction_angle", abs_value=True, fallback_good=3.0, fallback_warn=6.0)
+            s["side_spin_class"] = classify_by_criteria(ss, club_id, "side_spin", abs_value=True, fallback_good=300, fallback_warn=600)
+            s["back_spin_class"] = classify_by_criteria(bk, club_id, "back_spin", fallback_good=None)
+            
+            shots.append(s)
+        
+        return render_template("bay_shots.html", 
+                             store_id=store_id,
+                             bay_id=bay_id,
+                             shots=shots)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        print(f"[ERROR] bay_shots failed: {str(e)}")
+        return f"오류 발생: {str(e)}", 500
+
 # =========================
 # API: PC 연장 요청 승인/반려 (CRITICAL 2 - SUPER_ADMIN만)
 # =========================
