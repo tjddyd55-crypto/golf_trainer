@@ -100,8 +100,8 @@ class PCRegistrationGUI:
         self.confirm_button = ttk.Button(input_frame, text="확인", command=self.confirm_store, width=20, state=tk.DISABLED)
         self.confirm_button.grid(row=3, column=0, columnspan=2, pady=5)
         
-        # 타석번호
-        ttk.Label(input_frame, text="타석번호:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        # 타석(룸)
+        ttk.Label(input_frame, text="타석(룸):").grid(row=4, column=0, sticky=tk.W, pady=5)
         self.bay_entry = ttk.Entry(input_frame, width=30, font=("맑은 고딕", 10), state=tk.DISABLED)
         self.bay_entry.grid(row=4, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         self.bay_entry.bind("<KeyRelease>", self.on_bay_entry_change)
@@ -176,7 +176,7 @@ class PCRegistrationGUI:
             self.store_id_entry.icursor(new_pos)
     
     def on_bay_entry_change(self, event=None):
-        """타석번호 입력 시 등록 요청 버튼 활성화"""
+        """타석(룸) 입력 시 등록 요청 버튼 활성화"""
         bay_name = self.bay_entry.get().strip()
         registration_code = self.code_entry.get().strip()
         if bay_name and self.selected_store_id and registration_code:
@@ -350,7 +350,7 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
             self.lookup_button.config(state=tk.NORMAL)
     
     def confirm_store(self):
-        """매장 확인 후 타석번호 입력 활성화"""
+        """매장 확인 후 타석(룸) 입력 활성화"""
         if self.selected_store_id and self.selected_store_name:
             self.bay_entry.config(state=tk.NORMAL)
             self.update_status(f"매장 확인 완료: {self.selected_store_name}")
@@ -373,7 +373,7 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
             return
         
         if not bay_name:
-            messagebox.showerror("오류", "타석번호를 입력하세요.")
+            messagebox.showerror("오류", "타석(룸)을 입력하세요.")
             return
         
         if not self.pc_info:
