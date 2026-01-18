@@ -51,7 +51,9 @@
                         {% for pc in pcs %}
                         <tr>
                             <td>
-                                {% if pc.bay_id %}
+                                {% if pc.bay_name and pc.bay_name.strip() %}
+                                    <strong style="font-size: 1.1em; color: #007bff;">{{ pc.bay_name }}</strong>
+                                {% elif pc.bay_id %}
                                     {% set bay_num = pc.bay_id|int %}
                                     <strong style="font-size: 1.1em; color: #007bff;">{{ "%02d"|format(bay_num) }}번 타석(룸)</strong>
                                 {% else %}
