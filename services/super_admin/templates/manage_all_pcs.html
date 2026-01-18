@@ -67,15 +67,15 @@
                             </td>
                             <td>
                                 {% if pc.status == 'pending' %}
-                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_id or '' }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}')">승인</button>
-                                    <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}')">거부</button>
+                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">승인</button>
+                                    <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">거부</button>
                                 {% elif pc.status == 'active' %}
-                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_id or '' }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}', '{{ pc.approved_at or '' }}')">수정</button>
+                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}', '{{ pc.approved_at or '' }}')">수정</button>
                                 {% endif %}
-                                <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}')">삭제</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">삭제</button>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.pc_unique_id }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.approved_by or '' }}', '{{ pc.notes or '' }}')">상세</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.pc_unique_id }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.approved_by or '' }}', '{{ pc.notes or '' }}')">상세</button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -187,7 +187,7 @@
                             <td id="detail-store-name"></td>
                         </tr>
                         <tr>
-                            <th>타석(룸) 이름</th>
+                            <th>타석(룸)</th>
                             <td id="detail-pc-name"></td>
                         </tr>
                         <tr>
@@ -375,7 +375,7 @@
 
         function showDetailModal(pcUniqueId, storeName, bayName, pcName, hostname, platform, uniqueId, registeredAt, approvedAt, approvedBy, notes) {
             document.getElementById('detail-store-name').textContent = storeName || '-';
-            document.getElementById('detail-pc-name').textContent = pcName || bayName || '-';
+            document.getElementById('detail-pc-name').textContent = bayName || pcName || '-';
             document.getElementById('detail-hostname').textContent = hostname || '-';
             document.getElementById('detail-platform').textContent = platform || '-';
             document.getElementById('detail-unique-id').textContent = uniqueId || '-';
