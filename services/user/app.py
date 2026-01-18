@@ -134,12 +134,19 @@ def select_store_bay():
                                      selected_bay_id=bay_id,
                                      error="완료된 타석입니다. 다른 타석을 이용하세요.")
             
-            # 타석 사용 가능 여부 확인
+            # 타석 사용 가능 여부 확인 (TTL 확인 포함)
             active_user = database.get_bay_active_user_info(store_id, bay_id)
             uid = session["user_id"]
             
+            # TTL 정책 적용: 만료된 active_user가 있으면 자동 해제 (10분 무활동)
+            ttl_minutes = 10  # 시나리오 기준: 10분
+            database.cleanup_expired_active_users(ttl_minutes)
+            
+            # TTL 정리 후 다시 조회
+            active_user = database.get_bay_active_user_info(store_id, bay_id)
+            
             if active_user and active_user["user_id"] != uid:
-                # 다른 사용자가 사용 중 - 409 Conflict 상황
+                # 다른 사용자가 사용 중 - 409 Conflict 상황 (TTL 유효)
                 stores = database.get_all_stores()
                 return render_template("select_store_bay.html", 
                                      stores=stores,
