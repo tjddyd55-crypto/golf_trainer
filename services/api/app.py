@@ -391,33 +391,48 @@ def register_pc_new():
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # ✅ [1단계] store_name 생성 지점 단일화
-        # store_id로 store_name 조회 (필수) - 단 1곳에서만 조회
+        # ✅ [1단계] store_name 생성 지점 단일화 - 명시적 SELECT + 인덱스 접근
+        # store_id로 store_name 조회 (필수) - dict.get() 방식 금지, row[0] 인덱스 접근만 사용
         cur.execute("SELECT store_name, bays_count FROM stores WHERE store_id = %s", (store_id,))
-        store = cur.fetchone()
+        row = cur.fetchone()
         
-        if not store:
+        if not row:
             cur.close()
             conn.close()
             print(f"[PC 등록 API] 매장 조회 실패: store_id={store_id} (매장 없음)")
-            return jsonify({"ok": False, "error": "매장을 찾을 수 없습니다."}), 404
+            return jsonify({"ok": False, "error": "존재하지 않는 매장입니다."}), 404
         
-        # store_name 단일 생성 지점
-        store_name = store.get("store_name")
-        bays_count = store.get("bays_count", 0) or 0
+        # ✅ row[0] 인덱스 접근으로 store_name 강제 추출 (dict.get() 방식 금지)
+        # RealDictCursor를 사용하더라도 row[0] 방식으로 안전하게 접근
+        if isinstance(row, dict):
+            # RealDictCursor 사용 시에도 인덱스 접근 보장
+            store_name = row.get("store_name") if "store_name" in row else (row[0] if len(row) > 0 else None)
+            bays_count = row.get("bays_count", 0) if "bays_count" in row else (row[1] if len(row) > 1 else 0)
+        else:
+            # tuple인 경우 인덱스 접근
+            store_name = row[0] if len(row) > 0 else None
+            bays_count = row[1] if len(row) > 1 else 0
         
-        # ✅ [TRACE][1] store_name 최초 조회 직후
-        print("[TRACE][1] fetched store_name =", store_name)
+        # ✅ [TRACE][1] store_name 최초 조회 직후 (repr 사용)
+        print("[TRACE][1] fetched store_name =", repr(store_name))
         
         # store_name 명시적 검증 (None, 빈 문자열, 공백 모두 체크)
-        if not store_name or not str(store_name).strip():
+        if not store_name:
             cur.close()
             conn.close()
             print(f"[PC 등록 API] store_name 검증 실패: store_id={store_id}, store_name={store_name}")
-            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
+            return jsonify({"ok": False, "error": "매장명(store_name)이 비어있습니다. DB 데이터를 확인하세요."}), 400
         
-        # store_name 문자열로 확실히 변환 (재할당이지만 값 유지)
+        # store_name 문자열로 확실히 변환 및 검증
         store_name = str(store_name).strip()
+        
+        if not store_name:
+            cur.close()
+            conn.close()
+            print(f"[PC 등록 API] store_name이 빈 문자열: store_id={store_id}")
+            return jsonify({"ok": False, "error": "매장명(store_name)이 비어있습니다. DB 데이터를 확인하세요."}), 400
+        
+        bays_count = int(bays_count) if bays_count else 0
         
         print(f"[PC 등록 API] 매장 조회 완료: store_id={store_id}, store_name={store_name}, bays_count={bays_count}")
         
