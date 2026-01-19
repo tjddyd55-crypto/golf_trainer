@@ -510,6 +510,7 @@ def register_pc_new():
         
         # ✅ store_name 재조회 (INSERT 직전 확실하게)
         # stores 테이블에서 store_name을 다시 한 번 명시적으로 조회
+        print(f"[PC 등록 API] store_name 조회 시작: store_id={store_id}")
         cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
         store_row = cur.fetchone()
         
@@ -523,25 +524,40 @@ def register_pc_new():
         if isinstance(store_row, dict):
             store_name = store_row.get("store_name")
         else:
+            # tuple인 경우 첫 번째 컬럼이 store_name
             store_name = store_row[0] if len(store_row) > 0 else None
         
-        if not store_name or not str(store_name).strip():
+        # store_name이 None이면 INSERT 시도 안 함
+        if store_name is None:
             cur.close()
             conn.close()
-            print(f"[PC 등록 API] store_name 검증 실패: store_id={store_id}, store_name={store_name}")
+            print(f"[PC 등록 API] store_name이 None: store_id={store_id}")
             return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
         
+        # store_name 문자열로 변환 및 검증
         store_name = str(store_name).strip()
+        
+        if not store_name:
+            cur.close()
+            conn.close()
+            print(f"[PC 등록 API] store_name이 빈 문자열: store_id={store_id}")
+            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
+        
+        # ✅ INSERT 직전 디버그 로그
+        print(f"[DEBUG] store_name = {store_name}")
         print(f"[PC 등록 API] store_name 최종 확인: store_id={store_id}, store_name={store_name}")
         
         # store_pcs INSERT (동일 PC 재등록은 이미 위에서 체크했으므로 INSERT만 실행)
         # status는 'pending'으로 설정 (관리자 승인 대기)
         # bay_id는 UUID 문자열로 저장 (bay_number는 별도 컬럼)
         # ✅ store_name 필수 포함 (NOT NULL 제약조건)
+        # ✅ 컬럼 순서와 VALUES 바인딩 순서 1:1 일치
         print(f"[PC 등록 API] store_pcs INSERT 시작: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}, pc_unique_id={pc_unique_id}")
         
         try:
             # INSERT만 실행 (ON CONFLICT는 동일 PC 재등록 체크에서 이미 걸러졌으므로 발생하지 않음)
+            # 컬럼 순서: store_id, store_name, bay_id, bay_name, pc_unique_id, status, registered_at, bay_number
+            # VALUES 순서: store_id, store_name, bay_id, bay_name, pc_unique_id, 'pending', CURRENT_TIMESTAMP, bay_number
             cur.execute("""
                 INSERT INTO store_pcs (
                     store_id, store_name, bay_id, bay_name, pc_unique_id, 
