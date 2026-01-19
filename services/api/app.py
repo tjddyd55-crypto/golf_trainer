@@ -392,7 +392,8 @@ def register_pc_new():
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
         # ✅ [1단계] store_name 생성 지점 단일화 - 명시적 SELECT + 인덱스 접근
-        # store_id로 store_name 조회 (필수) - dict.get() 방식 금지, row[0] 인덱스 접근만 사용
+        # store_id로 store_name 조회 (필수) - dict.get() 방식 완전 금지, row[0] 인덱스 접근만 사용
+        # SELECT 쿼리를 명시적으로 store_name만 조회
         cur.execute("SELECT store_name, bays_count FROM stores WHERE store_id = %s", (store_id,))
         row = cur.fetchone()
         
@@ -402,16 +403,23 @@ def register_pc_new():
             print(f"[PC 등록 API] 매장 조회 실패: store_id={store_id} (매장 없음)")
             return jsonify({"ok": False, "error": "존재하지 않는 매장입니다."}), 404
         
-        # ✅ row[0] 인덱스 접근으로 store_name 강제 추출 (dict.get() 방식 금지)
-        # RealDictCursor를 사용하더라도 row[0] 방식으로 안전하게 접근
-        if isinstance(row, dict):
-            # RealDictCursor 사용 시에도 인덱스 접근 보장
-            store_name = row.get("store_name") if "store_name" in row else (row[0] if len(row) > 0 else None)
-            bays_count = row.get("bays_count", 0) if "bays_count" in row else (row[1] if len(row) > 1 else 0)
-        else:
-            # tuple인 경우 인덱스 접근
+        # ✅ row[0] 인덱스 접근으로 store_name 강제 추출 (dict.get() 방식 완전 금지)
+        # RealDictCursor를 사용하더라도 인덱스 접근으로 강제
+        # row는 tuple 또는 dict일 수 있지만, 인덱스 접근으로 통일
+        if isinstance(row, (list, tuple)):
+            # tuple/list인 경우 인덱스 접근
             store_name = row[0] if len(row) > 0 else None
             bays_count = row[1] if len(row) > 1 else 0
+        elif isinstance(row, dict):
+            # dict인 경우에도 인덱스 접근 시도 (RealDictCursor는 dict를 반환하지만 순서 보장)
+            # 안전을 위해 list(row.values())로 변환 후 인덱스 접근
+            row_values = list(row.values())
+            store_name = row_values[0] if len(row_values) > 0 else None
+            bays_count = row_values[1] if len(row_values) > 1 else 0
+        else:
+            # 기타 경우 None 처리
+            store_name = None
+            bays_count = 0
         
         # ✅ [TRACE][1] store_name 최초 조회 직후 (repr 사용)
         print("[TRACE][1] fetched store_name =", repr(store_name))
