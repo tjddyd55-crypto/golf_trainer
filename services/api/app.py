@@ -425,6 +425,7 @@ def register_pc_new():
             }), 400
         
         # ✅ 동일 PC 재등록 확인 (pc_unique_id 기준) - INSERT 전에 체크
+        print(f"[PC 등록 API] 동일 PC 재등록 체크 시작: pc_unique_id={pc_unique_id}")
         cur.execute("""
             SELECT store_id, bay_number, bay_name, status
             FROM store_pcs
@@ -448,7 +449,10 @@ def register_pc_new():
                 "error": f"이미 등록된 PC입니다. 현재 {bay_display}에 등록되어 있습니다. (상태: {existing_status})"
             }), 409
         
+        print(f"[PC 등록 API] 동일 PC 재등록 체크 완료: pc_unique_id={pc_unique_id} (중복 없음)")
+        
         # ✅ 중복 확인 1: bays 테이블에서 bay_number 중복 체크
+        print(f"[PC 등록 API] bays 테이블 중복 체크 시작: store_id={store_id}, bay_number={bay_number}")
         cur.execute("""
             SELECT 1
             FROM bays
@@ -466,7 +470,10 @@ def register_pc_new():
                 "error": f"타석 번호 {bay_number}는 이미 할당되어 있습니다."
             }), 409
         
+        print(f"[PC 등록 API] bays 테이블 중복 체크 완료: store_id={store_id}, bay_number={bay_number} (중복 없음)")
+        
         # ✅ 중복 확인 2: store_pcs 테이블에서 bay_number 중복 체크 (중요!)
+        print(f"[PC 등록 API] store_pcs 테이블 중복 체크 시작: store_id={store_id}, bay_number={bay_number}")
         cur.execute("""
             SELECT 1
             FROM store_pcs
@@ -485,7 +492,7 @@ def register_pc_new():
                 "error": f"타석 번호 {bay_number}는 이미 할당되어 있습니다."
             }), 409
         
-        print(f"[PC 등록 API] 중복 체크 완료: store_id={store_id}, bay_number={bay_number} (중복 없음)")
+        print(f"[PC 등록 API] store_pcs 테이블 중복 체크 완료: store_id={store_id}, bay_number={bay_number} (중복 없음)")
         
         # bay_id 생성 (내부 키로 사용, UUID 기반)
         import uuid
@@ -501,54 +508,75 @@ def register_pc_new():
                 assigned_pc_unique_id = EXCLUDED.assigned_pc_unique_id
         """, (store_id, bay_id, bay_number, bay_name, pc_unique_id))
         
-        # store_pcs INSERT 또는 UPDATE (PC가 없으면 INSERT, 있으면 UPDATE)
-        # status는 'PENDING'으로 설정 (관리자 승인 대기)
-        # bay_id는 UUID 문자열로 저장 (bay_number는 별도 컬럼)
-        # ✅ store_name 필수 포함 (NOT NULL 제약조건)
+        # ✅ store_name 재조회 (INSERT 직전 확실하게)
+        # stores 테이블에서 store_name을 다시 한 번 명시적으로 조회
+        cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
+        store_row = cur.fetchone()
         
-        # INSERT 직전 store_name 최종 검증
+        if not store_row:
+            cur.close()
+            conn.close()
+            print(f"[PC 등록 API] store_name 조회 실패: store_id={store_id} (매장 없음)")
+            return jsonify({"ok": False, "error": "존재하지 않는 매장입니다."}), 404
+        
+        # store_name을 명시적으로 가져옴 (RealDictCursor 또는 tuple 모두 처리)
+        if isinstance(store_row, dict):
+            store_name = store_row.get("store_name")
+        else:
+            store_name = store_row[0] if len(store_row) > 0 else None
+        
         if not store_name or not str(store_name).strip():
             cur.close()
             conn.close()
-            print(f"[PC 등록 API] INSERT 직전 store_name 검증 실패: store_name={store_name}")
-            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 500
+            print(f"[PC 등록 API] store_name 검증 실패: store_id={store_id}, store_name={store_name}")
+            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
         
+        store_name = str(store_name).strip()
+        print(f"[PC 등록 API] store_name 최종 확인: store_id={store_id}, store_name={store_name}")
+        
+        # store_pcs INSERT (동일 PC 재등록은 이미 위에서 체크했으므로 INSERT만 실행)
+        # status는 'pending'으로 설정 (관리자 승인 대기)
+        # bay_id는 UUID 문자열로 저장 (bay_number는 별도 컬럼)
+        # ✅ store_name 필수 포함 (NOT NULL 제약조건)
         print(f"[PC 등록 API] store_pcs INSERT 시작: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}, pc_unique_id={pc_unique_id}")
         
         try:
+            # INSERT만 실행 (ON CONFLICT는 동일 PC 재등록 체크에서 이미 걸러졌으므로 발생하지 않음)
             cur.execute("""
                 INSERT INTO store_pcs (
                     store_id, store_name, bay_id, bay_name, pc_unique_id, 
                     status, registered_at, bay_number
                 )
                 VALUES (%s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP, %s)
-                ON CONFLICT (pc_unique_id) DO UPDATE SET
-                    store_id = EXCLUDED.store_id,
-                    store_name = COALESCE(EXCLUDED.store_name, store_pcs.store_name),
-                    bay_id = EXCLUDED.bay_id,
-                    bay_name = COALESCE(EXCLUDED.bay_name, store_pcs.bay_name),
-                    bay_number = EXCLUDED.bay_number,
-                    status = CASE 
-                        WHEN store_pcs.status = 'active' THEN 'active'  -- 이미 승인된 경우 유지
-                        ELSE 'pending'  -- 새 등록이면 대기 상태
-                    END
             """, (store_id, store_name, bay_id, bay_name, pc_unique_id, bay_number))
             
             print(f"[PC 등록 API] store_pcs INSERT 완료")
         except Exception as e:
             print(f"[PC 등록 API] store_pcs INSERT 오류: {e}")
-            print(f"[PC 등록 API] INSERT 시도 값: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}")
+            print(f"[PC 등록 API] INSERT 시도 값: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}, pc_unique_id={pc_unique_id}")
+            import traceback
+            traceback.print_exc()
             conn.rollback()
             cur.close()
             conn.close()
-            raise
+            return jsonify({
+                "ok": False,
+                "error": f"PC 등록 중 오류가 발생했습니다: {str(e)}"
+            }), 500
         
         # DB commit 확인 후 응답
+        print(f"[PC 등록 API] DB commit 시작")
         conn.commit()
+        print(f"[PC 등록 API] DB commit 완료")
         
         # commit 성공 확인
-        cur.execute("SELECT status FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
+        cur.execute("SELECT status, store_name FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
         saved_pc = cur.fetchone()
+        
+        if saved_pc:
+            print(f"[PC 등록 API] 저장 확인: pc_unique_id={pc_unique_id}, status={saved_pc.get('status')}, store_name={saved_pc.get('store_name')}")
+        else:
+            print(f"[PC 등록 API] 저장 확인 실패: pc_unique_id={pc_unique_id} (레코드 없음)")
         
         cur.close()
         conn.close()
