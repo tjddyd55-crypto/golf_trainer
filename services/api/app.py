@@ -556,8 +556,12 @@ def register_pc_new():
         
         try:
             # INSERT만 실행 (ON CONFLICT는 동일 PC 재등록 체크에서 이미 걸러졌으므로 발생하지 않음)
-            # 컬럼 순서: store_id, store_name, bay_id, bay_name, pc_unique_id, status, registered_at, bay_number
-            # VALUES 순서: store_id, store_name, bay_id, bay_name, pc_unique_id, 'pending', CURRENT_TIMESTAMP, bay_number
+            # ✅ 컬럼 순서와 VALUES 바인딩 순서 1:1 일치 확인
+            # 컬럼: store_id, store_name, bay_id, bay_name, pc_unique_id, status, registered_at, bay_number
+            # VALUES: store_id, store_name, bay_id, bay_name, pc_unique_id, 'pending', CURRENT_TIMESTAMP, bay_number
+            # 바인딩: (store_id, store_name, bay_id, bay_name, pc_unique_id, bay_number)
+            print(f"[DEBUG] INSERT 바인딩 값: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_name={bay_name}, pc_unique_id={pc_unique_id}, bay_number={bay_number}")
+            
             cur.execute("""
                 INSERT INTO store_pcs (
                     store_id, store_name, bay_id, bay_name, pc_unique_id, 
