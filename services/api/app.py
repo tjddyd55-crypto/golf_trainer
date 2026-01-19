@@ -391,7 +391,8 @@ def register_pc_new():
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # store_id로 store_name 조회 (필수)
+        # ✅ [1단계] store_name 생성 지점 단일화
+        # store_id로 store_name 조회 (필수) - 단 1곳에서만 조회
         cur.execute("SELECT store_name, bays_count FROM stores WHERE store_id = %s", (store_id,))
         store = cur.fetchone()
         
@@ -401,11 +402,12 @@ def register_pc_new():
             print(f"[PC 등록 API] 매장 조회 실패: store_id={store_id} (매장 없음)")
             return jsonify({"ok": False, "error": "매장을 찾을 수 없습니다."}), 404
         
+        # store_name 단일 생성 지점
         store_name = store.get("store_name")
         bays_count = store.get("bays_count", 0) or 0
         
-        # ✅ STEP1: store_name 최초 조회 직후
-        print("[DEBUG][STEP1] fetched store_name =", store_name)
+        # ✅ [TRACE][1] store_name 최초 조회 직후
+        print("[TRACE][1] fetched store_name =", store_name)
         
         # store_name 명시적 검증 (None, 빈 문자열, 공백 모두 체크)
         if not store_name or not str(store_name).strip():
@@ -414,7 +416,7 @@ def register_pc_new():
             print(f"[PC 등록 API] store_name 검증 실패: store_id={store_id}, store_name={store_name}")
             return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
         
-        # store_name 문자열로 확실히 변환
+        # store_name 문자열로 확실히 변환 (재할당이지만 값 유지)
         store_name = str(store_name).strip()
         
         print(f"[PC 등록 API] 매장 조회 완료: store_id={store_id}, store_name={store_name}, bays_count={bays_count}")
@@ -497,8 +499,16 @@ def register_pc_new():
         
         print(f"[PC 등록 API] store_pcs 테이블 중복 체크 완료: store_id={store_id}, bay_number={bay_number} (중복 없음)")
         
-        # ✅ STEP2: 중복 체크 로직 직후
-        print("[DEBUG][STEP2] before insert store_name =", store_name)
+        # ✅ [4단계] 조건 분기 전후 상태 점검
+        # PC 중복 체크 후
+        print("[TRACE][2] after pc duplicate check store_name =", store_name)
+        
+        # bays 중복 체크 후
+        print("[TRACE][2] after bays duplicate check store_name =", store_name)
+        
+        # store_pcs 중복 체크 후
+        print("[TRACE][2] after store_pcs duplicate check store_name =", store_name)
+        print("[TRACE][2] before insert store_name =", store_name)
         
         # bay_id 생성 (내부 키로 사용, UUID 기반)
         import uuid
@@ -514,44 +524,9 @@ def register_pc_new():
                 assigned_pc_unique_id = EXCLUDED.assigned_pc_unique_id
         """, (store_id, bay_id, bay_number, bay_name, pc_unique_id))
         
-        # ✅ store_name 재조회 (INSERT 직전 확실하게)
-        # stores 테이블에서 store_name을 다시 한 번 명시적으로 조회
-        print(f"[PC 등록 API] store_name 조회 시작: store_id={store_id}")
-        cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
-        store_row = cur.fetchone()
-        
-        if not store_row:
-            cur.close()
-            conn.close()
-            print(f"[PC 등록 API] store_name 조회 실패: store_id={store_id} (매장 없음)")
-            return jsonify({"ok": False, "error": "존재하지 않는 매장입니다."}), 404
-        
-        # store_name을 명시적으로 가져옴 (RealDictCursor 또는 tuple 모두 처리)
-        if isinstance(store_row, dict):
-            store_name = store_row.get("store_name")
-        else:
-            # tuple인 경우 첫 번째 컬럼이 store_name
-            store_name = store_row[0] if len(store_row) > 0 else None
-        
-        # store_name이 None이면 INSERT 시도 안 함
-        if store_name is None:
-            cur.close()
-            conn.close()
-            print(f"[PC 등록 API] store_name이 None: store_id={store_id}")
-            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
-        
-        # store_name 문자열로 변환 및 검증
-        store_name = str(store_name).strip()
-        
-        if not store_name:
-            cur.close()
-            conn.close()
-            print(f"[PC 등록 API] store_name이 빈 문자열: store_id={store_id}")
-            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
-        
-        # ✅ INSERT 직전 디버그 로그
-        print(f"[DEBUG] store_name = {store_name}")
-        print(f"[PC 등록 API] store_name 최종 확인: store_id={store_id}, store_name={store_name}")
+        # ✅ [1단계] store_name 재조회 완전 제거
+        # 기존 재조회 로직(517-550라인) 전부 삭제
+        # store_name은 위에서 조회한 값을 그대로 사용
         
         # store_pcs INSERT (동일 PC 재등록은 이미 위에서 체크했으므로 INSERT만 실행)
         # ✅ dict 바인딩(named parameter) 방식으로 전면 재작성 (컬럼 순서 의존성 완전 제거)
@@ -569,13 +544,11 @@ def register_pc_new():
             print(f"[PC 등록 API] store_name이 None: store_id={store_id} (INSERT 실행 안 함)")
             return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
         
-        # ✅ STEP3: INSERT 바로 직전
-        print("[DEBUG][STEP3] final store_name =", store_name)
+        # ✅ [6단계] INSERT 직전 강제 검증
+        print("[TRACE][FINAL] store_name =", store_name)
+        assert store_name is not None, "store_name lost before INSERT"
         
-        # ✅ 임시 검증: assert 추가
-        assert store_name is not None, "store_name is None before INSERT"
-        
-        # ✅ STEP4: INSERT dict 바인딩 전체 로그
+        # ✅ [7단계] INSERT 파라미터 무결성 점검
         insert_params = {
             "store_name": store_name,
             "store_id": store_id,
@@ -586,7 +559,7 @@ def register_pc_new():
             "bay_id": bay_id,
             "bay_number": bay_number
         }
-        print("[DEBUG][STEP4] insert params =", insert_params)
+        print("[TRACE][PARAMS]", insert_params)
         
         print(f"[PC 등록 API] store_pcs INSERT 시작: store_name={store_name}, store_id={store_id}")
         
