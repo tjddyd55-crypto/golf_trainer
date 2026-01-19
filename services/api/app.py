@@ -116,12 +116,13 @@ TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 database.init_db()
 
 # =========================
-# 헬스 체크
+# 헬스 체크 (Railway Healthcheck용 - 무조건 200 반환)
 # =========================
 @app.route("/api/health", methods=["GET"])
+@app.route("/health", methods=["GET"])
 def health_check():
-    """헬스 체크 엔드포인트"""
-    return jsonify({"status": "ok", "service": "api"})
+    """Railway Healthcheck용 엔드포인트 - 무조건 200 반환 (DB 체크, 인증 등 절대 없음)"""
+    return "OK", 200
 
 # =========================
 # 샷 데이터 저장 API (main.py에서 사용)
