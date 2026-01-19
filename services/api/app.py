@@ -1250,6 +1250,8 @@ def upload_coordinates():
             "error": "Internal server error"
         }), 500
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5003))
-    app.run(host="0.0.0.0", port=port, debug=True)
+# ✅ [3단계] Flask/Gunicorn 포트 충돌 전면 제거
+# app.run() 코드 제거 - gunicorn만 사용
+# if __name__ == "__main__":
+#     port = int(os.environ.get("PORT", 5003))
+#     app.run(host="0.0.0.0", port=port, debug=True)
