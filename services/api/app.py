@@ -548,51 +548,61 @@ def register_pc_new():
         print(f"[PC 등록 API] store_name 최종 확인: store_id={store_id}, store_name={store_name}")
         
         # store_pcs INSERT (동일 PC 재등록은 이미 위에서 체크했으므로 INSERT만 실행)
-        # ✅ 최소 컬럼 기준으로 INSERT 구문 작성 (자동 컬럼은 DB default 사용)
-        # ✅ 컬럼 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, status
-        # ✅ VALUES 바인딩 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number
-        # status는 'pending'으로 고정, registered_at는 DB default 사용
+        # ✅ dict 바인딩(named parameter) 방식으로 전면 재작성 (컬럼 순서 의존성 완전 제거)
         
         # pc_uuid는 pc_unique_id와 동일하게 사용 (PC 고유 식별자)
-        # pc_unique_id는 UNIQUE NOT NULL이므로 필수 포함
         pc_uuid = pc_unique_id
         
+        # pc_name은 NOT NULL이므로 기본값 설정
+        pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
+        
+        # ✅ store_name None 체크 (INSERT 실행 전 필수)
+        if store_name is None:
+            cur.close()
+            conn.close()
+            print(f"[PC 등록 API] store_name이 None: store_id={store_id} (INSERT 실행 안 함)")
+            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
+        
         # ✅ INSERT 직전 디버그 로그
-        print("[DEBUG][FINAL] store_name:", store_name)
-        print("[DEBUG] store_id =", store_id)
-        print("[DEBUG] bay_name =", bay_name)
-        print("[DEBUG] pc_uuid =", pc_uuid)
-        print("[DEBUG] bay_id =", bay_id)
-        print("[DEBUG] bay_number =", bay_number)
-        
-        # 임시 검증용: store_name 하드코딩 테스트 (문제 확인용)
-        # store_name = "TEMP_TEST_STORE"
-        
-        print(f"[PC 등록 API] store_pcs INSERT 시작")
+        print("[DEBUG][FINAL] INSERT store_name =", store_name)
+        print(f"[PC 등록 API] store_pcs INSERT 시작: store_name={store_name}, store_id={store_id}")
         
         try:
-            # ✅ 사용자 요청 순서대로 정확히 작성
-            # 컬럼 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, status
-            # VALUES 바인딩 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number
-            # NOT NULL 컬럼(pc_name, pc_unique_id)은 사용자 요청 순서 뒤에 추가
-            pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
-            
-            # ✅ 사용자 요청 순서 정확히 유지
+            # ✅ dict 바인딩(named parameter) 방식 사용
+            # 컬럼명을 명시하고 %(name)s 형식으로 바인딩
+            # 컬럼 순서와 무관하게 정확한 매핑 보장
             cur.execute("""
                 INSERT INTO store_pcs (
                     store_name,
                     store_id,
                     bay_name,
                     pc_uuid,
-                    bay_id,
-                    bay_number,
                     pc_unique_id,
                     pc_name,
+                    bay_id,
+                    bay_number,
                     status
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, %s, %s, 'pending'
+                    %(store_name)s,
+                    %(store_id)s,
+                    %(bay_name)s,
+                    %(pc_uuid)s,
+                    %(pc_unique_id)s,
+                    %(pc_name)s,
+                    %(bay_id)s,
+                    %(bay_number)s,
+                    'pending'
                 )
-            """, (store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, pc_unique_id, pc_name))
+            """, {
+                "store_name": store_name,
+                "store_id": store_id,
+                "bay_name": bay_name,
+                "pc_uuid": pc_uuid,
+                "pc_unique_id": pc_unique_id,
+                "pc_name": pc_name,
+                "bay_id": bay_id,
+                "bay_number": bay_number
+            })
             
             print(f"[PC 등록 API] store_pcs INSERT 완료")
         except Exception as e:
