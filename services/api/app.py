@@ -398,17 +398,23 @@ def register_pc_new():
         if not store:
             cur.close()
             conn.close()
+            print(f"[PC 등록 API] 매장 조회 실패: store_id={store_id} (매장 없음)")
             return jsonify({"ok": False, "error": "매장을 찾을 수 없습니다."}), 404
         
         store_name = store.get("store_name")
         bays_count = store.get("bays_count", 0) or 0
         
-        if not store_name:
+        # store_name 명시적 검증 (None, 빈 문자열, 공백 모두 체크)
+        if not store_name or not str(store_name).strip():
             cur.close()
             conn.close()
+            print(f"[PC 등록 API] store_name 검증 실패: store_id={store_id}, store_name={store_name}")
             return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
         
-        print(f"[PC 등록 API] 매장 조회 완료: store_name={store_name}, bays_count={bays_count}")
+        # store_name 문자열로 확실히 변환
+        store_name = str(store_name).strip()
+        
+        print(f"[PC 등록 API] 매장 조회 완료: store_id={store_id}, store_name={store_name}, bays_count={bays_count}")
         
         if bay_number < 1 or bay_number > bays_count:
             cur.close()
@@ -475,27 +481,43 @@ def register_pc_new():
         # status는 'PENDING'으로 설정 (관리자 승인 대기)
         # bay_id는 UUID 문자열로 저장 (bay_number는 별도 컬럼)
         # ✅ store_name 필수 포함 (NOT NULL 제약조건)
-        print(f"[PC 등록 API] store_pcs INSERT 시작: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}")
         
-        cur.execute("""
-            INSERT INTO store_pcs (
-                store_id, store_name, bay_id, bay_name, pc_unique_id, 
-                status, registered_at, bay_number
-            )
-            VALUES (%s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP, %s)
-            ON CONFLICT (pc_unique_id) DO UPDATE SET
-                store_id = EXCLUDED.store_id,
-                store_name = EXCLUDED.store_name,
-                bay_id = EXCLUDED.bay_id,
-                bay_name = COALESCE(EXCLUDED.bay_name, store_pcs.bay_name),
-                bay_number = EXCLUDED.bay_number,
-                status = CASE 
-                    WHEN store_pcs.status = 'active' THEN 'active'  -- 이미 승인된 경우 유지
-                    ELSE 'pending'  -- 새 등록이면 대기 상태
-                END
-        """, (store_id, store_name, bay_id, bay_name, pc_unique_id, bay_number))
+        # INSERT 직전 store_name 최종 검증
+        if not store_name or not str(store_name).strip():
+            cur.close()
+            conn.close()
+            print(f"[PC 등록 API] INSERT 직전 store_name 검증 실패: store_name={store_name}")
+            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 500
         
-        print(f"[PC 등록 API] store_pcs INSERT 완료")
+        print(f"[PC 등록 API] store_pcs INSERT 시작: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}, pc_unique_id={pc_unique_id}")
+        
+        try:
+            cur.execute("""
+                INSERT INTO store_pcs (
+                    store_id, store_name, bay_id, bay_name, pc_unique_id, 
+                    status, registered_at, bay_number
+                )
+                VALUES (%s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP, %s)
+                ON CONFLICT (pc_unique_id) DO UPDATE SET
+                    store_id = EXCLUDED.store_id,
+                    store_name = COALESCE(EXCLUDED.store_name, store_pcs.store_name),
+                    bay_id = EXCLUDED.bay_id,
+                    bay_name = COALESCE(EXCLUDED.bay_name, store_pcs.bay_name),
+                    bay_number = EXCLUDED.bay_number,
+                    status = CASE 
+                        WHEN store_pcs.status = 'active' THEN 'active'  -- 이미 승인된 경우 유지
+                        ELSE 'pending'  -- 새 등록이면 대기 상태
+                    END
+            """, (store_id, store_name, bay_id, bay_name, pc_unique_id, bay_number))
+            
+            print(f"[PC 등록 API] store_pcs INSERT 완료")
+        except Exception as e:
+            print(f"[PC 등록 API] store_pcs INSERT 오류: {e}")
+            print(f"[PC 등록 API] INSERT 시도 값: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}")
+            conn.rollback()
+            cur.close()
+            conn.close()
+            raise
         
         # DB commit 확인 후 응답
         conn.commit()
