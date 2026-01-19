@@ -30,8 +30,21 @@ app = Flask(__name__,
             static_folder=static_path)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_in_production")
 
-# 데이터베이스 초기화
-database.init_db()
+# =========================
+# Healthcheck 엔드포인트 (가장 먼저 등록 - 데이터베이스 초기화 전)
+# =========================
+@app.route("/health", methods=["GET"])
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    """Railway healthcheck용 엔드포인트 - 인증 불필요, DB 접근 불필요"""
+    return "OK", 200
+
+# 데이터베이스 초기화 (healthcheck 이후)
+try:
+    database.init_db()
+except Exception as e:
+    print(f"[WARNING] Database initialization failed: {e}", flush=True)
+    # 데이터베이스 초기화 실패해도 애플리케이션은 기동 가능
 
 # =========================
 # 타석 표시 형식 통일 헬퍼 함수
@@ -80,15 +93,6 @@ def super_admin_login():
             return render_template("super_admin_login.html", error="인증 실패")
 
     return render_template("super_admin_login.html")
-
-# =========================
-# Healthcheck 엔드포인트 (인증 불필요)
-# =========================
-@app.route("/health", methods=["GET"])
-@app.route("/api/health", methods=["GET"])
-def health_check():
-    """Railway healthcheck용 엔드포인트 - 인증 불필요"""
-    return "OK", 200
 
 # =========================
 # 총책임자 대시보드
