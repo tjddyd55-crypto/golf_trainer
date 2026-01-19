@@ -5,7 +5,7 @@ import sys
 print("### SUPER_ADMIN BOOT START ###", flush=True)
 print("### SERVICE=super_admin ###", flush=True)
 print("### PORT env =", os.getenv("PORT"), flush=True)
-print("PYTHONPATH:", sys.path, flush=True)
+print("SYS.PATH =", sys.path, flush=True)
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import re
