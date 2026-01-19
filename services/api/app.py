@@ -109,21 +109,20 @@ from shared import database
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_in_production")
 
+# ✅ [4단계] 앱 기동 확인용 로그 강제 삽입
+print("### APP BOOT COMPLETED ###", flush=True)
+
+# ✅ [2단계] 앱 기동만 되면 바로 200을 반환하도록 최소화
+@app.route("/")
+def root_ok():
+    """Railway Healthcheck용 - 앱 기동만 되면 바로 200 반환"""
+    return "OK", 200
+
 # 테스트 모드 스위치 (기본값: False)
 TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 
 # 데이터베이스 초기화
 database.init_db()
-
-# =========================
-# 헬스 체크 (Railway Healthcheck용 - 무조건 200 반환)
-# =========================
-@app.route("/api/health", methods=["GET"])
-@app.route("/health", methods=["GET"])
-@app.route("/", methods=["GET"])
-def health_check():
-    """Railway Healthcheck용 엔드포인트 - 무조건 200 반환 (DB 체크, 인증 등 절대 없음)"""
-    return "OK", 200
 
 # =========================
 # 샷 데이터 저장 API (main.py에서 사용)
