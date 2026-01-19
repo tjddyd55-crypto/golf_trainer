@@ -265,10 +265,22 @@
         </div>
     </div>
 
+    <!-- ✅ 배포 확인용 빌드 마커 -->
+    <span id="build-marker" data-build="MANAGE_ALL_PCS__2026-01-19__v2" style="display: none;"></span>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ✅ 버전 식별용 로그 (배포 확인용)
+        console.log('[MANAGE_ALL_PCS] build=MANAGE_ALL_PCS__2026-01-19__v2');
         console.log('[MANAGE_ALL_PCS] Version: 2026-01-19-bay-id-warning-v2');
+        
+        // ✅ 빌드 마커 확인
+        const buildMarker = document.getElementById('build-marker');
+        if (buildMarker) {
+            console.log('[MANAGE_ALL_PCS] Build marker found:', buildMarker.getAttribute('data-build'));
+        } else {
+            console.warn('[MANAGE_ALL_PCS] Build marker NOT found!');
+        }
         
         let currentPcUniqueId = null;
         let currentStoreId = '';
