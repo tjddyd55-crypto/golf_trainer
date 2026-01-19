@@ -296,43 +296,41 @@
             currentStoreId = storeId || '';
             currentBayId = bayId || '';
             
-            // ✅ [1단계] PC 등록 시 전달된 bay_id를 원래 값으로 저장
-            if (bayId) {
-                const bayIdInt = parseInt(bayId, 10);
-                originalBayId = (!isNaN(bayIdInt) && bayIdInt > 0) ? bayIdInt : null;
-            } else {
-                originalBayId = null;
-            }
-            
             document.getElementById('approve-store-name').textContent = storeName;
             document.getElementById('approve-bay-name').textContent = bayName;
             document.getElementById('approve-pc-name').textContent = pcName || '-';
             
-            // ✅ [1단계] bay_id 입력 필드에 기본값 자동 입력
             const bayIdInput = document.getElementById('approve-bay-id');
-            if (originalBayId !== null) {
-                bayIdInput.value = originalBayId;
+            
+            // ✅ [2단계] 최초 1회만 자동 세팅
+            if (!bayIdInitialized) {
+                // PC 등록 시 전달된 bay_id를 원래 값으로 저장
+                if (bayId) {
+                    const bayIdInt = parseInt(bayId, 10);
+                    originalBayId = (!isNaN(bayIdInt) && bayIdInt > 0) ? bayIdInt : null;
+                } else {
+                    originalBayId = null;
+                }
+                
+                // bay_id 입력 필드에 기본값 자동 입력 (최초 1회만)
+                bayIdInput.value = originalBayId !== null ? originalBayId : '';
+                bayIdInitialized = true;
+                
+                console.log('[DEBUG] bay_id initialized:', originalBayId);
             } else {
-                bayIdInput.value = '';
+                console.log('[DEBUG] bay_id already initialized, not overwriting. Current value:', bayIdInput.value);
             }
             
             // ✅ [2단계] 타석 번호 수정 감지 이벤트 리스너 추가
             // 기존 이벤트 리스너 제거 (중복 방지)
-            const clonedInput = bayIdInput.cloneNode(true);
-            bayIdInput.parentNode.replaceChild(clonedInput, bayIdInput);
-            const newBayIdInput = document.getElementById('approve-bay-id');
+            bayIdInput.removeEventListener('change', handleBayIdChange);
+            bayIdInput.removeEventListener('blur', handleBayIdBlur);
             
             // change 이벤트: 값 변경 시 즉시 감지
-            newBayIdInput.addEventListener('change', handleBayIdChange);
+            bayIdInput.addEventListener('change', handleBayIdChange);
             
             // blur 이벤트: 포커스가 벗어날 때 감지
-            newBayIdInput.addEventListener('blur', handleBayIdBlur);
-            
-            // input 이벤트: 실시간 감지 (선택적)
-            newBayIdInput.addEventListener('input', function(e) {
-                // input 이벤트는 change/blur에서 처리하므로 여기서는 로그만
-                console.log('[DEBUG] bay_id input changed:', e.target.value);
-            });
+            bayIdInput.addEventListener('blur', handleBayIdBlur);
             
             const today = new Date().toISOString().split('T')[0];
             const oneYearLater = new Date();
@@ -344,30 +342,46 @@
             document.getElementById('approve-approved-date').value = approvedDate || today;
             document.getElementById('approve-notes').value = '';
             
-            new bootstrap.Modal(document.getElementById('approveModal')).show();
+            const approveModal = new bootstrap.Modal(document.getElementById('approveModal'));
+            approveModal.show();
+            
+            // ✅ [5단계] 모달 닫힐 때 상태 초기화
+            const approveModalElement = document.getElementById('approveModal');
+            approveModalElement.addEventListener('hidden.bs.modal', function onModalHidden() {
+                bayIdInitialized = false;
+                originalBayId = null;
+                pendingBayIdChange = null;
+                console.log('[DEBUG] Modal closed, state reset');
+                // 이벤트 리스너 제거 (중복 방지)
+                approveModalElement.removeEventListener('hidden.bs.modal', onModalHidden);
+            }, { once: true });
         }
         
-        // ✅ [2단계] 타석 번호 변경 감지 함수
+        // ✅ [3단계] bay_id 변경 감지 로직 수정
         function handleBayIdChange(event) {
             const bayIdInput = event.target;
-            const newValue = bayIdInput.value.trim();
+            const current = parseInt(bayIdInput.value.trim(), 10);
             
-            // 빈 값이면 무시
-            if (!newValue) {
+            // originalBayId가 없으면 무시
+            if (originalBayId === null) {
                 return;
             }
             
-            const newValueInt = parseInt(newValue, 10);
-            
             // 숫자가 아니거나 0 이하면 무시
-            if (isNaN(newValueInt) || newValueInt <= 0) {
+            if (isNaN(current) || current <= 0) {
                 return;
             }
             
             // ✅ 원래 값과 다른 경우에만 경고 모달 표시
-            if (originalBayId !== null && newValueInt !== originalBayId) {
-                pendingBayIdChange = newValueInt;
-                showBayIdChangeWarning(originalBayId, newValueInt);
+            // 단, 경고 모달이 이미 열려있지 않은 경우에만 표시 (중복 방지)
+            if (current !== originalBayId) {
+                const warningModal = bootstrap.Modal.getInstance(document.getElementById('bayIdChangeWarningModal'));
+                const isWarningModalOpen = warningModal && warningModal._element && warningModal._element.classList.contains('show');
+                
+                if (!isWarningModalOpen) {
+                    pendingBayIdChange = current;
+                    showBayIdChangeWarning(originalBayId, current);
+                }
             }
         }
         
