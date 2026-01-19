@@ -404,6 +404,9 @@ def register_pc_new():
         store_name = store.get("store_name")
         bays_count = store.get("bays_count", 0) or 0
         
+        # ✅ STEP1: store_name 최초 조회 직후
+        print("[DEBUG][STEP1] fetched store_name =", store_name)
+        
         # store_name 명시적 검증 (None, 빈 문자열, 공백 모두 체크)
         if not store_name or not str(store_name).strip():
             cur.close()
@@ -494,6 +497,9 @@ def register_pc_new():
         
         print(f"[PC 등록 API] store_pcs 테이블 중복 체크 완료: store_id={store_id}, bay_number={bay_number} (중복 없음)")
         
+        # ✅ STEP2: 중복 체크 로직 직후
+        print("[DEBUG][STEP2] before insert store_name =", store_name)
+        
         # bay_id 생성 (내부 키로 사용, UUID 기반)
         import uuid
         bay_id = str(uuid.uuid4())[:8]  # 간단한 ID
@@ -563,8 +569,25 @@ def register_pc_new():
             print(f"[PC 등록 API] store_name이 None: store_id={store_id} (INSERT 실행 안 함)")
             return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
         
-        # ✅ INSERT 직전 디버그 로그
-        print("[DEBUG][FINAL] INSERT store_name =", store_name)
+        # ✅ STEP3: INSERT 바로 직전
+        print("[DEBUG][STEP3] final store_name =", store_name)
+        
+        # ✅ 임시 검증: assert 추가
+        assert store_name is not None, "store_name is None before INSERT"
+        
+        # ✅ STEP4: INSERT dict 바인딩 전체 로그
+        insert_params = {
+            "store_name": store_name,
+            "store_id": store_id,
+            "bay_name": bay_name,
+            "pc_uuid": pc_uuid,
+            "pc_unique_id": pc_unique_id,
+            "pc_name": pc_name,
+            "bay_id": bay_id,
+            "bay_number": bay_number
+        }
+        print("[DEBUG][STEP4] insert params =", insert_params)
+        
         print(f"[PC 등록 API] store_pcs INSERT 시작: store_name={store_name}, store_id={store_id}")
         
         try:
@@ -593,16 +616,7 @@ def register_pc_new():
                     %(bay_number)s,
                     'pending'
                 )
-            """, {
-                "store_name": store_name,
-                "store_id": store_id,
-                "bay_name": bay_name,
-                "pc_uuid": pc_uuid,
-                "pc_unique_id": pc_unique_id,
-                "pc_name": pc_name,
-                "bay_id": bay_id,
-                "bay_number": bay_number
-            })
+            """, insert_params)
             
             print(f"[PC 등록 API] store_pcs INSERT 완료")
         except Exception as e:
