@@ -548,32 +548,43 @@ def register_pc_new():
         print(f"[PC 등록 API] store_name 최종 확인: store_id={store_id}, store_name={store_name}")
         
         # store_pcs INSERT (동일 PC 재등록은 이미 위에서 체크했으므로 INSERT만 실행)
-        # status는 'pending'으로 설정 (관리자 승인 대기)
-        # bay_id는 UUID 문자열로 저장 (bay_number는 별도 컬럼)
-        # ✅ store_name 필수 포함 (NOT NULL 제약조건)
-        # ✅ 컬럼 순서와 VALUES 바인딩 순서 1:1 일치
-        print(f"[PC 등록 API] store_pcs INSERT 시작: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}, pc_unique_id={pc_unique_id}")
+        # ✅ 최소 컬럼 기준으로 INSERT 구문 작성 (자동 컬럼은 DB default 사용)
+        # ✅ 컬럼 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, status
+        # ✅ VALUES 바인딩 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number
+        # status는 'pending'으로 고정, registered_at는 DB default 사용
+        
+        # pc_uuid는 pc_unique_id와 동일하게 사용 (PC 고유 식별자)
+        pc_uuid = pc_unique_id
+        
+        # ✅ INSERT 직전 디버그 로그
+        print("[DEBUG] store_name =", store_name)
+        print("[DEBUG] store_id =", store_id)
+        print("[DEBUG] bay_name =", bay_name)
+        print("[DEBUG] pc_uuid =", pc_uuid)
+        print("[DEBUG] bay_id =", bay_id)
+        print("[DEBUG] bay_number =", bay_number)
+        
+        print(f"[PC 등록 API] store_pcs INSERT 시작")
         
         try:
-            # INSERT만 실행 (ON CONFLICT는 동일 PC 재등록 체크에서 이미 걸러졌으므로 발생하지 않음)
-            # ✅ 컬럼 순서와 VALUES 바인딩 순서 1:1 일치 확인
-            # 컬럼: store_id, store_name, bay_id, bay_name, pc_unique_id, status, registered_at, bay_number
-            # VALUES: store_id, store_name, bay_id, bay_name, pc_unique_id, 'pending', CURRENT_TIMESTAMP, bay_number
-            # 바인딩: (store_id, store_name, bay_id, bay_name, pc_unique_id, bay_number)
-            print(f"[DEBUG] INSERT 바인딩 값: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_name={bay_name}, pc_unique_id={pc_unique_id}, bay_number={bay_number}")
-            
+            # ✅ 최소 컬럼 기준 INSERT (컬럼 순서와 VALUES 바인딩 순서 정확히 일치)
             cur.execute("""
                 INSERT INTO store_pcs (
-                    store_id, store_name, bay_id, bay_name, pc_unique_id, 
-                    status, registered_at, bay_number
+                    store_name,
+                    store_id,
+                    bay_name,
+                    pc_uuid,
+                    bay_id,
+                    bay_number,
+                    status
+                ) VALUES (
+                    %s, %s, %s, %s, %s, %s, 'pending'
                 )
-                VALUES (%s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP, %s)
-            """, (store_id, store_name, bay_id, bay_name, pc_unique_id, bay_number))
+            """, (store_name, store_id, bay_name, pc_uuid, bay_id, bay_number))
             
             print(f"[PC 등록 API] store_pcs INSERT 완료")
         except Exception as e:
             print(f"[PC 등록 API] store_pcs INSERT 오류: {e}")
-            print(f"[PC 등록 API] INSERT 시도 값: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}, pc_unique_id={pc_unique_id}")
             import traceback
             traceback.print_exc()
             conn.rollback()
