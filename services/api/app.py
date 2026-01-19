@@ -391,8 +391,8 @@ def register_pc_new():
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # ✅ [1단계] store_name 생성 지점 단일화 - 명시적 SELECT + 안전한 파싱
-        # store_id로 store_name 조회 (필수) - row[0] 인덱스 접근 또는 row["store_name"] 키 접근만 사용
+        # ✅ [1단계] store_name 생성 지점 단일화 - 명시적 SELECT + row[0] 인덱스 접근
+        # store_id로 store_name 조회 (필수) - row[0] 인덱스 접근만 사용
         # ❌ 금지: row.values()[0], list(row.values()), store.get("store_name")
         cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
         row = cur.fetchone()
@@ -403,15 +403,11 @@ def register_pc_new():
             print(f"[PC 등록 API] 매장 조회 실패: store_id={store_id} (매장 없음)")
             return jsonify({"ok": False, "error": "존재하지 않는 매장입니다."}), 404
         
-        # ✅ row[0] 인덱스 접근으로 store_name 강제 추출 (RealDictCursor 사용 시에도 안전)
-        # RealDictCursor는 dict를 반환하지만, 단일 컬럼 조회이므로 row[0] 또는 row["store_name"] 모두 안전
+        # ✅ row[0] 인덱스 접근으로 store_name 강제 추출
+        # RealDictCursor를 사용하더라도 단일 컬럼 조회이므로 row[0] 접근 안전
         if isinstance(row, dict):
-            # RealDictCursor 사용 시 키 접근 (가장 안전)
-            store_name = row.get("store_name") if "store_name" in row else None
-            # 키 접근이 실패하면 인덱스 접근 시도
-            if store_name is None:
-                row_list = list(row.values())
-                store_name = row_list[0] if len(row_list) > 0 else None
+            # RealDictCursor는 dict를 반환하지만, 단일 컬럼이므로 키 접근 사용
+            store_name = row["store_name"] if "store_name" in row else None
         else:
             # tuple/list인 경우 인덱스 접근
             store_name = row[0] if len(row) > 0 else None
@@ -434,7 +430,10 @@ def register_pc_new():
         # bays_count 조회 (별도 쿼리)
         cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
         bays_row = cur.fetchone()
-        bays_count = int(bays_row[0] if isinstance(bays_row, (list, tuple)) else (bays_row.get("bays_count", 0) if isinstance(bays_row, dict) else 0)) if bays_row else 0
+        if isinstance(bays_row, dict):
+            bays_count = int(bays_row["bays_count"]) if "bays_count" in bays_row else 0
+        else:
+            bays_count = int(bays_row[0]) if bays_row and len(bays_row) > 0 else 0
         
         print(f"[PC 등록 API] 매장 조회 완료: store_id={store_id}, store_name={store_name}, bays_count={bays_count}")
         
