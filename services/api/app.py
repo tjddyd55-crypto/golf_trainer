@@ -233,7 +233,225 @@ def get_store():
         }), 500
 
 # =========================
-# PC 등록 API (register_pc.py에서 사용)
+# 매장 좌석 상태 조회 API (PC 등록 프로그램에서 사용)
+# =========================
+@app.route("/api/stores/<store_id>/bays", methods=["GET"])
+def get_store_bays(store_id):
+    """
+    매장 좌석 상태 조회 API
+    
+    Response:
+    {
+      "store_id": "A",
+      "bays_count": 10,
+      "bays": [
+        {"bay_number": 1, "bay_name": "1번룸", "assigned": true},
+        {"bay_number": 2, "bay_name": null, "assigned": false},
+        ...
+      ]
+    }
+    """
+    try:
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # 매장 정보 조회
+        cur.execute("SELECT store_id, store_name, bays_count FROM stores WHERE store_id = %s", (store_id,))
+        store = cur.fetchone()
+        
+        if not store:
+            cur.close()
+            conn.close()
+            return jsonify({"error": "매장을 찾을 수 없습니다."}), 404
+        
+        bays_count = store.get("bays_count", 0) or 0
+        
+        # bays 테이블에서 할당된 타석 조회
+        cur.execute("""
+            SELECT 
+                b.bay_number,
+                b.bay_name,
+                b.assigned_pc_unique_id,
+                sp.pc_unique_id as pc_connected
+            FROM bays b
+            LEFT JOIN store_pcs sp ON sp.store_id = b.store_id 
+                AND (sp.bay_id = b.bay_id OR sp.bay_number = b.bay_number::TEXT)
+                AND sp.status = 'active'
+            WHERE b.store_id = %s
+            ORDER BY b.bay_number
+        """, (store_id,))
+        
+        assigned_bays = {row.get("bay_number"): row for row in cur.fetchall()}
+        
+        # store_pcs에서도 할당 상태 확인 (bay_number 기준)
+        cur.execute("""
+            SELECT DISTINCT
+                CAST(bay_id AS INTEGER) as bay_number,
+                bay_name
+            FROM store_pcs
+            WHERE store_id = %s
+              AND status = 'active'
+              AND bay_id IS NOT NULL
+              AND bay_id ~ '^[0-9]+$'
+        """, (store_id,))
+        
+        pc_assigned_bays = {row.get("bay_number"): row for row in cur.fetchall()}
+        
+        # 모든 타석 목록 생성 (1..bays_count)
+        bays = []
+        for bay_num in range(1, bays_count + 1):
+            bay_info = assigned_bays.get(bay_num) or pc_assigned_bays.get(bay_num)
+            
+            assigned = False
+            bay_name = None
+            
+            if bay_info:
+                assigned = bool(bay_info.get("assigned_pc_unique_id") or bay_info.get("pc_connected") or bay_info.get("bay_name"))
+                bay_name = bay_info.get("bay_name")
+            
+            bays.append({
+                "bay_number": bay_num,
+                "bay_name": bay_name,
+                "assigned": assigned
+            })
+        
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "store_id": store_id,
+            "bays_count": bays_count,
+            "bays": bays
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] get_store_bays 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# =========================
+# PC 등록 API (새로운 방식: bay_number 기반)
+# =========================
+@app.route("/api/pcs/register", methods=["POST"])
+def register_pc_new():
+    """
+    PC 등록 API (bay_number 기반)
+    
+    Request:
+    {
+      "store_id": "A",
+      "pc_unique_id": "xxx",
+      "bay_number": 3,
+      "bay_name": "VIP룸"  // optional
+    }
+    
+    Response:
+    {
+      "ok": true,
+      "store_id": "A",
+      "bay_id": "...",
+      "bay_number": 3,
+      "bay_name": "VIP룸"
+    }
+    """
+    try:
+        data = request.get_json()
+        store_id = data.get("store_id")
+        pc_unique_id = data.get("pc_unique_id")
+        bay_number = data.get("bay_number")
+        bay_name = data.get("bay_name")
+        
+        if not store_id or not pc_unique_id or bay_number is None:
+            return jsonify({
+                "ok": False,
+                "error": "store_id, pc_unique_id, bay_number are required"
+            }), 400
+        
+        # bay_number 범위 확인
+        from psycopg2.extras import RealDictCursor
+        conn = database.get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
+        store = cur.fetchone()
+        
+        if not store:
+            cur.close()
+            conn.close()
+            return jsonify({"ok": False, "error": "매장을 찾을 수 없습니다."}), 404
+        
+        bays_count = store.get("bays_count", 0) or 0
+        
+        if bay_number < 1 or bay_number > bays_count:
+            cur.close()
+            conn.close()
+            return jsonify({
+                "ok": False,
+                "error": f"bay_number는 1부터 {bays_count} 사이여야 합니다."
+            }), 400
+        
+        # 중복 확인 (store_id, bay_number)
+        cur.execute("""
+            SELECT 1
+            FROM bays
+            WHERE store_id = %s
+              AND bay_number = %s
+            LIMIT 1
+        """, (store_id, bay_number))
+        
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            return jsonify({
+                "ok": False,
+                "error": f"타석 번호 {bay_number}는 이미 할당되어 있습니다."
+            }), 409
+        
+        # bay_id 생성 (UUID 또는 store_id_bay_number 형식)
+        import uuid
+        bay_id = str(uuid.uuid4())[:8]  # 간단한 ID
+        
+        # bays 테이블에 생성
+        cur.execute("""
+            INSERT INTO bays (store_id, bay_id, bay_number, bay_name, status, assigned_pc_unique_id)
+            VALUES (%s, %s, %s, %s, 'READY', %s)
+            ON CONFLICT (store_id, bay_id) DO UPDATE
+            SET bay_number = EXCLUDED.bay_number,
+                bay_name = EXCLUDED.bay_name,
+                assigned_pc_unique_id = EXCLUDED.assigned_pc_unique_id
+        """, (store_id, bay_id, bay_number, bay_name, pc_unique_id))
+        
+        # store_pcs 업데이트 (기존 PC가 있으면)
+        cur.execute("""
+            UPDATE store_pcs
+            SET store_id = %s,
+                bay_id = %s,
+                bay_name = COALESCE(%s, bay_name)
+            WHERE pc_unique_id = %s
+        """, (store_id, str(bay_number), bay_name, pc_unique_id))
+        
+        conn.commit()
+        cur.close()
+        conn.close()
+        
+        return jsonify({
+            "ok": True,
+            "store_id": store_id,
+            "bay_id": bay_id,
+            "bay_number": bay_number,
+            "bay_name": bay_name
+        })
+        
+    except Exception as e:
+        print(f"[ERROR] register_pc_new 오류: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"ok": False, "error": str(e)}), 500
+
+# =========================
+# PC 등록 API (기존 방식: 등록 키 기반)
 # =========================
 @app.route("/api/register_pc", methods=["POST"])
 @app.route("/pc/register", methods=["POST"])

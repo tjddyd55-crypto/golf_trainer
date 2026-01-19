@@ -136,15 +136,18 @@ def init_db():
     except Exception:
         pass
 
-    # 4️⃣ 타석 테이블 (코드 필드 추가)
+    # 4️⃣ 타석 테이블 (bay_number 추가, UNIQUE 제약조건)
     cur.execute("""
     CREATE TABLE IF NOT EXISTS bays (
         store_id    TEXT,
         bay_id      TEXT,
+        bay_number  INTEGER,
+        bay_name    TEXT,
         status      TEXT,
         user_id     TEXT,
         last_update TEXT,
         bay_code    TEXT UNIQUE,
+        assigned_pc_unique_id TEXT,
         PRIMARY KEY (store_id, bay_id)
     )
     """)
@@ -154,6 +157,33 @@ def init_db():
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bay_code ON bays(bay_code)")
     except Exception:
         pass
+    
+    # bay_number 컬럼 추가 (마이그레이션)
+    try:
+        cur.execute("ALTER TABLE bays ADD COLUMN IF NOT EXISTS bay_number INTEGER")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE bays ADD COLUMN IF NOT EXISTS bay_name TEXT")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE bays ADD COLUMN IF NOT EXISTS assigned_pc_unique_id TEXT")
+    except Exception:
+        pass
+    
+    # ✅ 1-2. 유니크 제약조건 (store_id, bay_number) 중복 방지
+    try:
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_bays_store_baynumber
+            ON bays(store_id, bay_number)
+            WHERE bay_number IS NOT NULL
+        """)
+        print("[DB] bays 테이블 UNIQUE INDEX 생성 완료 (store_id, bay_number)")
+    except Exception as e:
+        print(f"[WARNING] bays UNIQUE INDEX 생성 실패 (이미 존재할 수 있음): {e}")
 
     # 5️⃣ 활성 세션 테이블
     cur.execute("""
