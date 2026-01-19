@@ -424,6 +424,31 @@ def register_pc_new():
                 "error": f"bay_number는 1부터 {bays_count} 사이여야 합니다."
             }), 400
         
+        # ✅ 동일 PC 재등록 확인 (pc_unique_id 기준)
+        cur.execute("""
+            SELECT store_id, bay_number, bay_name, status
+            FROM store_pcs
+            WHERE pc_unique_id = %s
+            LIMIT 1
+        """, (pc_unique_id,))
+        
+        existing_pc = cur.fetchone()
+        if existing_pc:
+            existing_store_id = existing_pc.get("store_id")
+            existing_bay_number = existing_pc.get("bay_number")
+            existing_bay_name = existing_pc.get("bay_name")
+            existing_status = existing_pc.get("status")
+            
+            # 동일 PC가 이미 등록되어 있으면 안내 메시지 반환
+            bay_display = existing_bay_name if existing_bay_name else f"{existing_bay_number}번 타석(룸)"
+            cur.close()
+            conn.close()
+            print(f"[PC 등록 API] 동일 PC 재등록 시도: pc_unique_id={pc_unique_id}, 기존 타석={bay_display}")
+            return jsonify({
+                "ok": False,
+                "error": f"이미 등록된 PC입니다. 현재 {bay_display}에 등록되어 있습니다. (상태: {existing_status})"
+            }), 409
+        
         # ✅ 중복 확인 1: bays 테이블에서 bay_number 중복 체크
         cur.execute("""
             SELECT 1
