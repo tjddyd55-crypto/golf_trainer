@@ -892,79 +892,59 @@ def get_all_stores():
 
 def get_bays(store_id):
     """
-    매장의 승인된 타석 목록만 반환 (store_pcs를 기준으로 조회)
+    매장의 승인된 타석 목록만 반환 (store_pcs 기준, 100% 단순화)
     
     ⚠️ READ-ONLY: 유저 조회 시 DB 수정 절대 금지
-    - bays 테이블 자동 생성/수정 로직 제거
-    - 관리자 승인 시에만 bays 테이블 생성/수정
+    - store_pcs만 조회 (bays 테이블 JOIN 제거)
+    - PC = 타석 = 유저 선택 대상
+    - bays 테이블은 관리/상태용으로만 사용
     """
     conn = get_db_connection()
     cur = conn.cursor(cursor_factory=RealDictCursor)
     
     try:
-        # 매장 존재 여부만 확인 (bays_count 필터링 제거)
+        # 매장 존재 여부만 확인
         cur.execute("SELECT store_id FROM stores WHERE store_id = %s", (store_id,))
         store = cur.fetchone()
         if not store:
             return []
         
-        # 승인된 PC가 있는 타석만 조회 (store_pcs를 기준으로 LEFT JOIN)
+        # ✅ 방법 1: store_pcs만 사용 (가장 안전)
+        # - DISTINCT 제거
+        # - COALESCE 제거
+        # - store_name 추론 제거
+        # - bays LEFT JOIN 제거
         from datetime import date
         today_str = date.today().strftime("%Y-%m-%d")
         
-        # 디버그: 먼저 store_pcs의 전체 데이터 확인
         cur.execute("""
-            SELECT store_id, store_name, bay_id, bay_name, status, usage_end_date
-            FROM store_pcs 
-            WHERE store_id = %s OR store_name IN (SELECT store_name FROM stores WHERE store_id = %s)
-        """, (store_id, store_id))
-        all_pcs = cur.fetchall()
-        print(f"[DEBUG] get_bays 전체 store_pcs: store_id={store_id}, 총 {len(all_pcs)}개")
-        for pc in all_pcs:
-            print(f"[DEBUG] PC: store_id={pc.get('store_id')}, store_name={pc.get('store_name')}, bay_id={pc.get('bay_id')}, bay_name={pc.get('bay_name')}, status={pc.get('status')}, usage_end_date={pc.get('usage_end_date')}")
-        
-        # store_pcs를 기준으로 조회하고, bays가 없으면 생성
-        # store_id 또는 store_name으로 조회 (PC 등록 시 store_name으로 저장될 수 있음)
-        cur.execute("""
-            SELECT DISTINCT 
-                COALESCE(b.bay_id, sp.bay_id) as bay_id,
-                COALESCE(sp.store_id, (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1)) as store_id,
-                COALESCE(b.status, 'READY') as status,
-                COALESCE(b.user_id, '') as user_id,
-                COALESCE(b.last_update, TO_CHAR(CURRENT_TIMESTAMP, 'YYYY-MM-DD HH24:MI:SS')) as last_update,
-                COALESCE(b.bay_code, CONCAT(COALESCE(sp.store_id, (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1)), '_', sp.bay_id)) as bay_code,
+            SELECT
+                sp.bay_id,
                 sp.bay_name,
                 sp.pc_name,
+                sp.store_id,
                 sp.status as pc_status,
                 sp.usage_end_date
             FROM store_pcs sp
-            LEFT JOIN bays b ON (b.store_id = sp.store_id OR b.store_id = (SELECT store_id FROM stores WHERE store_name = sp.store_name LIMIT 1))
-                                AND b.bay_id = sp.bay_id
-            WHERE (sp.store_id = %s OR sp.store_name IN (SELECT store_name FROM stores WHERE store_id = %s))
+            WHERE sp.store_id = %s
               AND sp.status = 'active'
               AND sp.bay_id IS NOT NULL
               AND sp.bay_id != ''
               AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date)
-            ORDER BY bay_id
-        """, (store_id, store_id, today_str))
+            ORDER BY sp.bay_id
+        """, (store_id, today_str))
         
         approved_bays = cur.fetchall()
         
-        # ✅ 2. 유저 타석 조회 SQL 원본 확인 로그
-        print(f"[SQL RESULT] get_bays 최종: store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
-        print(f"[SQL RESULT] SQL 쿼리: SELECT DISTINCT ... FROM store_pcs ... (LIMIT 없음, 모든 타석 반환)")
+        # ✅ SQL 결과 로그
+        print(f"[SQL RESULT] get_bays (store_pcs만 사용): store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
         for bay in approved_bays:
             print(f"[SQL RESULT] 타석: bay_id={bay.get('bay_id')}, bay_name={bay.get('bay_name')}, pc_name={bay.get('pc_name')}, pc_status={bay.get('pc_status')}, usage_end_date={bay.get('usage_end_date')}")
-        
-        # ⚠️ 유저 조회 시 DB 수정 금지: bays 테이블 자동 생성 로직 제거
-        # bays 테이블은 관리자 승인 시에만 생성/수정됨 (approve_pc)
-        # 유저는 조회만 수행: store_pcs 기준으로 승인된 타석만 반환
         
         cur.close()
         conn.close()
         
-        # 승인된 타석만 반환 (bays_count 필터링 제거 - 승인된 타석만 표시)
-        # 모든 승인된 타석을 반환 (문자열 bay_id 포함)
+        # 모든 승인된 타석 반환 (문자열 bay_id 포함)
         return [dict(bay) for bay in approved_bays]
         
     except Exception as e:
