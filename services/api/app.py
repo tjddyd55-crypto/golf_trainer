@@ -703,12 +703,21 @@ def register_pc_new():
         return jsonify({"ok": False, "error": str(e)}), 500
 
 # =========================
-# PC 등록 API (기존 방식: 등록 키 기반)
+# PC 등록 API (기존 방식: 등록 키 기반) - 레거시 차단
 # =========================
+# ✅ [5단계] 레거시 API 엔드포인트 차단
 @app.route("/api/register_pc", methods=["POST"])
 @app.route("/pc/register", methods=["POST"])
-def register_pc():
-    """PC 등록 API (등록 키 검증 후 토큰 발급)"""
+def legacy_register_pc():
+    """레거시 PC 등록 API - 구버전 등록프로그램 차단"""
+    return jsonify({
+        "ok": False,
+        "error": "구버전 등록프로그램입니다. 최신 버전을 사용하세요."
+    }), 410
+
+# 레거시 함수는 주석 처리 (참고용)
+# def register_pc():
+#     """PC 등록 API (등록 키 검증 후 토큰 발급)"""
     try:
         data = request.get_json()
         
