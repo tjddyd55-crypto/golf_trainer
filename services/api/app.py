@@ -412,11 +412,17 @@ def register_pc_new():
             # tuple/list인 경우 인덱스 접근
             store_name = row[0] if len(row) > 0 else None
         
-        # ✅ [TRACE][1] store_name 최초 조회 직후 (repr 사용)
-        print("[TRACE][1] fetched store_name =", repr(store_name))
+        # ✅ [TRACE][1] store_name 최초 조회 직후 (repr 사용) - 강제 flush
+        print("[TRACE][1] fetched store_name =", repr(store_name), flush=True)
+        import sys
+        sys.stdout.flush()
         
         # ✅ store_name 파싱 직후 강제 검증
-        assert isinstance(store_name, str) and store_name.strip() != "", "invalid store_name"
+        if not isinstance(store_name, str) or not store_name.strip():
+            print(f"[ERROR] invalid store_name: type={type(store_name)}, value={repr(store_name)}", flush=True)
+            cur.close()
+            conn.close()
+            return jsonify({"ok": False, "error": f"매장명(store_name)이 올바르지 않습니다. (type: {type(store_name)}, value: {repr(store_name)})"}), 400
         
         # store_name 문자열로 확실히 변환 및 검증
         store_name = str(store_name).strip()
@@ -576,8 +582,17 @@ def register_pc_new():
             "bay_id": bay_id,
             "bay_number": bay_number
         }
-        # repr 사용하여 정확한 값 확인
-        print("[TRACE][PARAMS]", {k: repr(v) for k, v in insert_params.items()})
+        # repr 사용하여 정확한 값 확인 - 강제 flush
+        print("[TRACE][PARAMS]", {k: repr(v) for k, v in insert_params.items()}, flush=True)
+        import sys
+        sys.stdout.flush()
+        
+        # ✅ insert_params의 store_name이 None인지 최종 확인
+        if insert_params.get("store_name") is None:
+            print(f"[ERROR] insert_params['store_name'] is None! insert_params={insert_params}", flush=True)
+            cur.close()
+            conn.close()
+            return jsonify({"ok": False, "error": "INSERT 파라미터에 store_name이 없습니다."}), 500
         
         print(f"[PC 등록 API] store_pcs INSERT 시작: store_name={store_name}, store_id={store_id}")
         
