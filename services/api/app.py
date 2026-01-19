@@ -366,18 +366,33 @@ def register_pc_new():
         bay_number = data.get("bay_number")
         bay_name = data.get("bay_name")
         
+        # ✅ 로그: 요청 payload 확인
+        print(f"[PC 등록 API] 요청 받음: store_id={store_id}, pc_unique_id={pc_unique_id}, bay_number={bay_number}, bay_name={bay_name}")
+        
         if not store_id or not pc_unique_id or bay_number is None:
             return jsonify({
                 "ok": False,
                 "error": "store_id, pc_unique_id, bay_number are required"
             }), 400
         
+        # bay_number 타입 확인 및 변환
+        try:
+            bay_number = int(bay_number)
+        except (ValueError, TypeError):
+            return jsonify({
+                "ok": False,
+                "error": f"bay_number는 숫자여야 합니다. (받은 값: {bay_number})"
+            }), 400
+        
+        print(f"[PC 등록 API] bay_number 검증 완료: {bay_number} (정수)")
+        
         # bay_number 범위 확인
         from psycopg2.extras import RealDictCursor
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
+        # store_id로 store_name 조회 (필수)
+        cur.execute("SELECT store_name, bays_count FROM stores WHERE store_id = %s", (store_id,))
         store = cur.fetchone()
         
         if not store:
@@ -385,7 +400,15 @@ def register_pc_new():
             conn.close()
             return jsonify({"ok": False, "error": "매장을 찾을 수 없습니다."}), 404
         
+        store_name = store.get("store_name")
         bays_count = store.get("bays_count", 0) or 0
+        
+        if not store_name:
+            cur.close()
+            conn.close()
+            return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
+        
+        print(f"[PC 등록 API] 매장 조회 완료: store_name={store_name}, bays_count={bays_count}")
         
         if bay_number < 1 or bay_number > bays_count:
             cur.close()
@@ -395,7 +418,7 @@ def register_pc_new():
                 "error": f"bay_number는 1부터 {bays_count} 사이여야 합니다."
             }), 400
         
-        # 중복 확인 (store_id, bay_number) - 409 반환
+        # ✅ 중복 확인 1: bays 테이블에서 bay_number 중복 체크
         cur.execute("""
             SELECT 1
             FROM bays
@@ -407,10 +430,32 @@ def register_pc_new():
         if cur.fetchone():
             cur.close()
             conn.close()
+            print(f"[PC 등록 API] 중복 발견 (bays 테이블): store_id={store_id}, bay_number={bay_number}")
             return jsonify({
                 "ok": False,
                 "error": f"타석 번호 {bay_number}는 이미 할당되어 있습니다."
             }), 409
+        
+        # ✅ 중복 확인 2: store_pcs 테이블에서 bay_number 중복 체크 (중요!)
+        cur.execute("""
+            SELECT 1
+            FROM store_pcs
+            WHERE store_id = %s
+              AND bay_number = %s
+              AND status IN ('pending', 'active')
+            LIMIT 1
+        """, (store_id, bay_number))
+        
+        if cur.fetchone():
+            cur.close()
+            conn.close()
+            print(f"[PC 등록 API] 중복 발견 (store_pcs 테이블): store_id={store_id}, bay_number={bay_number}")
+            return jsonify({
+                "ok": False,
+                "error": f"타석 번호 {bay_number}는 이미 할당되어 있습니다."
+            }), 409
+        
+        print(f"[PC 등록 API] 중복 체크 완료: store_id={store_id}, bay_number={bay_number} (중복 없음)")
         
         # bay_id 생성 (내부 키로 사용, UUID 기반)
         import uuid
@@ -429,14 +474,18 @@ def register_pc_new():
         # store_pcs INSERT 또는 UPDATE (PC가 없으면 INSERT, 있으면 UPDATE)
         # status는 'PENDING'으로 설정 (관리자 승인 대기)
         # bay_id는 UUID 문자열로 저장 (bay_number는 별도 컬럼)
+        # ✅ store_name 필수 포함 (NOT NULL 제약조건)
+        print(f"[PC 등록 API] store_pcs INSERT 시작: store_id={store_id}, store_name={store_name}, bay_id={bay_id}, bay_number={bay_number}")
+        
         cur.execute("""
             INSERT INTO store_pcs (
-                store_id, bay_id, bay_name, pc_unique_id, 
+                store_id, store_name, bay_id, bay_name, pc_unique_id, 
                 status, registered_at, bay_number
             )
-            VALUES (%s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP, %s)
+            VALUES (%s, %s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP, %s)
             ON CONFLICT (pc_unique_id) DO UPDATE SET
                 store_id = EXCLUDED.store_id,
+                store_name = EXCLUDED.store_name,
                 bay_id = EXCLUDED.bay_id,
                 bay_name = COALESCE(EXCLUDED.bay_name, store_pcs.bay_name),
                 bay_number = EXCLUDED.bay_number,
@@ -444,7 +493,9 @@ def register_pc_new():
                     WHEN store_pcs.status = 'active' THEN 'active'  -- 이미 승인된 경우 유지
                     ELSE 'pending'  -- 새 등록이면 대기 상태
                 END
-        """, (store_id, bay_id, bay_name, pc_unique_id, bay_number))
+        """, (store_id, store_name, bay_id, bay_name, pc_unique_id, bay_number))
+        
+        print(f"[PC 등록 API] store_pcs INSERT 완료")
         
         # DB commit 확인 후 응답
         conn.commit()
