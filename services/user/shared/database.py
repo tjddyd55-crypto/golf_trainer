@@ -938,42 +938,43 @@ def get_bays(store_id):
         if not store:
             return []
         
-        # ✅ 방법 1: store_pcs만 사용 (가장 안전)
-        # - DISTINCT 제거
-        # - COALESCE 제거
-        # - store_name 추론 제거
-        # - bays LEFT JOIN 제거
+        # bays 테이블에서 조회 (bay_number, bay_name 포함)
+        # store_pcs와 조인하여 active 상태인 타석만 반환
         from datetime import date
         today_str = date.today().strftime("%Y-%m-%d")
         
         cur.execute("""
-            SELECT
-                sp.bay_id,
-                sp.bay_name,
+            SELECT DISTINCT
+                b.bay_id,
+                b.bay_number,
+                b.bay_name,
+                b.status,
                 sp.pc_name,
-                sp.store_id,
                 sp.status as pc_status,
                 sp.usage_end_date
-            FROM store_pcs sp
-            WHERE sp.store_id = %s
-              AND sp.status = 'active'
-              AND sp.bay_id IS NOT NULL
-              AND sp.bay_id != ''
-              AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date)
-            ORDER BY sp.bay_id
-        """, (store_id, today_str))
+            FROM bays b
+            INNER JOIN store_pcs sp ON (
+                sp.store_id = b.store_id 
+                AND (sp.bay_id = b.bay_id OR sp.bay_id = CAST(b.bay_number AS TEXT))
+                AND sp.status = 'active'
+                AND (sp.usage_end_date IS NULL OR sp.usage_end_date::date >= %s::date)
+            )
+            WHERE b.store_id = %s
+              AND b.bay_number IS NOT NULL
+            ORDER BY b.bay_number
+        """, (today_str, store_id))
         
         approved_bays = cur.fetchall()
         
         # ✅ SQL 결과 로그
-        print(f"[SQL RESULT] get_bays (store_pcs만 사용): store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
+        print(f"[SQL RESULT] get_bays: store_id={store_id}, 조회된 타석 수={len(approved_bays)}")
         for bay in approved_bays:
-            print(f"[SQL RESULT] 타석: bay_id={bay.get('bay_id')}, bay_name={bay.get('bay_name')}, pc_name={bay.get('pc_name')}, pc_status={bay.get('pc_status')}, usage_end_date={bay.get('usage_end_date')}")
+            print(f"[SQL RESULT] 타석: bay_id={bay.get('bay_id')}, bay_number={bay.get('bay_number')}, bay_name={bay.get('bay_name')}")
         
         cur.close()
         conn.close()
         
-        # 모든 승인된 타석 반환 (문자열 bay_id 포함)
+        # bay_number와 bay_name 포함하여 반환
         return [dict(bay) for bay in approved_bays]
         
     except Exception as e:
