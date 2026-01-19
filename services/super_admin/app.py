@@ -1,12 +1,13 @@
 # ===== services/super_admin/app.py (총책임자 서비스) =====
 # ✅ [1단계] 서비스 부팅 확인 로그 (가장 먼저 출력)
 import os
+import sys
 print("### SUPER_ADMIN BOOT START ###", flush=True)
 print("### SERVICE=super_admin ###", flush=True)
 print("### PORT env =", os.getenv("PORT"), flush=True)
+print("PYTHONPATH:", sys.path, flush=True)
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-import sys
 import re
 import traceback
 from datetime import datetime
