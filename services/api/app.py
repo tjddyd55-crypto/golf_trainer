@@ -375,8 +375,13 @@ def register_pc_new():
         bay_number = data.get("bay_number")
         bay_name = data.get("bay_name")
         
+        # ✅ [1단계] pc_uuid 초기화 (함수 시작부에서 항상 초기화)
+        # 요청 payload에 pc_uuid가 있으면 그대로 사용, 없으면 pc_unique_id로 대체
+        pc_uuid = data.get("pc_uuid") or pc_unique_id
+        pc_name = data.get("pc_name") or None  # 나중에 bay_name 기반으로 생성
+        
         # ✅ 로그: 요청 payload 확인
-        print(f"[PC 등록 API] 요청 받음: store_id={store_id}, pc_unique_id={pc_unique_id}, bay_number={bay_number}, bay_name={bay_name}")
+        print(f"[PC 등록 API] 요청 받음: store_id={store_id}, pc_unique_id={pc_unique_id}, bay_number={bay_number}, bay_name={bay_name}, pc_uuid={pc_uuid}")
         
         if not store_id or not pc_unique_id or bay_number is None:
             return jsonify({
@@ -573,6 +578,27 @@ def register_pc_new():
         print("[TRACE][FINAL] store_name =", repr(store_name))
         assert isinstance(store_name, str) and store_name.strip() != "", "store_name invalid"
         
+        # ✅ [2단계] pc_uuid와 pc_name 최종 보장 (insert_params 구성 전에 반드시 설정)
+        # pc_uuid: 요청에서 받았거나 pc_unique_id로 대체 (이미 위에서 초기화됨)
+        if not pc_uuid:
+            pc_uuid = pc_unique_id
+        
+        # pc_name: 요청에서 받았거나 bay_name 기반으로 생성
+        if not pc_name:
+            pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
+        
+        # ✅ [3단계] payload 구성 전 검증 로그
+        print("[REGISTER_PC_FINAL]", flush=True)
+        print(f"  pc_uuid={repr(pc_uuid)}", flush=True)
+        print(f"  pc_unique_id={repr(pc_unique_id)}", flush=True)
+        print(f"  pc_name={repr(pc_name)}", flush=True)
+        import sys
+        sys.stdout.flush()
+        
+        # ✅ [4단계] pc_uuid가 None인 상태로 payload에 들어가는 경우는 절대 없도록 assert 추가
+        assert pc_uuid is not None, "pc_uuid must not be None"
+        assert pc_name is not None, "pc_name must not be None"
+        
         # ✅ [3단계] INSERT 파라미터 강제 고정
         # insert_params를 명시적으로 구성 (키명 정확히 일치 보장)
         # 필수 키: store_name, store_id, bay_id, bay_name, pc_unique_id, bay_number
@@ -583,13 +609,12 @@ def register_pc_new():
             "bay_id": bay_id,
             "bay_name": bay_name,
             "pc_unique_id": pc_unique_id,
-            "pc_uuid": pc_uuid,
-            "pc_name": pc_name,
+            "pc_uuid": pc_uuid,            # ✅ 이제 확실히 초기화됨
+            "pc_name": pc_name,            # ✅ 이제 확실히 초기화됨
             "bay_number": bay_number
         }
         # repr 사용하여 정확한 값 확인 - 강제 flush
         print("[TRACE][PARAMS]", {k: repr(v) for k, v in insert_params.items()}, flush=True)
-        import sys
         sys.stdout.flush()
         
         # ✅ insert_params의 store_name이 None인지 최종 확인
@@ -601,9 +626,7 @@ def register_pc_new():
         
         # ✅ [2단계] INSERT SQL 단일화 (정답 SQL)
         # store_name 포함, ON CONFLICT 처리 포함
-        # pc_name과 pc_uuid는 NOT NULL이므로 기본값 설정 필요
-        pc_uuid = pc_unique_id
-        pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
+        # pc_name과 pc_uuid는 NOT NULL이므로 기본값 설정 필요 (이미 위에서 설정됨)
         
         SQL_STRING = """
             INSERT INTO store_pcs (
