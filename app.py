@@ -5,39 +5,74 @@ import sys
 # 프로젝트 루트를 sys.path에 추가 (Railway 환경 대응)
 current_file = os.path.abspath(__file__)
 current_dir = os.path.dirname(current_file)
+cwd = os.getcwd()
 
 # 여러 가능한 경로를 sys.path에 추가
 paths_to_add = [
     current_dir,  # 현재 파일의 디렉토리 (프로젝트 루트)
-    os.path.join(current_dir, '..'),  # 상위 디렉토리 (만약 서브디렉토리에서 실행되는 경우)
-    os.path.abspath('.'),  # 현재 작업 디렉토리
+    cwd,  # 현재 작업 디렉토리
+    os.path.join(current_dir, '..'),  # 상위 디렉토리
+    os.path.join(current_dir, '../..'),  # 상위의 상위
     '/app',  # Railway의 일반적인 작업 디렉토리
 ]
 
 for path in paths_to_add:
-    abs_path = os.path.abspath(path)
-    if os.path.exists(abs_path) and abs_path not in sys.path:
-        sys.path.insert(0, abs_path)
+    try:
+        abs_path = os.path.abspath(path)
+        if os.path.exists(abs_path) and abs_path not in sys.path:
+            sys.path.insert(0, abs_path)
+    except Exception:
+        pass
 
 # 디버깅: 경로 확인
 print(f"[ROOT APP] __file__: {current_file}", flush=True)
 print(f"[ROOT APP] Current dir: {current_dir}", flush=True)
-print(f"[ROOT APP] CWD: {os.getcwd()}", flush=True)
+print(f"[ROOT APP] CWD: {cwd}", flush=True)
 print(f"[ROOT APP] sys.path (first 5): {sys.path[:5]}", flush=True)
 
-# services 디렉토리 존재 확인
-services_path = os.path.join(current_dir, 'services')
-if not os.path.exists(services_path):
-    # 다른 위치에서 찾기 시도
-    for path in sys.path:
-        test_path = os.path.join(path, 'services')
-        if os.path.exists(test_path):
-            print(f"[ROOT APP] Found services at: {test_path}", flush=True)
+# services 디렉토리 찾기
+services_found = False
+services_path = None
+
+# 여러 위치에서 services 찾기 시도
+search_paths = [current_dir, cwd] + sys.path[:10]
+for path in search_paths:
+    try:
+        test_path = os.path.join(os.path.abspath(path), 'services')
+        if os.path.exists(test_path) and os.path.isdir(test_path):
+            services_path = test_path
+            services_found = True
+            print(f"[ROOT APP] Found services at: {services_path}", flush=True)
+            # services의 부모 디렉토리를 sys.path에 추가
+            parent = os.path.dirname(services_path)
+            if parent not in sys.path:
+                sys.path.insert(0, parent)
             break
-    else:
-        print(f"[ROOT APP] ERROR: services directory not found!", flush=True)
-        print(f"[ROOT APP] Searched in: {sys.path[:5]}", flush=True)
-else:
-    print(f"[ROOT APP] services directory found at: {services_path}", flush=True)
+    except Exception as e:
+        continue
+
+if not services_found:
+    print(f"[ROOT APP] ERROR: services directory not found!", flush=True)
+    print(f"[ROOT APP] Searched in: {search_paths[:10]}", flush=True)
+    # 최후의 수단: 현재 디렉토리에서 재귀적으로 찾기
+    for root, dirs, files in os.walk(os.path.abspath('.'), topdown=True):
+        if 'services' in dirs:
+            services_path = os.path.join(root, 'services')
+            parent = root
+            if parent not in sys.path:
+                sys.path.insert(0, parent)
+            print(f"[ROOT APP] Found services recursively at: {services_path}", flush=True)
+            services_found = True
+            break
+        # 최대 3단계까지만 탐색
+        depth = root.replace(os.path.abspath('.'), '').count(os.sep)
+        if depth >= 3:
+            dirs[:] = []  # 더 깊이 탐색하지 않음
+
+if not services_found:
+    raise ImportError("Cannot find 'services' directory. Check Railway working directory and file structure.")
+
+# 최종 sys.path 확인
+print(f"[ROOT APP] Final sys.path (first 5): {sys.path[:5]}", flush=True)
 
 from services.super_admin.app import app
