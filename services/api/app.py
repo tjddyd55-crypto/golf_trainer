@@ -560,12 +560,6 @@ def register_pc_new():
         # store_pcs INSERT (동일 PC 재등록은 이미 위에서 체크했으므로 INSERT만 실행)
         # ✅ dict 바인딩(named parameter) 방식으로 전면 재작성 (컬럼 순서 의존성 완전 제거)
         
-        # pc_uuid는 pc_unique_id와 동일하게 사용 (PC 고유 식별자)
-        pc_uuid = pc_unique_id
-        
-        # pc_name은 NOT NULL이므로 기본값 설정
-        pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
-        
         # ✅ store_name None 체크 (INSERT 실행 전 필수)
         if store_name is None:
             cur.close()
@@ -580,12 +574,15 @@ def register_pc_new():
         # ✅ [3단계] INSERT 파라미터 강제 고정
         # insert_params를 명시적으로 구성 (키명 정확히 일치 보장)
         # 필수 키: store_name, store_id, bay_id, bay_name, pc_unique_id, bay_number
+        # pc_name과 pc_uuid는 NOT NULL이므로 포함
         insert_params = {
             "store_name": store_name,      # DB에서 조회한 값 (필수)
             "store_id": store_id,
             "bay_id": bay_id,
             "bay_name": bay_name,
             "pc_unique_id": pc_unique_id,
+            "pc_uuid": pc_uuid,
+            "pc_name": pc_name,
             "bay_number": bay_number
         }
         # repr 사용하여 정확한 값 확인 - 강제 flush
@@ -602,6 +599,10 @@ def register_pc_new():
         
         # ✅ [2단계] INSERT SQL 단일화 (정답 SQL)
         # store_name 포함, ON CONFLICT 처리 포함
+        # pc_name과 pc_uuid는 NOT NULL이므로 기본값 설정 필요
+        pc_uuid = pc_unique_id
+        pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
+        
         SQL_STRING = """
             INSERT INTO store_pcs (
                 store_name,
@@ -609,6 +610,8 @@ def register_pc_new():
                 bay_id,
                 bay_name,
                 pc_unique_id,
+                pc_uuid,
+                pc_name,
                 bay_number,
                 status,
                 registered_at
@@ -619,6 +622,8 @@ def register_pc_new():
                 %(bay_id)s,
                 %(bay_name)s,
                 %(pc_unique_id)s,
+                %(pc_uuid)s,
+                %(pc_name)s,
                 %(bay_number)s,
                 'pending',
                 CURRENT_TIMESTAMP
