@@ -838,7 +838,12 @@ def manage_all_pcs():
         
         # 각 PC에 표시용 bay_display 추가
         for pc in pcs:
-            pc["bay_display"] = format_bay_display(pc.get("bay_id"), pc.get("bay_name"))
+            # bay_number 우선 사용 (새로운 방식)
+            pc["bay_display"] = format_bay_display(
+                bay_number=pc.get("bay_number"),
+                bay_name=pc.get("bay_name"),
+                bay_id=pc.get("bay_id")  # 레거시 지원
+            )
         
         return render_template("manage_all_pcs.html", pcs=pcs)
     except Exception as e:

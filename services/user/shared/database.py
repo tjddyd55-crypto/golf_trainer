@@ -155,10 +155,13 @@ def init_db():
     CREATE TABLE IF NOT EXISTS bays (
         store_id    TEXT,
         bay_id      TEXT,
+        bay_number  INTEGER,
+        bay_name    TEXT,
         status      TEXT,
         user_id     TEXT,
         last_update TEXT,
         bay_code    TEXT UNIQUE,
+        assigned_pc_unique_id TEXT,
         PRIMARY KEY (store_id, bay_id)
     )
     """)
@@ -166,6 +169,32 @@ def init_db():
     try:
         cur.execute("ALTER TABLE bays ADD COLUMN IF NOT EXISTS bay_code TEXT")
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_bay_code ON bays(bay_code)")
+    except Exception:
+        pass
+    
+    # bay_number 컬럼 추가 (마이그레이션)
+    try:
+        cur.execute("ALTER TABLE bays ADD COLUMN IF NOT EXISTS bay_number INTEGER")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE bays ADD COLUMN IF NOT EXISTS bay_name TEXT")
+    except Exception:
+        pass
+    
+    try:
+        cur.execute("ALTER TABLE bays ADD COLUMN IF NOT EXISTS assigned_pc_unique_id TEXT")
+    except Exception:
+        pass
+    
+    # ✅ UNIQUE 제약조건 (store_id, bay_number) 중복 방지
+    try:
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS ux_bays_store_baynumber
+            ON bays(store_id, bay_number)
+            WHERE bay_number IS NOT NULL
+        """)
     except Exception:
         pass
 

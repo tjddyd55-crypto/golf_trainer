@@ -276,7 +276,7 @@ def get_store_bays(store_id):
                 sp.pc_unique_id as pc_connected
             FROM bays b
             LEFT JOIN store_pcs sp ON sp.store_id = b.store_id 
-                AND (sp.bay_id = b.bay_id OR sp.bay_number = b.bay_number::TEXT)
+                AND sp.bay_id = CAST(b.bay_number AS TEXT)
                 AND sp.status = 'active'
             WHERE b.store_id = %s
             ORDER BY b.bay_number
@@ -284,7 +284,7 @@ def get_store_bays(store_id):
         
         assigned_bays = {row.get("bay_number"): row for row in cur.fetchall()}
         
-        # store_pcs에서도 할당 상태 확인 (bay_number 기준)
+        # store_pcs에서도 할당 상태 확인 (bay_id가 숫자인 경우 bay_number로 간주)
         cur.execute("""
             SELECT DISTINCT
                 CAST(bay_id AS INTEGER) as bay_number,
@@ -303,11 +303,14 @@ def get_store_bays(store_id):
         for bay_num in range(1, bays_count + 1):
             bay_info = assigned_bays.get(bay_num) or pc_assigned_bays.get(bay_num)
             
+            # assigned=true 기준:
+            # 1. bays에 해당 bay_number가 존재하고 assigned_pc_unique_id가 있거나
+            # 2. store_pcs에서 해당 bay_id(숫자)가 연결되어 있는 경우
             assigned = False
             bay_name = None
             
             if bay_info:
-                assigned = bool(bay_info.get("assigned_pc_unique_id") or bay_info.get("pc_connected") or bay_info.get("bay_name"))
+                assigned = bool(bay_info.get("assigned_pc_unique_id") or bay_info.get("pc_connected"))
                 bay_name = bay_info.get("bay_name")
             
             bays.append({
@@ -392,7 +395,7 @@ def register_pc_new():
                 "error": f"bay_number는 1부터 {bays_count} 사이여야 합니다."
             }), 400
         
-        # 중복 확인 (store_id, bay_number)
+        # 중복 확인 (store_id, bay_number) - 409 반환
         cur.execute("""
             SELECT 1
             FROM bays
@@ -409,21 +412,21 @@ def register_pc_new():
                 "error": f"타석 번호 {bay_number}는 이미 할당되어 있습니다."
             }), 409
         
-        # bay_id 생성 (UUID 또는 store_id_bay_number 형식)
+        # bay_id 생성 (내부 키로 사용, UUID 기반)
         import uuid
         bay_id = str(uuid.uuid4())[:8]  # 간단한 ID
         
-        # bays 테이블에 생성
+        # bays 테이블에 생성 또는 업데이트
         cur.execute("""
             INSERT INTO bays (store_id, bay_id, bay_number, bay_name, status, assigned_pc_unique_id)
             VALUES (%s, %s, %s, %s, 'READY', %s)
             ON CONFLICT (store_id, bay_id) DO UPDATE
             SET bay_number = EXCLUDED.bay_number,
-                bay_name = EXCLUDED.bay_name,
+                bay_name = COALESCE(EXCLUDED.bay_name, bays.bay_name),
                 assigned_pc_unique_id = EXCLUDED.assigned_pc_unique_id
         """, (store_id, bay_id, bay_number, bay_name, pc_unique_id))
         
-        # store_pcs 업데이트 (기존 PC가 있으면)
+        # store_pcs 업데이트 (기존 PC가 있으면 bay_id와 bay_number 연결)
         cur.execute("""
             UPDATE store_pcs
             SET store_id = %s,

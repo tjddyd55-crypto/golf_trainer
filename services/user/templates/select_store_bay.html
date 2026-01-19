@@ -112,21 +112,28 @@
                         // ✅ 모든 타석 렌더링 (bays[0] 사용 안 함)
                         data.bays.forEach(bay => {
                             const option = document.createElement('option');
-                            option.value = bay.bay_id;
-                            // bay_name이 있으면 우선 사용 (PC 등록 시 입력한 값), 없으면 bay_id 사용
+                            // bay_id는 내부 키이므로 value로만 사용
+                            option.value = bay.bay_id || bay.bay_number;
+                            
+                            // 표시 규칙: bay_name 우선, 없으면 "{bay_number}번 타석(룸)"
+                            let displayText = '';
                             if (bay.bay_name && bay.bay_name.trim()) {
-                                option.textContent = bay.bay_name;
-                            } else {
-                                // bay_name이 없으면 bay_id 사용
+                                displayText = bay.bay_name.trim();
+                            } else if (bay.bay_number) {
+                                displayText = `${bay.bay_number}번 타석(룸)`;
+                            } else if (bay.bay_id) {
+                                // 레거시 지원: bay_id가 숫자면 번호로 간주
                                 const bayIdStr = String(bay.bay_id);
                                 if (bayIdStr.match(/^\d+$/)) {
-                                    // 숫자 타석 ID: "03번 타석" 형식
-                                    option.textContent = `${parseInt(bayIdStr)}번 타석`;
+                                    displayText = `${parseInt(bayIdStr)}번 타석(룸)`;
                                 } else {
-                                    // 문자열 타석 ID: "능동잡테스트" 형식
-                                    option.textContent = bayIdStr;
+                                    displayText = bayIdStr;
                                 }
+                            } else {
+                                displayText = '타석 정보 없음';
                             }
+                            
+                            option.textContent = displayText;
                             baySelect.appendChild(option);
                         });
                     } else {

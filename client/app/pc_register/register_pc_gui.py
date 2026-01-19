@@ -109,11 +109,18 @@ class PCRegistrationGUI:
         self.confirm_button = ttk.Button(input_frame, text="확인", command=self.confirm_store, width=20, state=tk.DISABLED)
         self.confirm_button.grid(row=3, column=0, columnspan=2, pady=5)
         
-        # 타석(룸)
-        ttk.Label(input_frame, text="타석(룸):").grid(row=4, column=0, sticky=tk.W, pady=5)
-        self.bay_entry = ttk.Entry(input_frame, width=30, font=("맑은 고딕", 10), state=tk.DISABLED)
-        self.bay_entry.grid(row=4, column=1, sticky=tk.W, pady=5, padx=(10, 0))
-        self.bay_entry.bind("<KeyRelease>", self.on_bay_entry_change)
+        # 타석 번호 선택
+        ttk.Label(input_frame, text="타석 번호:").grid(row=4, column=0, sticky=tk.W, pady=5)
+        self.bay_number_var = tk.StringVar()
+        self.bay_number_combo = ttk.Combobox(input_frame, textvariable=self.bay_number_var, width=27, font=("맑은 고딕", 10), state=tk.DISABLED)
+        self.bay_number_combo.grid(row=4, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        self.bay_number_combo.bind("<<ComboboxSelected>>", self.on_bay_number_change)
+        
+        # 타석 이름 (선택사항)
+        ttk.Label(input_frame, text="타석 이름 (선택):").grid(row=5, column=0, sticky=tk.W, pady=5)
+        self.bay_name_entry = ttk.Entry(input_frame, width=30, font=("맑은 고딕", 10), state=tk.DISABLED)
+        self.bay_name_entry.grid(row=5, column=1, sticky=tk.W, pady=5, padx=(10, 0))
+        self.bay_name_entry.bind("<KeyRelease>", self.on_bay_name_change)
         
         # 버튼 영역
         button_frame = ttk.Frame(main_frame)
@@ -184,11 +191,15 @@ class PCRegistrationGUI:
             new_pos = min(cursor_pos - (len(current) - len(filtered)), len(filtered))
             self.store_id_entry.icursor(new_pos)
     
-    def on_bay_entry_change(self, event=None):
-        """타석(룸) 입력 시 등록 요청 버튼 활성화"""
-        bay_name = self.bay_entry.get().strip()
+    def on_bay_number_change(self, event=None):
+        """타석 번호 선택 시 등록 요청 버튼 활성화"""
+        self.on_bay_name_change()
+    
+    def on_bay_name_change(self, event=None):
+        """타석 이름 입력 시 등록 요청 버튼 활성화"""
+        bay_number = self.bay_number_var.get()
         registration_code = self.code_entry.get().strip()
-        if bay_name and self.selected_store_id and registration_code:
+        if bay_number and self.selected_store_id and registration_code:
             self.register_button.config(state=tk.NORMAL)
         else:
             self.register_button.config(state=tk.DISABLED)
@@ -244,7 +255,8 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
                         self.store_id_entry.config(state=tk.DISABLED)
                         self.lookup_button.config(state=tk.DISABLED)
                         self.confirm_button.config(state=tk.DISABLED)
-                        self.bay_entry.config(state=tk.DISABLED)
+                        self.bay_number_combo.config(state=tk.DISABLED)
+                        self.bay_name_entry.config(state=tk.DISABLED)
                         self.register_button.config(state=tk.DISABLED)
                         
                         # 재등록 옵션
@@ -259,7 +271,8 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
                             self.code_entry.config(state=tk.NORMAL)
                             self.store_id_entry.config(state=tk.NORMAL)
                             self.lookup_button.config(state=tk.NORMAL)
-                            self.bay_entry.config(state=tk.NORMAL)
+                            self.bay_number_combo.config(state=tk.DISABLED)
+                            self.bay_name_entry.config(state=tk.DISABLED)
                             self.store_info_label.config(text="")
                             self.selected_store_id = None
                             self.selected_store_name = None
@@ -359,19 +372,74 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
             self.lookup_button.config(state=tk.NORMAL)
     
     def confirm_store(self):
-        """매장 확인 후 타석(룸) 입력 활성화"""
-        if self.selected_store_id and self.selected_store_name:
-            self.bay_entry.config(state=tk.NORMAL)
-            self.update_status(f"매장 확인 완료: {self.selected_store_name}")
-            self.on_bay_entry_change()
-        else:
+        """매장 확인 후 타석 목록 조회 및 드롭다운 생성"""
+        if not self.selected_store_id:
             messagebox.showerror("오류", "매장을 먼저 조회하세요.")
+            return
+        
+        self.update_status(f"타석 목록 조회 중: {self.selected_store_id}")
+        self.confirm_button.config(state=tk.DISABLED)
+        
+        try:
+            # GET /api/stores/<store_id>/bays 호출
+            response = requests.get(
+                f"{self.server_url}/api/stores/{self.selected_store_id}/bays",
+                timeout=10
+            )
+            
+            if response.status_code == 200:
+                data = response.json()
+                bays_count = data.get("bays_count", 0)
+                bays = data.get("bays", [])
+                
+                # 드롭다운 옵션 생성
+                options = []
+                for bay in bays:
+                    bay_number = bay.get("bay_number")
+                    bay_name = bay.get("bay_name")
+                    assigned = bay.get("assigned", False)
+                    
+                    # 옵션 텍스트 생성
+                    if bay_name:
+                        option_text = f"{bay_number}번 - {bay_name}"
+                    else:
+                        option_text = f"{bay_number}번 타석(룸)"
+                    
+                    if assigned:
+                        option_text += " (할당됨)"
+                    
+                    options.append(option_text)
+                
+                # 드롭다운 설정
+                self.bay_number_combo['values'] = options
+                self.bay_number_combo.config(state=tk.NORMAL)
+                self.bay_name_entry.config(state=tk.NORMAL)
+                
+                self.update_status(f"매장 확인 완료: {self.selected_store_name} (타석 {bays_count}개)")
+                self.on_bay_name_change()
+            else:
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("error", response.text[:100])
+                except:
+                    error_msg = f"서버 오류: {response.status_code}"
+                self.update_status(f"타석 목록 조회 실패: {error_msg}", is_error=True)
+                messagebox.showerror("조회 실패", error_msg)
+        except requests.exceptions.ConnectionError:
+            self.update_status("서버 연결 실패", is_error=True)
+            messagebox.showerror("연결 실패", "서버에 연결할 수 없습니다.")
+        except Exception as e:
+            self.update_status(f"타석 목록 조회 오류: {e}", is_error=True)
+            messagebox.showerror("오류", f"타석 목록 조회 중 오류가 발생했습니다.\n{e}")
+        finally:
+            self.confirm_button.config(state=tk.NORMAL)
     
     def register_pc(self):
-        """PC 등록 요청"""
+        """PC 등록 요청 (새로운 API 사용)"""
         # 입력값 확인
         registration_code = self.code_entry.get().strip().upper()
-        bay_name = self.bay_entry.get().strip()
+        bay_number_text = self.bay_number_var.get()
+        bay_name = self.bay_name_entry.get().strip()
         
         if not registration_code:
             messagebox.showerror("오류", "PC 등록 코드를 입력하세요.")
@@ -381,84 +449,100 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
             messagebox.showerror("오류", "매장을 먼저 조회하고 확인하세요.")
             return
         
-        if not bay_name:
-            messagebox.showerror("오류", "타석(룸)을 입력하세요.")
+        if not bay_number_text:
+            messagebox.showerror("오류", "타석 번호를 선택하세요.")
             return
+        
+        # bay_number 추출 (예: "3번 타석(룸)" → 3)
+        import re
+        match = re.search(r'(\d+)', bay_number_text)
+        if not match:
+            messagebox.showerror("오류", "타석 번호를 올바르게 선택하세요.")
+            return
+        
+        bay_number = int(match.group(1))
+        
+        # 할당된 타석인지 확인
+        if "(할당됨)" in bay_number_text:
+            response = messagebox.askyesno(
+                "이미 할당됨",
+                f"타석 번호 {bay_number}는 이미 할당되어 있습니다.\n그래도 등록하시겠습니까?",
+                icon=messagebox.WARNING
+            )
+            if not response:
+                return
         
         if not self.pc_info:
             messagebox.showerror("오류", "PC 정보를 수집할 수 없습니다.")
             return
         
         # 필수 정보 확인
-        mac_address = self.pc_info.get("mac_address")
-        pc_uuid = self.pc_info.get("system_uuid") or self.pc_info.get("machine_guid")
+        pc_unique_id = self.pc_info.get("unique_id")
         
-        if not mac_address:
-            messagebox.showerror("오류", "MAC Address를 수집할 수 없습니다.")
+        if not pc_unique_id:
+            messagebox.showerror("오류", "PC 고유번호를 수집할 수 없습니다.")
             return
         
-        if not pc_uuid:
-            messagebox.showerror("오류", "PC UUID를 수집할 수 없습니다.")
-            return
-        
-        # PC 이름 자동 생성
-        pc_name = f"{self.selected_store_name}-{bay_name}-PC"
-        
-        # 등록 요청
+        # 등록 요청 (새로운 API)
         self.update_status("서버에 등록 요청 중...")
         self.register_button.config(state=tk.DISABLED)
         
         try:
             payload = {
-                "registration_key": registration_code,
                 "store_id": self.selected_store_id,
-                "store_name": self.selected_store_name,
-                "bay_name": bay_name,
-                "pc_name": pc_name,
-                "pc_info": self.pc_info
+                "pc_unique_id": pc_unique_id,
+                "bay_number": bay_number,
+                "bay_name": bay_name if bay_name else None
             }
             
             response = requests.post(
-                f"{self.server_url}/api/register_pc",
+                f"{self.server_url}/api/pcs/register",
                 json=payload,
                 timeout=10
             )
             
             if response.status_code == 200:
                 data = response.json()
-                if data.get("success"):
-                    pc_token = data.get("pc_token")
+                if data.get("ok"):
+                    bay_id = data.get("bay_id")
+                    bay_number_result = data.get("bay_number")
+                    bay_name_result = data.get("bay_name")
                     
-                    if pc_token:
-                        # 토큰 저장
-                        if self.save_pc_token(pc_token, self.server_url):
-                            self.update_status("PC 등록이 완료되었습니다.")
-                            self.update_status(f"이 PC는 {bay_name}으로 등록되었습니다.")
-                            self.update_status("토큰이 자동으로 저장되었습니다.")
-                            
-                            # 입력 필드 비활성화
-                            self.code_entry.config(state=tk.DISABLED)
-                            self.store_id_entry.config(state=tk.DISABLED)
-                            self.lookup_button.config(state=tk.DISABLED)
-                            self.confirm_button.config(state=tk.DISABLED)
-                            self.bay_entry.config(state=tk.DISABLED)
-                            self.register_button.config(state=tk.DISABLED)
-                            
-                            messagebox.showinfo(
-                                "등록 완료",
-                                f"PC 등록이 완료되었습니다.\n\n"
-                                f"매장: {self.selected_store_name}\n"
-                                f"타석: {bay_name}\n\n"
-                                f"토큰이 자동으로 저장되었습니다."
-                            )
-                        else:
-                            self.update_status("등록은 완료되었지만 토큰 저장에 실패했습니다.", is_error=True)
-                    else:
-                        self.update_status("등록 완료 (토큰 없음)")
+                    self.update_status("PC 등록이 완료되었습니다.")
+                    self.update_status(f"매장: {self.selected_store_name}")
+                    self.update_status(f"타석 번호: {bay_number_result}")
+                    if bay_name_result:
+                        self.update_status(f"타석 이름: {bay_name_result}")
+                    
+                    # 입력 필드 비활성화
+                    self.code_entry.config(state=tk.DISABLED)
+                    self.store_id_entry.config(state=tk.DISABLED)
+                    self.lookup_button.config(state=tk.DISABLED)
+                    self.confirm_button.config(state=tk.DISABLED)
+                    self.bay_number_combo.config(state=tk.DISABLED)
+                    self.bay_name_entry.config(state=tk.DISABLED)
+                    self.register_button.config(state=tk.DISABLED)
+                    
+                    messagebox.showinfo(
+                        "등록 완료",
+                        f"PC 등록이 완료되었습니다.\n\n"
+                        f"매장: {self.selected_store_name}\n"
+                        f"타석 번호: {bay_number_result}\n"
+                        f"{f'타석 이름: {bay_name_result}' if bay_name_result else ''}"
+                    )
                 else:
                     error_msg = data.get("error", "알 수 없는 오류")
                     self.update_status(f"등록 실패: {error_msg}", is_error=True)
                     messagebox.showerror("등록 실패", error_msg)
+            elif response.status_code == 409:
+                # 중복 할당
+                try:
+                    error_data = response.json()
+                    error_msg = error_data.get("error", "이미 할당된 타석입니다.")
+                except:
+                    error_msg = "이미 할당된 타석입니다."
+                self.update_status(f"등록 실패: {error_msg}", is_error=True)
+                messagebox.showerror("등록 실패", error_msg)
             else:
                 try:
                     error_data = response.json()
