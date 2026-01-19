@@ -25,10 +25,23 @@ for path in paths_to_add:
         pass
 
 # 디버깅: 경로 확인
+print(f"[ROOT APP] ========== DEBUG START ==========", flush=True)
 print(f"[ROOT APP] __file__: {current_file}", flush=True)
 print(f"[ROOT APP] Current dir: {current_dir}", flush=True)
 print(f"[ROOT APP] CWD: {cwd}", flush=True)
-print(f"[ROOT APP] sys.path (first 5): {sys.path[:5]}", flush=True)
+print(f"[ROOT APP] sys.path (first 10): {sys.path[:10]}", flush=True)
+# 현재 디렉토리의 파일 목록 확인
+try:
+    files_in_cwd = os.listdir(cwd)
+    print(f"[ROOT APP] Files in CWD: {files_in_cwd[:20]}", flush=True)
+except Exception as e:
+    print(f"[ROOT APP] Cannot list CWD: {e}", flush=True)
+# current_dir의 파일 목록 확인
+try:
+    files_in_current = os.listdir(current_dir)
+    print(f"[ROOT APP] Files in current_dir: {files_in_current[:20]}", flush=True)
+except Exception as e:
+    print(f"[ROOT APP] Cannot list current_dir: {e}", flush=True)
 
 # services 디렉토리 찾기
 services_found = False
