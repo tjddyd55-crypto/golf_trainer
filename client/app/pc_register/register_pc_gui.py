@@ -112,7 +112,7 @@ class PCRegistrationGUI:
         # 타석 번호 선택
         ttk.Label(input_frame, text="타석 번호:").grid(row=4, column=0, sticky=tk.W, pady=5)
         self.bay_number_var = tk.StringVar()
-        self.bay_number_combo = ttk.Combobox(input_frame, textvariable=self.bay_number_var, width=27, font=("맑은 고딕", 10), state=tk.DISABLED)
+        self.bay_number_combo = ttk.Combobox(input_frame, textvariable=self.bay_number_var, width=27, font=("맑은 고딕", 10), state="readonly")
         self.bay_number_combo.grid(row=4, column=1, sticky=tk.W, pady=5, padx=(10, 0))
         self.bay_number_combo.bind("<<ComboboxSelected>>", self.on_bay_number_change)
         
@@ -410,9 +410,9 @@ PC UUID:      {self.pc_info.get('system_uuid') or self.pc_info.get('machine_guid
                     
                     options.append(option_text)
                 
-                # 드롭다운 설정
+                # 드롭다운 설정 (readonly로 설정하여 키보드 입력 차단)
                 self.bay_number_combo['values'] = options
-                self.bay_number_combo.config(state=tk.NORMAL)
+                self.bay_number_combo.config(state="readonly")
                 self.bay_name_entry.config(state=tk.NORMAL)
                 
                 self.update_status(f"매장 확인 완료: {self.selected_store_name} (타석 {bays_count}개)")

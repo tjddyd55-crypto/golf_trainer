@@ -822,7 +822,18 @@ def manage_all_pcs():
         from psycopg2.extras import RealDictCursor
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
-        cur.execute("SELECT * FROM store_pcs ORDER BY registered_at DESC")
+        # PENDING과 active 상태 모두 조회 (승인 대기 + 승인 완료)
+        cur.execute("""
+            SELECT * FROM store_pcs 
+            WHERE status IN ('pending', 'active')
+            ORDER BY 
+                CASE status 
+                    WHEN 'pending' THEN 0  -- 승인 대기를 먼저
+                    WHEN 'active' THEN 1
+                    ELSE 2
+                END,
+                registered_at DESC
+        """)
         pcs = [dict(row) for row in cur.fetchall()]
         cur.close()
         conn.close()

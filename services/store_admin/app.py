@@ -85,8 +85,8 @@ def store_admin_signup():
                 owner_name, birth_date, email, address, bays_count
             )
             if result is True:
-                return render_template("store_admin_signup.html", 
-                                     success="매장 등록 요청이 완료되었습니다. 승인 대기 중입니다.")
+                return render_template("store_register_success.html", 
+                                     message="매장 등록 요청이 접수되었습니다. 관리자 승인 후 사용 가능합니다.")
             elif isinstance(result, tuple) and len(result) == 2:
                 # (False, "오류 메시지") 형식
                 return render_template("store_admin_signup.html", 
