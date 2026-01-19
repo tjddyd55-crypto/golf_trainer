@@ -231,6 +231,22 @@ def init_db():
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pc_token ON store_pcs(pc_token) WHERE pc_token IS NOT NULL")
     except Exception:
         pass
+    
+    # ✅ 6. DB 레벨 보호: bay_id NOT NULL 및 중복 방지 인덱스
+    try:
+        # bay_id가 NULL인 경우를 허용하되, active 상태일 때는 NOT NULL 강제
+        # PostgreSQL에서는 부분 인덱스로 처리
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS uq_store_bay_id_active
+            ON store_pcs (store_id, bay_id)
+            WHERE status = 'active' AND bay_id IS NOT NULL
+        """)
+        print("[DB] bay_id 중복 방지 인덱스 생성 완료")
+    except Exception as e:
+        print(f"[WARNING] bay_id 인덱스 생성 실패 (이미 존재할 수 있음): {e}")
+    
+    # 주의: bay_id NOT NULL 제약조건은 기존 데이터가 NULL일 수 있으므로
+    # 마이그레이션 스크립트로 별도 처리 필요 (기존 데이터 정리 후)
 
     # 9️⃣ PC 등록 코드 테이블 (신규)
     cur.execute("""

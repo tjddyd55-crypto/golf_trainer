@@ -100,10 +100,24 @@
                 </div>
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="approve-store-name"></span></p>
-                    <p><strong>타석(룸):</strong> <span id="approve-bay-name"></span></p>
-                    <p><strong>타석(룸):</strong> <span id="approve-pc-name"></span></p>
+                    <p><strong>타석(룸) 이름:</strong> <span id="approve-bay-name"></span></p>
+                    <p><strong>PC 이름:</strong> <span id="approve-pc-name"></span></p>
                     <hr>
-                    <label>사용 시작일:</label>
+                    <label>타석 번호 (bay_id) <span class="text-danger">*</span>:</label>
+                    <input 
+                        type="number" 
+                        id="approve-bay-id" 
+                        class="form-control" 
+                        min="1" 
+                        step="1" 
+                        required
+                        placeholder="예: 1, 2, 3..."
+                    >
+                    <small class="form-text text-muted">
+                        타석 번호(bay_id)는 숫자만 입력하며, 01 같은 형식은 사용할 수 없습니다.<br>
+                        예: 1, 2, 3 …
+                    </small>
+                    <label class="mt-3">사용 시작일:</label>
                     <input type="date" id="approve-start-date" class="form-control" required>
                     <label>사용 종료일:</label>
                     <input type="date" id="approve-end-date" class="form-control" required>
@@ -240,7 +254,21 @@
             currentBayId = bayId || '';
             document.getElementById('approve-store-name').textContent = storeName;
             document.getElementById('approve-bay-name').textContent = bayName;
-            document.getElementById('approve-pc-name').textContent = bayName || pcName || '-';
+            document.getElementById('approve-pc-name').textContent = pcName || '-';
+            
+            // bay_id 입력 필드 설정 (정수만, 앞자리 0 제거)
+            const bayIdInput = document.getElementById('approve-bay-id');
+            if (bayId) {
+                // 기존 bay_id가 있으면 정수로 변환 (01 -> 1)
+                const bayIdInt = parseInt(bayId, 10);
+                if (!isNaN(bayIdInt) && bayIdInt > 0) {
+                    bayIdInput.value = bayIdInt;
+                } else {
+                    bayIdInput.value = '';
+                }
+            } else {
+                bayIdInput.value = '';
+            }
             
             const today = new Date().toISOString().split('T')[0];
             const oneYearLater = new Date();
@@ -266,20 +294,44 @@
         }
 
         function approvePC() {
+            const bayIdInput = document.getElementById('approve-bay-id');
+            const bayIdValue = bayIdInput.value.trim();
             const startDate = document.getElementById('approve-start-date').value;
             const endDate = document.getElementById('approve-end-date').value;
             const approvedDate = document.getElementById('approve-approved-date').value;
             const notes = document.getElementById('approve-notes').value;
+            
+            // bay_id 필수 검증
+            if (!bayIdValue) {
+                alert('타석 번호(bay_id)는 필수입니다.');
+                bayIdInput.focus();
+                return;
+            }
+            
+            // 숫자 검증
+            if (!/^\d+$/.test(bayIdValue)) {
+                alert('타석 번호는 숫자만 입력할 수 있습니다.');
+                bayIdInput.focus();
+                return;
+            }
+            
+            const bayIdInt = parseInt(bayIdValue, 10);
+            if (bayIdInt <= 0) {
+                alert('타석 번호는 1 이상의 정수여야 합니다.');
+                bayIdInput.focus();
+                return;
+            }
             
             if (!startDate || !endDate) {
                 alert('사용 시작일과 종료일을 모두 입력해주세요.');
                 return;
             }
             
+            // bay_id는 정수로 전송 (01 입력 시 자동으로 1 처리)
             const requestBody = {
                 pc_unique_id: currentPcUniqueId,
                 store_id: currentStoreId || null,
-                bay_id: currentBayId || null,
+                bay_id: bayIdInt,  // 정수로 전송
                 usage_start_date: startDate,
                 usage_end_date: endDate,
                 approved_date: approvedDate || new Date().toISOString().split('T')[0],

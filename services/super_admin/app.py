@@ -857,16 +857,32 @@ def approve_pc():
         
         pc_unique_id = data.get("pc_unique_id")
         store_id = data.get("store_id")  # 매장코드
-        bay_id = data.get("bay_id")  # 타석 ID (예: "01", "02" 또는 "3번룸")
+        bay_id_raw = data.get("bay_id")  # 타석 ID (정수로 받음)
         usage_start_date = data.get("usage_start_date")  # YYYY-MM-DD 문자열
         usage_end_date = data.get("usage_end_date")  # YYYY-MM-DD 문자열
         approved_date = data.get("approved_date")  # YYYY-MM-DD 문자열 (선택)
         notes = data.get("notes", "") or ""
         
-        print(f"[DEBUG] approve_pc 요청: pc_unique_id={pc_unique_id}, store_id={store_id}, bay_id={bay_id}")
+        print(f"[DEBUG] approve_pc 요청: pc_unique_id={pc_unique_id}, store_id={store_id}, bay_id_raw={bay_id_raw}")
         
         if not pc_unique_id:
             return jsonify({"success": False, "message": "pc_unique_id가 필요합니다."}), 400
+        
+        # ✅ 1. bay_id 필수 입력 검증
+        if not bay_id_raw:
+            return jsonify({"success": False, "message": "타석 번호(bay_id)는 필수입니다."}), 400
+        
+        # ✅ 2. 숫자 여부 검증
+        bay_id_str = str(bay_id_raw).strip()
+        if not bay_id_str.isdigit():
+            return jsonify({"success": False, "message": "타석 번호는 숫자만 입력할 수 있습니다."}), 400
+        
+        # ✅ 3. 정수 변환 및 범위 체크 (01 입력 시 자동으로 1 처리)
+        bay_id = int(bay_id_str)
+        if bay_id <= 0:
+            return jsonify({"success": False, "message": "타석 번호는 1 이상의 정수여야 합니다."}), 400
+        
+        print(f"[DEBUG] bay_id 검증 완료: {bay_id_raw} -> {bay_id} (정수)")
         
         # 문자열을 DATE로 변환
         from datetime import date
@@ -907,7 +923,7 @@ def approve_pc():
         
         print(f"[DEBUG] PC 데이터 조회 완료: store_name={pc_data.get('store_name')}, pc_name={pc_data.get('pc_name')}")
         
-        # store_id와 bay_id가 비어있으면 기존 데이터에서 추출 시도
+        # store_id가 비어있으면 기존 데이터에서 추출 시도
         if not store_id or store_id == '' or store_id == 'null' or store_id is None:
             store_id = None
             # pc_name에서 store_id 추출 시도 (예: "가자스크린골프테스트2-3번룸-PC" -> "가자스크린골프테스트2")
@@ -920,56 +936,7 @@ def approve_pc():
                     store_id = store_row[0]
                     print(f"[DEBUG] store_id 자동 추출: {store_id}")
         
-        # bay_id 변환 처리: "3번룸" -> "03" 형식으로 변환 (문자열 타석 ID는 그대로 유지)
-        original_bay_id = bay_id
-        if bay_id:
-            # None, 빈 문자열, 'null' 문자열 체크
-            if bay_id in ('', 'null', None):
-                bay_id = None
-            # "3번룸" 같은 형식인지 확인하고 변환
-            elif isinstance(bay_id, str):
-                # 이미 "01", "02" 같은 숫자 형식이면 그대로 사용
-                if bay_id.isdigit() and len(bay_id) == 2:
-                    # 이미 올바른 형식
-                    pass
-                # "3번룸", "3번", "3" 같은 형식이면 변환 (숫자가 있는 경우만)
-                elif '번' in bay_id:
-                    match = re.search(r'(\d+)', bay_id)
-                    if match:
-                        bay_num = int(match.group(1))
-                        bay_id = f"{bay_num:02d}"
-                        print(f"[DEBUG] bay_id 변환: '{original_bay_id}' -> '{bay_id}'")
-                    else:
-                        # 숫자를 찾을 수 없으면 원본 그대로 사용 (예: "능동잡테스트")
-                        print(f"[DEBUG] bay_id 숫자 없음, 원본 유지: '{bay_id}'")
-                # 숫자로만 이루어진 경우
-                elif bay_id.isdigit():
-                    if len(bay_id) == 1:
-                        # "3" 같은 단일 숫자면 "03"으로 변환
-                        bay_id = f"0{bay_id}"
-                        print(f"[DEBUG] bay_id 변환: '{original_bay_id}' -> '{bay_id}'")
-                    # 이미 2자리 이상이면 그대로 사용
-                else:
-                    # 숫자와 "번"이 없는 문자열 타석 ID (예: "능동잡테스트") - 원본 그대로 사용
-                    print(f"[DEBUG] bay_id 문자열 타석 ID, 원본 유지: '{bay_id}'")
-        else:
-            # bay_id가 비어있으면 pc_name이나 bay_name에서 추출 시도
-            pc_name = pc_data.get("pc_name", "")
-            bay_name = pc_data.get("bay_name", "")
-            if bay_name:
-                match = re.search(r'(\d+)번', bay_name)
-                if match:
-                    bay_num = int(match.group(1))
-                    bay_id = f"{bay_num:02d}"
-                    print(f"[DEBUG] bay_id bay_name에서 추출: '{bay_name}' -> '{bay_id}'")
-            elif pc_name:
-                match = re.search(r'(\d+)번', pc_name)
-                if match:
-                    bay_num = int(match.group(1))
-                    bay_id = f"{bay_num:02d}"
-                    print(f"[DEBUG] bay_id pc_name에서 추출: '{pc_name}' -> '{bay_id}'")
-        
-        # store_id와 bay_id 검증
+        # store_id 검증
         if not store_id or store_id == '' or store_id == 'null':
             if cur:
                 cur.close()
@@ -980,11 +947,29 @@ def approve_pc():
                 "message": "매장 정보를 찾을 수 없습니다. store_id가 필요합니다."
             }), 400
         
-        # bay_id 정리 (None으로 설정된 경우)
-        if bay_id in ('null', '', None):
-            bay_id = None
+        # ✅ 4. bay_id 중복 검증 (매장 단위, 정수 기준)
+        cur.execute("""
+            SELECT 1
+            FROM store_pcs
+            WHERE store_id = %s
+              AND bay_id = %s
+              AND status = 'active'
+              AND pc_unique_id != %s
+            LIMIT 1
+        """, (store_id, bay_id, pc_unique_id))
         
-        print(f"[DEBUG] 최종 변환 후: store_id={store_id}, bay_id={bay_id}")
+        duplicate_exists = cur.fetchone() is not None
+        if duplicate_exists:
+            if cur:
+                cur.close()
+            if conn:
+                conn.close()
+            return jsonify({
+                "success": False,
+                "message": f"타석 번호 {bay_id}는 이미 사용 중입니다. 다른 번호를 입력하세요."
+            }), 400
+        
+        print(f"[DEBUG] bay_id 중복 검증 완료: store_id={store_id}, bay_id={bay_id} (중복 없음)")
         
         # 토큰 생성
         pc_token = database.generate_pc_token(pc_unique_id, mac_address)
@@ -995,7 +980,8 @@ def approve_pc():
         except (ValueError, TypeError):
             approved_at_value = date.today()
         
-        # PC 승인 및 사용 기간 설정
+        # ✅ 5. PC 승인 및 사용 기간 설정 (bay_id 없으면 승인 금지)
+        # bay_id는 이미 검증 완료 (필수, 정수, 중복 없음)
         cur.execute("""
             UPDATE store_pcs 
             SET status = 'active',
