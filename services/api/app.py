@@ -601,35 +601,57 @@ def register_pc_new():
             conn.close()
             return jsonify({"ok": False, "error": "INSERT 파라미터에 store_name이 없습니다."}), 500
         
-        print(f"[PC 등록 API] store_pcs INSERT 시작: store_name={store_name}, store_id={store_id}")
+        # ✅ [2단계] INSERT SQL 단일화 (정답 SQL)
+        # store_name 포함, ON CONFLICT 처리 포함
+        SQL_STRING = """
+            INSERT INTO store_pcs (
+                store_name,
+                store_id,
+                bay_id,
+                bay_name,
+                pc_unique_id,
+                bay_number,
+                status,
+                registered_at
+            )
+            VALUES (
+                %(store_name)s,
+                %(store_id)s,
+                %(bay_id)s,
+                %(bay_name)s,
+                %(pc_unique_id)s,
+                %(bay_number)s,
+                'pending',
+                CURRENT_TIMESTAMP
+            )
+            ON CONFLICT (pc_unique_id) DO UPDATE SET
+                store_name = EXCLUDED.store_name,
+                store_id = EXCLUDED.store_id,
+                bay_id = EXCLUDED.bay_id,
+                bay_name = EXCLUDED.bay_name,
+                bay_number = EXCLUDED.bay_number,
+                status = CASE
+                    WHEN store_pcs.status = 'active' THEN 'active'
+                    ELSE 'pending'
+                END
+        """
+        
+        # ✅ [4단계] 실제 실행 SQL 강제 출력
+        print("[TRACE][ENTER] register_pc_new", flush=True)
+        try:
+            # cur.mogrify로 실제 실행될 SQL 확인
+            actual_sql = cur.mogrify(SQL_STRING, insert_params).decode('utf-8')
+            print("[TRACE][EXEC SQL]", actual_sql, flush=True)
+        except Exception as e:
+            print(f"[TRACE][EXEC SQL] mogrify 실패: {e}", flush=True)
+            print(f"[TRACE][EXEC SQL] SQL_STRING: {SQL_STRING}", flush=True)
+            print(f"[TRACE][EXEC SQL] insert_params: {insert_params}", flush=True)
+        
+        print(f"[PC 등록 API] store_pcs INSERT 시작: store_name={store_name}, store_id={store_id}", flush=True)
         
         try:
-            # ✅ dict 바인딩(named parameter) 방식 사용
-            # 컬럼명을 명시하고 %(name)s 형식으로 바인딩
-            # 컬럼 순서와 무관하게 정확한 매핑 보장
-            cur.execute("""
-                INSERT INTO store_pcs (
-                    store_name,
-                    store_id,
-                    bay_name,
-                    pc_uuid,
-                    pc_unique_id,
-                    pc_name,
-                    bay_id,
-                    bay_number,
-                    status
-                ) VALUES (
-                    %(store_name)s,
-                    %(store_id)s,
-                    %(bay_name)s,
-                    %(pc_uuid)s,
-                    %(pc_unique_id)s,
-                    %(pc_name)s,
-                    %(bay_id)s,
-                    %(bay_number)s,
-                    'pending'
-                )
-            """, insert_params)
+            # ✅ [2단계] 단일화된 INSERT SQL 실행
+            cur.execute(SQL_STRING, insert_params)
             
             print(f"[PC 등록 API] store_pcs INSERT 완료")
         except Exception as e:
