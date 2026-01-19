@@ -1,4 +1,7 @@
 # ===== services/super_admin/app.py (총책임자 서비스) =====
+# ✅ 애플리케이션 기동 확인용 로그 (가장 먼저 출력)
+print("### APP BOOT COMPLETED ###", flush=True)
+
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import sys
 import os
@@ -32,11 +35,20 @@ app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_
 
 # =========================
 # Healthcheck 엔드포인트 (가장 먼저 등록 - 데이터베이스 초기화 전)
+# Railway Healthcheck용 - 무조건 200 OK 반환 (외부 의존성 체크 절대 금지)
 # =========================
 @app.route("/health", methods=["GET"])
 @app.route("/api/health", methods=["GET"])
 def health_check():
-    """Railway healthcheck용 엔드포인트 - 인증 불필요, DB 접근 불필요"""
+    """
+    Railway healthcheck용 엔드포인트
+    - 인증 불필요
+    - DB 접근 불필요
+    - 외부 API 호출 불필요
+    - 무조건 200 OK 반환
+    """
+    # 절대 DB 체크, Redis 체크, 외부 API 호출 등을 하지 않음
+    # 단순히 200 OK만 반환
     return "OK", 200
 
 # 데이터베이스 초기화 (healthcheck 이후)
