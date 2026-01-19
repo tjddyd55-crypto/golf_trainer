@@ -567,11 +567,12 @@ def register_pc_new():
             print(f"[PC 등록 API] store_name이 None: store_id={store_id} (INSERT 실행 안 함)")
             return jsonify({"ok": False, "error": "매장 정보가 올바르지 않습니다. (store_name 없음)"}), 400
         
-        # ✅ [6단계] INSERT 직전 강제 검증
-        print("[TRACE][FINAL] store_name =", store_name)
-        assert store_name is not None, "store_name lost before INSERT"
+        # ✅ [6단계] INSERT 직전 강제 검증 (더 강력한 assert)
+        print("[TRACE][FINAL] store_name =", repr(store_name))
+        assert isinstance(store_name, str) and store_name.strip() != "", "store_name invalid"
         
         # ✅ [7단계] INSERT 파라미터 무결성 점검
+        # insert_params를 명시적으로 구성 (키명 정확히 일치 보장)
         insert_params = {
             "store_name": store_name,
             "store_id": store_id,
@@ -582,7 +583,8 @@ def register_pc_new():
             "bay_id": bay_id,
             "bay_number": bay_number
         }
-        print("[TRACE][PARAMS]", insert_params)
+        # repr 사용하여 정확한 값 확인
+        print("[TRACE][PARAMS]", {k: repr(v) for k, v in insert_params.items()})
         
         print(f"[PC 등록 API] store_pcs INSERT 시작: store_name={store_name}, store_id={store_id}")
         
