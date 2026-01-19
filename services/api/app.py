@@ -554,6 +554,7 @@ def register_pc_new():
         # status는 'pending'으로 고정, registered_at는 DB default 사용
         
         # pc_uuid는 pc_unique_id와 동일하게 사용 (PC 고유 식별자)
+        # pc_unique_id는 UNIQUE NOT NULL이므로 필수 포함
         pc_uuid = pc_unique_id
         
         # ✅ INSERT 직전 디버그 로그
@@ -561,6 +562,7 @@ def register_pc_new():
         print("[DEBUG] store_id =", store_id)
         print("[DEBUG] bay_name =", bay_name)
         print("[DEBUG] pc_uuid =", pc_uuid)
+        print("[DEBUG] pc_unique_id =", pc_unique_id)
         print("[DEBUG] bay_id =", bay_id)
         print("[DEBUG] bay_number =", bay_number)
         
@@ -568,6 +570,7 @@ def register_pc_new():
         
         try:
             # ✅ 최소 컬럼 기준 INSERT (컬럼 순서와 VALUES 바인딩 순서 정확히 일치)
+            # store_name이 첫 번째 컬럼이므로 NULL이 될 수 없음
             cur.execute("""
                 INSERT INTO store_pcs (
                     store_name,
