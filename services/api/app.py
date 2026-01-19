@@ -391,10 +391,10 @@ def register_pc_new():
         conn = database.get_db_connection()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # ✅ [1단계] store_name 생성 지점 단일화 - 명시적 SELECT + 인덱스 접근
-        # store_id로 store_name 조회 (필수) - dict.get() 방식 완전 금지, row[0] 인덱스 접근만 사용
-        # SELECT 쿼리를 명시적으로 store_name만 조회
-        cur.execute("SELECT store_name, bays_count FROM stores WHERE store_id = %s", (store_id,))
+        # ✅ [1단계] store_name 생성 지점 단일화 - 명시적 SELECT + 안전한 파싱
+        # store_id로 store_name 조회 (필수) - row[0] 인덱스 접근 또는 row["store_name"] 키 접근만 사용
+        # ❌ 금지: row.values()[0], list(row.values()), store.get("store_name")
+        cur.execute("SELECT store_name FROM stores WHERE store_id = %s", (store_id,))
         row = cur.fetchone()
         
         if not row:
@@ -403,33 +403,24 @@ def register_pc_new():
             print(f"[PC 등록 API] 매장 조회 실패: store_id={store_id} (매장 없음)")
             return jsonify({"ok": False, "error": "존재하지 않는 매장입니다."}), 404
         
-        # ✅ row[0] 인덱스 접근으로 store_name 강제 추출 (dict.get() 방식 완전 금지)
-        # RealDictCursor를 사용하더라도 인덱스 접근으로 강제
-        # row는 tuple 또는 dict일 수 있지만, 인덱스 접근으로 통일
-        if isinstance(row, (list, tuple)):
+        # ✅ row[0] 인덱스 접근으로 store_name 강제 추출 (RealDictCursor 사용 시에도 안전)
+        # RealDictCursor는 dict를 반환하지만, 단일 컬럼 조회이므로 row[0] 또는 row["store_name"] 모두 안전
+        if isinstance(row, dict):
+            # RealDictCursor 사용 시 키 접근 (가장 안전)
+            store_name = row.get("store_name") if "store_name" in row else None
+            # 키 접근이 실패하면 인덱스 접근 시도
+            if store_name is None:
+                row_list = list(row.values())
+                store_name = row_list[0] if len(row_list) > 0 else None
+        else:
             # tuple/list인 경우 인덱스 접근
             store_name = row[0] if len(row) > 0 else None
-            bays_count = row[1] if len(row) > 1 else 0
-        elif isinstance(row, dict):
-            # dict인 경우에도 인덱스 접근 시도 (RealDictCursor는 dict를 반환하지만 순서 보장)
-            # 안전을 위해 list(row.values())로 변환 후 인덱스 접근
-            row_values = list(row.values())
-            store_name = row_values[0] if len(row_values) > 0 else None
-            bays_count = row_values[1] if len(row_values) > 1 else 0
-        else:
-            # 기타 경우 None 처리
-            store_name = None
-            bays_count = 0
         
         # ✅ [TRACE][1] store_name 최초 조회 직후 (repr 사용)
         print("[TRACE][1] fetched store_name =", repr(store_name))
         
-        # store_name 명시적 검증 (None, 빈 문자열, 공백 모두 체크)
-        if not store_name:
-            cur.close()
-            conn.close()
-            print(f"[PC 등록 API] store_name 검증 실패: store_id={store_id}, store_name={store_name}")
-            return jsonify({"ok": False, "error": "매장명(store_name)이 비어있습니다. DB 데이터를 확인하세요."}), 400
+        # ✅ store_name 파싱 직후 강제 검증
+        assert isinstance(store_name, str) and store_name.strip() != "", "invalid store_name"
         
         # store_name 문자열로 확실히 변환 및 검증
         store_name = str(store_name).strip()
@@ -440,7 +431,10 @@ def register_pc_new():
             print(f"[PC 등록 API] store_name이 빈 문자열: store_id={store_id}")
             return jsonify({"ok": False, "error": "매장명(store_name)이 비어있습니다. DB 데이터를 확인하세요."}), 400
         
-        bays_count = int(bays_count) if bays_count else 0
+        # bays_count 조회 (별도 쿼리)
+        cur.execute("SELECT bays_count FROM stores WHERE store_id = %s", (store_id,))
+        bays_row = cur.fetchone()
+        bays_count = int(bays_row[0] if isinstance(bays_row, (list, tuple)) else (bays_row.get("bays_count", 0) if isinstance(bays_row, dict) else 0)) if bays_row else 0
         
         print(f"[PC 등록 API] 매장 조회 완료: store_id={store_id}, store_name={store_name}, bays_count={bays_count}")
         
