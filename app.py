@@ -68,6 +68,7 @@ if not services_found:
     print(f"[ROOT APP] ERROR: services directory not found!", flush=True)
     print(f"[ROOT APP] Searched in: {search_paths[:10]}", flush=True)
     # 최후의 수단: 현재 디렉토리에서 재귀적으로 찾기
+    print(f"[ROOT APP] Starting recursive search from: {os.path.abspath('.')}", flush=True)
     for root, dirs, files in os.walk(os.path.abspath('.'), topdown=True):
         if 'services' in dirs:
             services_path = os.path.join(root, 'services')
@@ -77,10 +78,23 @@ if not services_found:
             print(f"[ROOT APP] Found services recursively at: {services_path}", flush=True)
             services_found = True
             break
-        # 최대 3단계까지만 탐색
+        # 최대 5단계까지만 탐색 (더 깊이 탐색)
         depth = root.replace(os.path.abspath('.'), '').count(os.sep)
-        if depth >= 3:
+        if depth >= 5:
             dirs[:] = []  # 더 깊이 탐색하지 않음
+    # 상위 디렉토리에서도 찾기 시도
+    if not services_found:
+        print(f"[ROOT APP] Trying parent directories...", flush=True)
+        for level in range(1, 4):
+            parent_dir = os.path.abspath(os.path.join('.', '../' * level))
+            test_services = os.path.join(parent_dir, 'services')
+            if os.path.exists(test_services) and os.path.isdir(test_services):
+                services_path = test_services
+                if parent_dir not in sys.path:
+                    sys.path.insert(0, parent_dir)
+                print(f"[ROOT APP] Found services in parent level {level}: {services_path}", flush=True)
+                services_found = True
+                break
 
 if not services_found:
     raise ImportError("Cannot find 'services' directory. Check Railway working directory and file structure.")
