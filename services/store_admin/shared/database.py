@@ -240,6 +240,15 @@ def init_db():
         except Exception:
             pass
     
+    # bay_number 컬럼 추가 (INTEGER)
+    try:
+        cur.execute("ALTER TABLE store_pcs ADD COLUMN IF NOT EXISTS bay_number INTEGER")
+        conn.commit()
+        print("[DB] store_pcs 테이블에 bay_number 컬럼 추가 완료")
+    except Exception as e:
+        print(f"[WARNING] store_pcs bay_number 컬럼 추가 실패 (이미 존재할 수 있음): {e}")
+        conn.rollback()
+    
     try:
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pc_unique_id ON store_pcs(pc_unique_id)")
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pc_token ON store_pcs(pc_token) WHERE pc_token IS NOT NULL")
