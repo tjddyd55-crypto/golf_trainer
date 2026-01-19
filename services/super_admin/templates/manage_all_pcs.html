@@ -102,7 +102,7 @@
                     <p><strong>매장:</strong> <span id="approve-store-name"></span></p>
                     <p><strong>타석(룸) 이름:</strong> <span id="approve-bay-name"></span></p>
                     <hr>
-                    <label>타석 번호 (bay_id) <span class="text-danger">*</span>:</label>
+                    <label>타석 번호 (bay_number) <span class="text-danger">*</span>:</label>
                     <input 
                         type="number" 
                         id="approve-bay-id" 
@@ -113,7 +113,7 @@
                         placeholder="예: 1, 2, 3..."
                     >
                     <small class="form-text text-muted">
-                        타석 번호(bay_id)는 숫자만 입력하며, 01 같은 형식은 사용할 수 없습니다.<br>
+                        타석 번호는 숫자만 입력합니다.<br>
                         예: 1, 2, 3 …
                     </small>
                     <label class="mt-3">사용 시작일:</label>
@@ -198,8 +198,8 @@
                             <td id="detail-store-name"></td>
                         </tr>
                         <tr>
-                            <th>타석(룸)</th>
-                            <td id="detail-pc-name"></td>
+                            <th>타석(룸) 이름</th>
+                            <td id="detail-bay-name"></td>
                         </tr>
                         <tr>
                             <th>호스트명</th>
@@ -248,7 +248,7 @@
                 <div class="modal-body">
                     <div class="alert alert-warning">
                         <strong>주의:</strong> PC 등록 시 선택된 타석 번호와 다릅니다.<br>
-                        타석 번호를 변경하면 이 PC는 새로운 타석으로 활성화됩니다.<br>
+                        타석 번호를 변경하면 이 PC는 <b>다른 타석으로 활성화</b>됩니다.<br>
                         정말 변경하시겠습니까?
                     </div>
                     <p><strong>원래 타석 번호:</strong> <span id="original-bay-id"></span></p>
@@ -263,14 +263,13 @@
     </div>
 
     <!-- ✅ 배포 확인용 빌드 마커 -->
-    <span id="build-marker" data-build="MANAGE_ALL_PCS__2026-01-19__v2" style="display: none;"></span>
+    <span id="build-marker" data-build="MANAGE_ALL_PCS__BAY_NUMBER_ONLY__v3" style="display: none;"></span>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         // ✅ [6단계] 디버그 로그 (확인용)
-        console.log('[MANAGE_ALL_PCS] bay_id warning FINAL FIX applied');
-        console.log('[MANAGE_ALL_PCS] build=MANAGE_ALL_PCS__2026-01-19__v2');
-        console.log('[MANAGE_ALL_PCS] Version: 2026-01-19-bay-id-warning-v2');
+        console.log('[MANAGE_ALL_PCS] build=MANAGE_ALL_PCS__BAY_NUMBER_ONLY__v3');
+        console.log('[MANAGE_ALL_PCS] bay_number concept unified, pc_name removed');
         
         // ✅ 빌드 마커 확인
         const buildMarker = document.getElementById('build-marker');
@@ -283,50 +282,48 @@
         // ✅ [1단계] 전역 상태 변수 명확히 분리
         let currentPcUniqueId = null;
         let currentStoreId = '';
-        let currentBayId = '';
-        let originalBayId = null;  // PC 등록 시 전달된 원래 bay_id 값 (실제로는 bay_number)
-        let bayIdInitialized = false;   // 🔴 최초 1회 자동입력용
-        let pendingBayIdChange = null;  // 변경 시도 중인 값
+        let originalBayNumber = null;  // PC 등록 시 전달된 원래 bay_number 값
+        let bayNumberInitialized = false;   // 🔴 최초 1회 자동입력용
+        let pendingBayNumberChange = null;  // 변경 시도 중인 값
         
-        function showApproveModal(pcUniqueId, storeId, storeName, bayId, bayName, startDate = '', endDate = '', approvedDate = '') {
+        function showApproveModal(pcUniqueId, storeId, storeName, bayNumber, bayName, startDate = '', endDate = '', approvedDate = '') {
             currentPcUniqueId = pcUniqueId;
             currentStoreId = storeId || '';
-            currentBayId = bayId || '';
             
             document.getElementById('approve-store-name').textContent = storeName;
             document.getElementById('approve-bay-name').textContent = bayName;
             
-            const bayIdInput = document.getElementById('approve-bay-id');
+            const bayNumberInput = document.getElementById('approve-bay-id');
             
-            // ✅ [2단계] 최초 1회만 자동 세팅
-            if (!bayIdInitialized) {
-                // PC 등록 시 전달된 bay_id를 원래 값으로 저장
-                if (bayId) {
-                    const bayIdInt = parseInt(bayId, 10);
-                    originalBayId = (!isNaN(bayIdInt) && bayIdInt > 0) ? bayIdInt : null;
+            // ✅ [2단계] 최초 1회만 자동 세팅 (bay_number 기준)
+            if (!bayNumberInitialized) {
+                // PC 등록 시 전달된 bay_number를 원래 값으로 저장
+                if (bayNumber) {
+                    const bayNumberInt = parseInt(bayNumber, 10);
+                    originalBayNumber = (!isNaN(bayNumberInt) && bayNumberInt > 0) ? bayNumberInt : null;
                 } else {
-                    originalBayId = null;
+                    originalBayNumber = null;
                 }
                 
-                // bay_id 입력 필드에 기본값 자동 입력 (최초 1회만)
-                bayIdInput.value = originalBayId !== null ? originalBayId : '';
-                bayIdInitialized = true;
+                // bay_number 입력 필드에 기본값 자동 입력 (최초 1회만)
+                bayNumberInput.value = originalBayNumber !== null ? originalBayNumber : '';
+                bayNumberInitialized = true;
                 
-                console.log('[DEBUG] bay_id initialized:', originalBayId);
+                console.log('[DEBUG] bay_number initialized:', originalBayNumber);
             } else {
-                console.log('[DEBUG] bay_id already initialized, not overwriting. Current value:', bayIdInput.value);
+                console.log('[DEBUG] bay_number already initialized, not overwriting. Current value:', bayNumberInput.value);
             }
             
             // ✅ [2단계] 타석 번호 수정 감지 이벤트 리스너 추가
             // 기존 이벤트 리스너 제거 (중복 방지)
-            bayIdInput.removeEventListener('change', handleBayIdChange);
-            bayIdInput.removeEventListener('blur', handleBayIdBlur);
+            bayNumberInput.removeEventListener('change', handleBayNumberChange);
+            bayNumberInput.removeEventListener('blur', handleBayNumberBlur);
             
             // change 이벤트: 값 변경 시 즉시 감지
-            bayIdInput.addEventListener('change', handleBayIdChange);
+            bayNumberInput.addEventListener('change', handleBayNumberChange);
             
             // blur 이벤트: 포커스가 벗어날 때 감지
-            bayIdInput.addEventListener('blur', handleBayIdBlur);
+            bayNumberInput.addEventListener('blur', handleBayNumberBlur);
             
             const today = new Date().toISOString().split('T')[0];
             const oneYearLater = new Date();
@@ -344,22 +341,22 @@
             // ✅ [5단계] 모달 닫힐 때 상태 초기화
             const approveModalElement = document.getElementById('approveModal');
             approveModalElement.addEventListener('hidden.bs.modal', function onModalHidden() {
-                bayIdInitialized = false;
-                originalBayId = null;
-                pendingBayIdChange = null;
+                bayNumberInitialized = false;
+                originalBayNumber = null;
+                pendingBayNumberChange = null;
                 console.log('[DEBUG] Modal closed, state reset');
                 // 이벤트 리스너 제거 (중복 방지)
                 approveModalElement.removeEventListener('hidden.bs.modal', onModalHidden);
             }, { once: true });
         }
         
-        // ✅ [3단계] bay_id 변경 감지 로직 수정
-        function handleBayIdChange(event) {
-            const bayIdInput = event.target;
-            const current = parseInt(bayIdInput.value.trim(), 10);
+        // ✅ [3단계] bay_number 변경 감지 로직 수정
+        function handleBayNumberChange(event) {
+            const bayNumberInput = event.target;
+            const current = parseInt(bayNumberInput.value.trim(), 10);
             
-            // originalBayId가 없으면 무시
-            if (originalBayId === null) {
+            // originalBayNumber가 없으면 무시
+            if (originalBayNumber === null) {
                 return;
             }
             
@@ -370,26 +367,26 @@
             
             // ✅ 원래 값과 다른 경우에만 경고 모달 표시
             // 단, 경고 모달이 이미 열려있지 않은 경우에만 표시 (중복 방지)
-            if (current !== originalBayId) {
+            if (current !== originalBayNumber) {
                 const warningModal = bootstrap.Modal.getInstance(document.getElementById('bayIdChangeWarningModal'));
                 const isWarningModalOpen = warningModal && warningModal._element && warningModal._element.classList.contains('show');
                 
                 if (!isWarningModalOpen) {
-                    pendingBayIdChange = current;
-                    showBayIdChangeWarning(originalBayId, current);
+                    pendingBayNumberChange = current;
+                    showBayNumberChangeWarning(originalBayNumber, current);
                 }
             }
         }
         
         // ✅ [2단계] blur 이벤트 핸들러 (포커스가 벗어날 때)
-        function handleBayIdBlur(event) {
+        function handleBayNumberBlur(event) {
             // change 이벤트에서 이미 처리했으므로 여기서는 추가 처리 없음
             // 단, change 이벤트가 발생하지 않은 경우를 대비해 한 번 더 체크
-            handleBayIdChange(event);
+            handleBayNumberChange(event);
         }
         
-        // ✅ [3단계] 경고 모달 표시 함수
-        function showBayIdChangeWarning(originalValue, newValue) {
+        // ✅ [3단계] 경고 모달 표시 함수 (bay_number 기준)
+        function showBayNumberChangeWarning(originalValue, newValue) {
             document.getElementById('original-bay-id').textContent = originalValue || '없음';
             document.getElementById('new-bay-id').textContent = newValue;
             
@@ -400,9 +397,9 @@
         // ✅ [4단계] 경고 모달 버튼 동작 명확화
         // 취소 버튼
         function cancelBayIdChange() {
-            const bayIdInput = document.getElementById('approve-bay-id');
-            bayIdInput.value = originalBayId !== null ? originalBayId : '';
-            pendingBayIdChange = null;
+            const bayNumberInput = document.getElementById('approve-bay-id');
+            bayNumberInput.value = originalBayNumber !== null ? originalBayNumber : '';
+            pendingBayNumberChange = null;
             
             // 경고 모달 닫기
             const warningModal = bootstrap.Modal.getInstance(document.getElementById('bayIdChangeWarningModal'));
@@ -414,7 +411,7 @@
         // 변경 유지 버튼
         function confirmBayIdChange() {
             // 값 유지, 아무 것도 덮어쓰지 않음
-            pendingBayIdChange = null;
+            pendingBayNumberChange = null;
             
             // 경고 모달 닫기
             const warningModal = bootstrap.Modal.getInstance(document.getElementById('bayIdChangeWarningModal'));
@@ -422,7 +419,7 @@
                 warningModal.hide();
             }
             
-            // 승인 모달의 bay_id input에 포커스 (사용자가 확인할 수 있도록)
+            // 승인 모달의 bay_number input에 포커스 (사용자가 확인할 수 있도록)
             document.getElementById('approve-bay-id').focus();
         }
 
@@ -436,31 +433,31 @@
         }
 
         function approvePC() {
-            const bayIdInput = document.getElementById('approve-bay-id');
-            const bayIdValue = bayIdInput.value.trim();
+            const bayNumberInput = document.getElementById('approve-bay-id');
+            const bayNumberValue = bayNumberInput.value.trim();
             const startDate = document.getElementById('approve-start-date').value;
             const endDate = document.getElementById('approve-end-date').value;
             const approvedDate = document.getElementById('approve-approved-date').value;
             const notes = document.getElementById('approve-notes').value;
             
-            // bay_id 필수 검증
-            if (!bayIdValue) {
-                alert('타석 번호(bay_id)는 필수입니다.');
-                bayIdInput.focus();
+            // bay_number 필수 검증
+            if (!bayNumberValue) {
+                alert('타석 번호(bay_number)는 필수입니다.');
+                bayNumberInput.focus();
                 return;
             }
             
             // 숫자 검증
-            if (!/^\d+$/.test(bayIdValue)) {
+            if (!/^\d+$/.test(bayNumberValue)) {
                 alert('타석 번호는 숫자만 입력할 수 있습니다.');
-                bayIdInput.focus();
+                bayNumberInput.focus();
                 return;
             }
             
-            const bayIdInt = parseInt(bayIdValue, 10);
-            if (bayIdInt <= 0) {
+            const bayNumberInt = parseInt(bayNumberValue, 10);
+            if (bayNumberInt <= 0) {
                 alert('타석 번호는 1 이상의 정수여야 합니다.');
-                bayIdInput.focus();
+                bayNumberInput.focus();
                 return;
             }
             
@@ -469,11 +466,11 @@
                 return;
             }
             
-            // bay_id는 정수로 전송 (01 입력 시 자동으로 1 처리)
+            // ✅ [5단계] 승인 요청 데이터 구조 정리 (bay_number 기준)
             const requestBody = {
                 pc_unique_id: currentPcUniqueId,
                 store_id: currentStoreId || null,
-                bay_id: bayIdInt,  // 정수로 전송
+                bay_id: bayNumberInt,  // 서버 API는 bay_id로 받지만, 실제로는 bay_number 값
                 usage_start_date: startDate,
                 usage_end_date: endDate,
                 approved_date: approvedDate || new Date().toISOString().split('T')[0],
@@ -568,7 +565,7 @@
 
         function showDetailModal(pcUniqueId, storeName, bayName, hostname, platform, uniqueId, registeredAt, approvedAt, approvedBy, notes) {
             document.getElementById('detail-store-name').textContent = storeName || '-';
-            document.getElementById('detail-pc-name').textContent = bayName || '-';
+            document.getElementById('detail-bay-name').textContent = bayName || '-';
             document.getElementById('detail-hostname').textContent = hostname || '-';
             document.getElementById('detail-platform').textContent = platform || '-';
             document.getElementById('detail-unique-id').textContent = uniqueId || '-';
