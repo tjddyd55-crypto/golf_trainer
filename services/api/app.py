@@ -114,6 +114,7 @@ print("### APP BOOT COMPLETED ###", flush=True)
 
 # ✅ [2단계] 앱 기동만 되면 바로 200을 반환하도록 최소화
 @app.route("/")
+@app.route("/api/health")
 def root_ok():
     """Railway Healthcheck용 - 앱 기동만 되면 바로 200 반환"""
     return "OK", 200
