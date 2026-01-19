@@ -120,6 +120,7 @@ database.init_db()
 # =========================
 @app.route("/api/health", methods=["GET"])
 @app.route("/health", methods=["GET"])
+@app.route("/", methods=["GET"])
 def health_check():
     """Railway Healthcheck용 엔드포인트 - 무조건 200 반환 (DB 체크, 인증 등 절대 없음)"""
     return "OK", 200
