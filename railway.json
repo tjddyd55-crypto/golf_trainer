@@ -1,5 +1,8 @@
 {
   "build": {
-    "builder": "DOCKERFILE"
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "PYTHONPATH=. gunicorn services.super_admin.app:app --bind 0.0.0.0:$PORT"
   }
 }

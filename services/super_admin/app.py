@@ -2,10 +2,16 @@
 # ✅ [1단계] 서비스 부팅 확인 로그 (가장 먼저 출력)
 import os
 import sys
+
+# app.py 경로 보정 코드 (삭제 금지)
+BASE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
+
 print("### SUPER_ADMIN BOOT START ###", flush=True)
 print("### SERVICE=super_admin ###", flush=True)
 print("### PORT env =", os.getenv("PORT"), flush=True)
-print("SYS.PATH =", sys.path, flush=True)
+print("BOOT SYS.PATH =", sys.path, flush=True)
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import re
