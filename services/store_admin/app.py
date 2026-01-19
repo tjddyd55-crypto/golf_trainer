@@ -345,13 +345,6 @@ def format_bay_display(bay_id=None, bay_name=None):
     if bay_name:
         import re
         # 숫자 추출 (예: "2번룸" -> "2", "1타석" -> "1")
-        match = re.search(r'(\d+)', str(bay_name))
-        if match:
-            num = int(match.group(1))
-            return f"{num:02d}번 타석"
-    
-    # 둘 다 없으면 기본값
-    return "타석 정보 없음"
 
 # =========================
 # 로그아웃

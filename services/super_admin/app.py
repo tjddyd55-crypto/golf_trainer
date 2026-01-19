@@ -58,12 +58,6 @@ def format_bay_display(bay_number=None, bay_name=None, bay_id=None):
             pass
     
     return "타석 정보 없음"
-        if match:
-            num = int(match.group(1))
-            return f"{num:02d}번 타석"
-    
-    # 둘 다 없으면 기본값
-    return "타석 정보 없음"
 
 # =========================
 # 총책임자 로그인
