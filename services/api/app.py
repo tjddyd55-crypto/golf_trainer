@@ -570,20 +570,26 @@ def register_pc_new():
         
         try:
             # ✅ 최소 컬럼 기준 INSERT (컬럼 순서와 VALUES 바인딩 순서 정확히 일치)
-            # store_name이 첫 번째 컬럼이므로 NULL이 될 수 없음
+            # 사용자 요청 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, status
+            # pc_unique_id는 UNIQUE NOT NULL이므로 필수 포함
+            # pc_name은 NOT NULL이므로 기본값 설정 필요
+            pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
+            
             cur.execute("""
                 INSERT INTO store_pcs (
                     store_name,
                     store_id,
                     bay_name,
                     pc_uuid,
+                    pc_unique_id,
+                    pc_name,
                     bay_id,
                     bay_number,
                     status
                 ) VALUES (
-                    %s, %s, %s, %s, %s, %s, 'pending'
+                    %s, %s, %s, %s, %s, %s, %s, %s, 'pending'
                 )
-            """, (store_name, store_id, bay_name, pc_uuid, bay_id, bay_number))
+            """, (store_name, store_id, bay_name, pc_uuid, pc_unique_id, pc_name, bay_id, bay_number))
             
             print(f"[PC 등록 API] store_pcs INSERT 완료")
         except Exception as e:
