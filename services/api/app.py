@@ -577,16 +577,15 @@ def register_pc_new():
         print("[TRACE][FINAL] store_name =", repr(store_name))
         assert isinstance(store_name, str) and store_name.strip() != "", "store_name invalid"
         
-        # ✅ [7단계] INSERT 파라미터 무결성 점검
+        # ✅ [3단계] INSERT 파라미터 강제 고정
         # insert_params를 명시적으로 구성 (키명 정확히 일치 보장)
+        # 필수 키: store_name, store_id, bay_id, bay_name, pc_unique_id, bay_number
         insert_params = {
-            "store_name": store_name,
+            "store_name": store_name,      # DB에서 조회한 값 (필수)
             "store_id": store_id,
-            "bay_name": bay_name,
-            "pc_uuid": pc_uuid,
-            "pc_unique_id": pc_unique_id,
-            "pc_name": pc_name,
             "bay_id": bay_id,
+            "bay_name": bay_name,
+            "pc_unique_id": pc_unique_id,
             "bay_number": bay_number
         }
         # repr 사용하여 정확한 값 확인 - 강제 flush
