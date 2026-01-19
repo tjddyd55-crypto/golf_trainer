@@ -1011,12 +1011,20 @@ def approve_pc():
             approved_at_value = date.today()
         
         # ✅ 5. PC 승인 및 사용 기간 설정 (bay_id와 bay_number 모두 저장)
+        # ✅ pc_name은 bay_name과 자동 동기화 (PC 이름 = 타석 이름)
+        # 기존 PC 데이터에서 bay_name 조회
+        existing_bay_name = pc_data.get("bay_name")
+        
+        # bay_name이 있으면 pc_name도 동일하게 설정, 없으면 기본값 사용
+        pc_name = existing_bay_name or f"{pc_data.get('store_name', '')}-{bay_number}번 타석(룸)"
+        
         cur.execute("""
             UPDATE store_pcs 
             SET status = 'active',
                 store_id = %s,
                 bay_id = %s,
                 bay_number = %s,
+                pc_name = %s,
                 pc_token = %s,
                 usage_start_date = %s,
                 usage_end_date = %s,
@@ -1024,7 +1032,7 @@ def approve_pc():
                 approved_by = %s,
                 notes = %s
             WHERE pc_unique_id = %s
-        """, (store_id, bay_id, bay_number, pc_token, start_date, end_date, 
+        """, (store_id, bay_id, bay_number, pc_name, pc_token, start_date, end_date, 
               approved_at_value, session.get("user_id", "super_admin"), notes, pc_unique_id))
         
         conn.commit()

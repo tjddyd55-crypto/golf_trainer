@@ -67,15 +67,15 @@
                             </td>
                             <td>
                                 {% if pc.status == 'pending' %}
-                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_number or pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">승인</button>
-                                    <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">거부</button>
+                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_number or pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}')">승인</button>
+                                    <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}')">거부</button>
                                 {% elif pc.status == 'active' %}
-                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_number or pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}', '{{ pc.approved_at or '' }}')">수정</button>
+                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_number or pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}', '{{ pc.approved_at or '' }}')">수정</button>
                                 {% endif %}
-                                <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">삭제</button>
+                                <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}')">삭제</button>
                             </td>
                             <td>
-                                <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.pc_unique_id }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.approved_by or '' }}', '{{ pc.notes or '' }}')">상세</button>
+                                <button class="btn btn-sm btn-outline-secondary" onclick="showDetailModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_hostname or '' }}', '{{ pc.pc_platform or '' }}', '{{ pc.pc_unique_id }}', '{{ pc.registered_at or '' }}', '{{ pc.approved_at or '' }}', '{{ pc.approved_by or '' }}', '{{ pc.notes or '' }}')">상세</button>
                             </td>
                         </tr>
                         {% endfor %}
@@ -101,7 +101,6 @@
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="approve-store-name"></span></p>
                     <p><strong>타석(룸) 이름:</strong> <span id="approve-bay-name"></span></p>
-                    <p><strong>PC 이름:</strong> <span id="approve-pc-name"></span></p>
                     <hr>
                     <label>타석 번호 (bay_id) <span class="text-danger">*</span>:</label>
                     <input 
@@ -291,14 +290,13 @@
         let bayIdInitialized = false;   // 🔴 최초 1회 자동입력용
         let pendingBayIdChange = null;  // 변경 시도 중인 값
         
-        function showApproveModal(pcUniqueId, storeId, storeName, bayId, bayName, pcName, startDate = '', endDate = '', approvedDate = '') {
+        function showApproveModal(pcUniqueId, storeId, storeName, bayId, bayName, startDate = '', endDate = '', approvedDate = '') {
             currentPcUniqueId = pcUniqueId;
             currentStoreId = storeId || '';
             currentBayId = bayId || '';
             
             document.getElementById('approve-store-name').textContent = storeName;
             document.getElementById('approve-bay-name').textContent = bayName;
-            document.getElementById('approve-pc-name').textContent = pcName || '-';
             
             const bayIdInput = document.getElementById('approve-bay-id');
             
@@ -430,11 +428,11 @@
             document.getElementById('approve-bay-id').focus();
         }
 
-        function showRejectModal(pcUniqueId, storeName, bayName, pcName) {
+        function showRejectModal(pcUniqueId, storeName, bayName) {
             currentPcUniqueId = pcUniqueId;
             document.getElementById('reject-store-name').textContent = storeName;
             document.getElementById('reject-bay-name').textContent = bayName;
-            document.getElementById('reject-pc-name').textContent = bayName || pcName || '-';
+            document.getElementById('reject-pc-name').textContent = bayName || '-';
             document.getElementById('reject-notes').value = '';
             
             new bootstrap.Modal(document.getElementById('rejectModal')).show();
@@ -536,11 +534,11 @@
             });
         }
 
-        function showDeleteModal(pcUniqueId, storeName, bayName, pcName) {
+        function showDeleteModal(pcUniqueId, storeName, bayName) {
             currentPcUniqueId = pcUniqueId;
             document.getElementById('delete-store-name').textContent = storeName;
             document.getElementById('delete-bay-name').textContent = bayName;
-            document.getElementById('delete-pc-name').textContent = bayName || pcName || '-';
+            document.getElementById('delete-pc-name').textContent = bayName || '-';
             
             new bootstrap.Modal(document.getElementById('deleteModal')).show();
         }
@@ -572,9 +570,9 @@
             });
         }
 
-        function showDetailModal(pcUniqueId, storeName, bayName, pcName, hostname, platform, uniqueId, registeredAt, approvedAt, approvedBy, notes) {
+        function showDetailModal(pcUniqueId, storeName, bayName, hostname, platform, uniqueId, registeredAt, approvedAt, approvedBy, notes) {
             document.getElementById('detail-store-name').textContent = storeName || '-';
-            document.getElementById('detail-pc-name').textContent = bayName || pcName || '-';
+            document.getElementById('detail-pc-name').textContent = bayName || '-';
             document.getElementById('detail-hostname').textContent = hostname || '-';
             document.getElementById('detail-platform').textContent = platform || '-';
             document.getElementById('detail-unique-id').textContent = uniqueId || '-';

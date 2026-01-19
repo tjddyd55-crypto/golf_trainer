@@ -583,9 +583,9 @@ def register_pc_new():
         if not pc_uuid:
             pc_uuid = pc_unique_id
         
-        # pc_name: 요청에서 받았거나 bay_name 기반으로 생성
-        if not pc_name:
-            pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
+        # ✅ pc_name은 bay_name과 자동 동기화 (PC 이름은 타석 이름과 동일)
+        # 프론트엔드에서 pc_name을 받지 않고, 서버에서 bay_name으로 자동 설정
+        pc_name = bay_name or f"{store_name}-{bay_number}번 타석(룸)"
         
         # ✅ [3단계] payload 구성 전 검증 로그
         print("[REGISTER_PC_FINAL]", flush=True)
