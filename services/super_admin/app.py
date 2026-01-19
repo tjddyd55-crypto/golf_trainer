@@ -1248,5 +1248,6 @@ def super_admin_logout():
     return redirect(url_for("super_admin_login"))
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5002))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    port = int(os.getenv("PORT", "8080"))
+    print(f"### LISTENING ON 0.0.0.0:{port} ###", flush=True)
+    app.run(host="0.0.0.0", port=port)
