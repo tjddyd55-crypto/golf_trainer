@@ -36,21 +36,13 @@ app = Flask(__name__,
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_in_production")
 
 # =========================
-# Healthcheck 엔드포인트 (가장 먼저 등록 - 데이터베이스 초기화 전)
+# ✅ [2단계] Healthcheck 엔드포인트 (app 생성 직후 즉시 등록)
 # Railway Healthcheck용 - 무조건 200 OK 반환 (외부 의존성 체크 절대 금지)
 # =========================
 @app.route("/health", methods=["GET"])
-@app.route("/api/health", methods=["GET"])
-def health_check():
-    """
-    Railway healthcheck용 엔드포인트
-    - 인증 불필요
-    - DB 접근 불필요
-    - 외부 API 호출 불필요
-    - 무조건 200 OK 반환
-    """
-    # 절대 DB 체크, Redis 체크, 외부 API 호출 등을 하지 않음
-    # 단순히 200 OK만 반환
+def health():
+    """Railway healthcheck용 엔드포인트 - 인증 불필요, DB 접근 불필요"""
+    print("### HEALTH HIT ###", flush=True)
     return "OK", 200
 
 # 데이터베이스 초기화 (healthcheck 이후)
