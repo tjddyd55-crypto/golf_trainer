@@ -359,6 +359,13 @@ def register_pc_new():
       "bay_name": "VIP룸"
     }
     """
+    # ✅ 함수 시작 로그 (실제 호출 여부 확인)
+    print("=" * 80, flush=True)
+    print("[REGISTER_PC_NEW] 함수 시작 - 최신 코드 버전", flush=True)
+    print("=" * 80, flush=True)
+    import sys
+    sys.stdout.flush()
+    
     try:
         data = request.get_json()
         store_id = data.get("store_id")
