@@ -630,10 +630,19 @@ def get_bays(store_id):
     db_bays = cur.fetchall()
     
     # DB 타석 정보로 업데이트
+    # bay_id는 UUID 문자열이므로 int() 변환 없이 직접 비교
     for db_bay in db_bays:
         bay_id = db_bay["bay_id"]
-        bay_num = int(bay_id)
-        if bay_num <= bays_count:
+        # bay_number가 있으면 bay_number로 매칭, 없으면 bay_id로 매칭
+        bay_number = db_bay.get("bay_number")
+        if bay_number and bay_number <= bays_count:
+            # bay_number로 매칭
+            for bay in all_bays:
+                if bay.get("bay_number") == bay_number:
+                    bay.update(dict(db_bay))
+                    break
+        else:
+            # bay_id로 직접 매칭 (레거시 지원)
             for bay in all_bays:
                 if bay["bay_id"] == bay_id:
                     bay.update(dict(db_bay))

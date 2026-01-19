@@ -428,25 +428,39 @@ def register_pc_new():
         
         # store_pcs INSERT 또는 UPDATE (PC가 없으면 INSERT, 있으면 UPDATE)
         # status는 'PENDING'으로 설정 (관리자 승인 대기)
+        # bay_id는 UUID 문자열로 저장 (bay_number는 별도 컬럼)
         cur.execute("""
             INSERT INTO store_pcs (
                 store_id, bay_id, bay_name, pc_unique_id, 
-                status, registered_at
+                status, registered_at, bay_number
             )
-            VALUES (%s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP)
+            VALUES (%s, %s, %s, %s, 'pending', CURRENT_TIMESTAMP, %s)
             ON CONFLICT (pc_unique_id) DO UPDATE SET
                 store_id = EXCLUDED.store_id,
                 bay_id = EXCLUDED.bay_id,
                 bay_name = COALESCE(EXCLUDED.bay_name, store_pcs.bay_name),
+                bay_number = EXCLUDED.bay_number,
                 status = CASE 
                     WHEN store_pcs.status = 'active' THEN 'active'  -- 이미 승인된 경우 유지
                     ELSE 'pending'  -- 새 등록이면 대기 상태
                 END
-        """, (store_id, str(bay_number), bay_name, pc_unique_id))
+        """, (store_id, bay_id, bay_name, pc_unique_id, bay_number))
         
+        # DB commit 확인 후 응답
         conn.commit()
+        
+        # commit 성공 확인
+        cur.execute("SELECT status FROM store_pcs WHERE pc_unique_id = %s", (pc_unique_id,))
+        saved_pc = cur.fetchone()
+        
         cur.close()
         conn.close()
+        
+        if not saved_pc:
+            return jsonify({
+                "ok": False,
+                "error": "PC 등록 저장에 실패했습니다."
+            }), 500
         
         return jsonify({
             "ok": True,

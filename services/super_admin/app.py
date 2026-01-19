@@ -864,7 +864,7 @@ def approve_pc():
         
         pc_unique_id = data.get("pc_unique_id")
         store_id = data.get("store_id")  # 매장코드
-        bay_id_raw = data.get("bay_id")  # 타석 ID (정수로 받음)
+        bay_id_raw = data.get("bay_id")  # 타석 번호 (bay_number, 정수)
         usage_start_date = data.get("usage_start_date")  # YYYY-MM-DD 문자열
         usage_end_date = data.get("usage_end_date")  # YYYY-MM-DD 문자열
         approved_date = data.get("approved_date")  # YYYY-MM-DD 문자열 (선택)
@@ -875,21 +875,21 @@ def approve_pc():
         if not pc_unique_id:
             return jsonify({"success": False, "message": "pc_unique_id가 필요합니다."}), 400
         
-        # ✅ 1. bay_id 필수 입력 검증
+        # ✅ 1. bay_number 필수 입력 검증 (bay_id는 실제로 bay_number)
         if not bay_id_raw:
-            return jsonify({"success": False, "message": "타석 번호(bay_id)는 필수입니다."}), 400
+            return jsonify({"success": False, "message": "타석 번호(bay_number)는 필수입니다."}), 400
         
         # ✅ 2. 숫자 여부 검증
-        bay_id_str = str(bay_id_raw).strip()
-        if not bay_id_str.isdigit():
+        bay_number_str = str(bay_id_raw).strip()
+        if not bay_number_str.isdigit():
             return jsonify({"success": False, "message": "타석 번호는 숫자만 입력할 수 있습니다."}), 400
         
         # ✅ 3. 정수 변환 및 범위 체크 (01 입력 시 자동으로 1 처리)
-        bay_id = int(bay_id_str)
-        if bay_id <= 0:
+        bay_number = int(bay_number_str)
+        if bay_number <= 0:
             return jsonify({"success": False, "message": "타석 번호는 1 이상의 정수여야 합니다."}), 400
         
-        print(f"[DEBUG] bay_id 검증 완료: {bay_id_raw} -> {bay_id} (정수)")
+        print(f"[DEBUG] bay_number 검증 완료: {bay_id_raw} -> {bay_number} (정수)")
         
         # 문자열을 DATE로 변환
         from datetime import date
@@ -954,16 +954,17 @@ def approve_pc():
                 "message": "매장 정보를 찾을 수 없습니다. store_id가 필요합니다."
             }), 400
         
-        # ✅ 4. bay_id 중복 검증 (매장 단위, 정수 기준)
+        # ✅ 4. bay_number 중복 검증 (매장 단위, bay_number 기준)
+        # bay_id는 UUID 문자열이므로, bay_number로 중복 검증
         cur.execute("""
             SELECT 1
             FROM store_pcs
             WHERE store_id = %s
-              AND bay_id = %s
+              AND bay_number = %s
               AND status = 'active'
               AND pc_unique_id != %s
             LIMIT 1
-        """, (store_id, bay_id, pc_unique_id))
+        """, (store_id, bay_number, pc_unique_id))
         
         duplicate_exists = cur.fetchone() is not None
         if duplicate_exists:
@@ -973,10 +974,32 @@ def approve_pc():
                 conn.close()
             return jsonify({
                 "success": False,
-                "message": f"타석 번호 {bay_id}는 이미 사용 중입니다. 다른 번호를 입력하세요."
+                "message": f"타석 번호 {bay_number}는 이미 사용 중입니다. 다른 번호를 입력하세요."
             }), 400
         
-        print(f"[DEBUG] bay_id 중복 검증 완료: store_id={store_id}, bay_id={bay_id} (중복 없음)")
+        print(f"[DEBUG] bay_number 중복 검증 완료: store_id={store_id}, bay_number={bay_number} (중복 없음)")
+        
+        # bay_id 조회 또는 생성 (bays 테이블에서 bay_number로 조회)
+        cur.execute("""
+            SELECT bay_id FROM bays 
+            WHERE store_id = %s AND bay_number = %s
+            LIMIT 1
+        """, (store_id, bay_number))
+        bay_row = cur.fetchone()
+        
+        if bay_row:
+            bay_id = bay_row["bay_id"]
+        else:
+            # bays 테이블에 타석이 없으면 생성 (bay_id는 UUID)
+            import uuid
+            bay_id = str(uuid.uuid4())[:8]
+            bay_code = f"{store_id}_{bay_number}"
+            cur.execute("""
+                INSERT INTO bays (store_id, bay_id, bay_number, status, user_id, last_update, bay_code)
+                VALUES (%s, %s, %s, 'READY', '', CURRENT_TIMESTAMP, %s)
+                ON CONFLICT (store_id, bay_id) DO NOTHING
+            """, (store_id, bay_id, bay_number, bay_code))
+            print(f"[DEBUG] bays 테이블에 타석 생성: store_id={store_id}, bay_id={bay_id}, bay_number={bay_number}")
         
         # 토큰 생성
         pc_token = database.generate_pc_token(pc_unique_id, mac_address)
@@ -987,13 +1010,13 @@ def approve_pc():
         except (ValueError, TypeError):
             approved_at_value = date.today()
         
-        # ✅ 5. PC 승인 및 사용 기간 설정 (bay_id 없으면 승인 금지)
-        # bay_id는 이미 검증 완료 (필수, 정수, 중복 없음)
+        # ✅ 5. PC 승인 및 사용 기간 설정 (bay_id와 bay_number 모두 저장)
         cur.execute("""
             UPDATE store_pcs 
             SET status = 'active',
                 store_id = %s,
                 bay_id = %s,
+                bay_number = %s,
                 pc_token = %s,
                 usage_start_date = %s,
                 usage_end_date = %s,
@@ -1001,25 +1024,8 @@ def approve_pc():
                 approved_by = %s,
                 notes = %s
             WHERE pc_unique_id = %s
-        """, (store_id, bay_id, pc_token, start_date, end_date, 
+        """, (store_id, bay_id, bay_number, pc_token, start_date, end_date, 
               approved_at_value, session.get("user_id", "super_admin"), notes, pc_unique_id))
-        
-        # bays 테이블에 타석이 없으면 생성 (get_bays()에서 조회 가능하도록)
-        if bay_id:
-            cur.execute("""
-                SELECT COUNT(*) as count FROM bays 
-                WHERE store_id = %s AND bay_id = %s
-            """, (store_id, bay_id))
-            bay_exists = cur.fetchone()
-            if bay_exists and bay_exists["count"] == 0:
-                # bays 테이블에 타석 생성
-                bay_code = f"{store_id}_{bay_id}"
-                cur.execute("""
-                    INSERT INTO bays (store_id, bay_id, status, user_id, last_update, bay_code)
-                    VALUES (%s, %s, 'READY', '', CURRENT_TIMESTAMP, %s)
-                    ON CONFLICT (store_id, bay_id) DO NOTHING
-                """, (store_id, bay_id, bay_code))
-                print(f"[DEBUG] bays 테이블에 타석 생성: store_id={store_id}, bay_id={bay_id}")
         
         conn.commit()
         
