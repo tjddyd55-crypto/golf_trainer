@@ -424,7 +424,7 @@ def register_pc_new():
                 "error": f"bay_number는 1부터 {bays_count} 사이여야 합니다."
             }), 400
         
-        # ✅ 동일 PC 재등록 확인 (pc_unique_id 기준)
+        # ✅ 동일 PC 재등록 확인 (pc_unique_id 기준) - INSERT 전에 체크
         cur.execute("""
             SELECT store_id, bay_number, bay_name, status
             FROM store_pcs
@@ -434,7 +434,6 @@ def register_pc_new():
         
         existing_pc = cur.fetchone()
         if existing_pc:
-            existing_store_id = existing_pc.get("store_id")
             existing_bay_number = existing_pc.get("bay_number")
             existing_bay_name = existing_pc.get("bay_name")
             existing_status = existing_pc.get("status")
