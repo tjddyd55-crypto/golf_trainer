@@ -558,21 +558,24 @@ def register_pc_new():
         pc_uuid = pc_unique_id
         
         # ✅ INSERT 직전 디버그 로그
-        print("[DEBUG] store_name =", store_name)
+        print("[DEBUG][FINAL] store_name:", store_name)
         print("[DEBUG] store_id =", store_id)
         print("[DEBUG] bay_name =", bay_name)
         print("[DEBUG] pc_uuid =", pc_uuid)
-        print("[DEBUG] pc_unique_id =", pc_unique_id)
         print("[DEBUG] bay_id =", bay_id)
         print("[DEBUG] bay_number =", bay_number)
+        
+        # 임시 검증용: store_name 하드코딩 테스트 (문제 확인용)
+        # store_name = "TEMP_TEST_STORE"
         
         print(f"[PC 등록 API] store_pcs INSERT 시작")
         
         try:
-            # ✅ 최소 컬럼 기준 INSERT (컬럼 순서와 VALUES 바인딩 순서 정확히 일치)
-            # 사용자 요청 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, status
-            # pc_unique_id는 UNIQUE NOT NULL이므로 필수 포함
-            # pc_name은 NOT NULL이므로 기본값 설정 필요
+            # ✅ 사용자 요청 순서대로 정확히 작성
+            # 컬럼 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, status
+            # VALUES 바인딩 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number
+            # NOT NULL 컬럼: store_name, bay_name, pc_name, pc_unique_id, bay_id
+            # pc_name과 pc_unique_id는 필수이므로 추가
             pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
             
             cur.execute("""
@@ -581,15 +584,15 @@ def register_pc_new():
                     store_id,
                     bay_name,
                     pc_uuid,
-                    pc_unique_id,
-                    pc_name,
                     bay_id,
                     bay_number,
+                    pc_unique_id,
+                    pc_name,
                     status
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, %s, 'pending'
                 )
-            """, (store_name, store_id, bay_name, pc_uuid, pc_unique_id, pc_name, bay_id, bay_number))
+            """, (store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, pc_unique_id, pc_name))
             
             print(f"[PC 등록 API] store_pcs INSERT 완료")
         except Exception as e:
