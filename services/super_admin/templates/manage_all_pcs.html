@@ -303,14 +303,21 @@
             
             // ✅ [2단계] 타석 번호 수정 감지 이벤트 리스너 추가
             // 기존 이벤트 리스너 제거 (중복 방지)
-            bayIdInput.removeEventListener('change', handleBayIdChange);
-            bayIdInput.removeEventListener('blur', handleBayIdBlur);
+            const clonedInput = bayIdInput.cloneNode(true);
+            bayIdInput.parentNode.replaceChild(clonedInput, bayIdInput);
+            const newBayIdInput = document.getElementById('approve-bay-id');
             
             // change 이벤트: 값 변경 시 즉시 감지
-            bayIdInput.addEventListener('change', handleBayIdChange);
+            newBayIdInput.addEventListener('change', handleBayIdChange);
             
             // blur 이벤트: 포커스가 벗어날 때 감지
-            bayIdInput.addEventListener('blur', handleBayIdBlur);
+            newBayIdInput.addEventListener('blur', handleBayIdBlur);
+            
+            // input 이벤트: 실시간 감지 (선택적)
+            newBayIdInput.addEventListener('input', function(e) {
+                // input 이벤트는 change/blur에서 처리하므로 여기서는 로그만
+                console.log('[DEBUG] bay_id input changed:', e.target.value);
+            });
             
             const today = new Date().toISOString().split('T')[0];
             const oneYearLater = new Date();
