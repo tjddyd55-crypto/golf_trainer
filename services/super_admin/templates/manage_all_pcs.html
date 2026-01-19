@@ -143,8 +143,7 @@
                 </div>
                 <div class="modal-body">
                     <p><strong>매장:</strong> <span id="reject-store-name"></span></p>
-                    <p><strong>타석(룸):</strong> <span id="reject-bay-name"></span></p>
-                    <p><strong>타석(룸):</strong> <span id="reject-pc-name"></span></p>
+                    <p><strong>타석(룸) 이름:</strong> <span id="reject-bay-name"></span></p>
                     <hr>
                     <label>거부 사유 (선택):</label>
                     <textarea id="reject-notes" class="form-control" rows="3"></textarea>
@@ -170,8 +169,7 @@
                         <strong>⚠️ 경고:</strong> 이 작업은 되돌릴 수 없습니다.
                     </div>
                     <p><strong>매장:</strong> <span id="delete-store-name"></span></p>
-                    <p><strong>타석(룸):</strong> <span id="delete-bay-name"></span></p>
-                    <p><strong>타석(룸):</strong> <span id="delete-pc-name"></span></p>
+                    <p><strong>타석(룸) 이름:</strong> <span id="delete-bay-name"></span></p>
                     <hr>
                     <p class="text-danger">
                         이 PC를 삭제하면 해당 매장에서 제거되며, 다시 등록하려면 PC 등록 프로그램을 실행해야 합니다.
@@ -431,8 +429,7 @@
         function showRejectModal(pcUniqueId, storeName, bayName) {
             currentPcUniqueId = pcUniqueId;
             document.getElementById('reject-store-name').textContent = storeName;
-            document.getElementById('reject-bay-name').textContent = bayName;
-            document.getElementById('reject-pc-name').textContent = bayName || '-';
+            document.getElementById('reject-bay-name').textContent = bayName || '-';
             document.getElementById('reject-notes').value = '';
             
             new bootstrap.Modal(document.getElementById('rejectModal')).show();
@@ -537,8 +534,7 @@
         function showDeleteModal(pcUniqueId, storeName, bayName) {
             currentPcUniqueId = pcUniqueId;
             document.getElementById('delete-store-name').textContent = storeName;
-            document.getElementById('delete-bay-name').textContent = bayName;
-            document.getElementById('delete-pc-name').textContent = bayName || '-';
+            document.getElementById('delete-bay-name').textContent = bayName || '-';
             
             new bootstrap.Modal(document.getElementById('deleteModal')).show();
         }
