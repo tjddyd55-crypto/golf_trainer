@@ -67,10 +67,10 @@
                             </td>
                             <td>
                                 {% if pc.status == 'pending' %}
-                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">승인</button>
+                                    <button class="btn btn-sm btn-success" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_number or pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">승인</button>
                                     <button class="btn btn-sm btn-danger" onclick="showRejectModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">거부</button>
                                 {% elif pc.status == 'active' %}
-                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}', '{{ pc.approved_at or '' }}')">수정</button>
+                                    <button class="btn btn-sm btn-primary" onclick="showApproveModal('{{ pc.pc_unique_id }}', '{{ pc.store_id or '' }}', '{{ pc.store_name }}', '{{ pc.bay_number or pc.bay_id or '' }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}', '{{ pc.usage_start_date or '' }}', '{{ pc.usage_end_date or '' }}', '{{ pc.approved_at or '' }}')">수정</button>
                                 {% endif %}
                                 <button class="btn btn-sm btn-outline-danger" onclick="showDeleteModal('{{ pc.pc_unique_id }}', '{{ pc.store_name }}', '{{ pc.bay_name or pc.bay_display }}', '{{ pc.pc_name }}')">삭제</button>
                             </td>
@@ -267,10 +267,13 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // ✅ 버전 식별용 로그 (배포 확인용)
+        console.log('[MANAGE_ALL_PCS] Version: 2026-01-19-bay-id-warning-v2');
+        
         let currentPcUniqueId = null;
         let currentStoreId = '';
         let currentBayId = '';
-        let originalBayId = null;  // PC 등록 시 전달된 원래 bay_id 값
+        let originalBayId = null;  // PC 등록 시 전달된 원래 bay_id 값 (실제로는 bay_number)
         let pendingBayIdChange = null;  // 변경 시도 중인 값
         
         function showApproveModal(pcUniqueId, storeId, storeName, bayId, bayName, pcName, startDate = '', endDate = '', approvedDate = '') {
