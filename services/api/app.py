@@ -574,10 +574,10 @@ def register_pc_new():
             # ✅ 사용자 요청 순서대로 정확히 작성
             # 컬럼 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number, status
             # VALUES 바인딩 순서: store_name, store_id, bay_name, pc_uuid, bay_id, bay_number
-            # NOT NULL 컬럼: store_name, bay_name, pc_name, pc_unique_id, bay_id
-            # pc_name과 pc_unique_id는 필수이므로 추가
+            # NOT NULL 컬럼(pc_name, pc_unique_id)은 사용자 요청 순서 뒤에 추가
             pc_name = bay_name or f"{store_name}-{bay_number}번-PC"
             
+            # ✅ 사용자 요청 순서 정확히 유지
             cur.execute("""
                 INSERT INTO store_pcs (
                     store_name,
