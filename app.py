@@ -75,4 +75,29 @@ if not services_found:
 # 최종 sys.path 확인
 print(f"[ROOT APP] Final sys.path (first 5): {sys.path[:5]}", flush=True)
 
-from services.super_admin.app import app
+# 동적 import 시도 (여러 방법 시도)
+try:
+    from services.super_admin.app import app
+    print(f"[ROOT APP] Successfully imported app from services.super_admin.app", flush=True)
+except ImportError as e:
+    print(f"[ROOT APP] Import error: {e}", flush=True)
+    # 대안: importlib 사용
+    import importlib.util
+    super_admin_path = os.path.join(services_path, 'super_admin', 'app.py')
+    if os.path.exists(super_admin_path):
+        spec = importlib.util.spec_from_file_location("services.super_admin.app", super_admin_path)
+        if spec and spec.loader:
+            module = importlib.util.module_from_spec(spec)
+            # services 패키지 구조 생성
+            import types
+            services_module = types.ModuleType('services')
+            super_admin_module = types.ModuleType('services.super_admin')
+            sys.modules['services'] = services_module
+            sys.modules['services.super_admin'] = super_admin_module
+            spec.loader.exec_module(module)
+            app = module.app
+            print(f"[ROOT APP] Successfully loaded app via importlib", flush=True)
+        else:
+            raise ImportError(f"Cannot load module from {super_admin_path}")
+    else:
+        raise ImportError(f"super_admin/app.py not found at {super_admin_path}")
