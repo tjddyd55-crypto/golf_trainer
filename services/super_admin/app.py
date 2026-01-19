@@ -1,10 +1,12 @@
 # ===== services/super_admin/app.py (총책임자 서비스) =====
-# ✅ 애플리케이션 기동 확인용 로그 (가장 먼저 출력)
-print("### APP BOOT COMPLETED ###", flush=True)
+# ✅ [1단계] 서비스 부팅 확인 로그 (가장 먼저 출력)
+import os
+print("### SUPER_ADMIN BOOT START ###", flush=True)
+print("### SERVICE=super_admin ###", flush=True)
+print("### PORT env =", os.getenv("PORT"), flush=True)
 
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 import sys
-import os
 import re
 import traceback
 from datetime import datetime
