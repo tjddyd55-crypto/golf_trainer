@@ -82,6 +82,15 @@ def super_admin_login():
     return render_template("super_admin_login.html")
 
 # =========================
+# Healthcheck 엔드포인트 (인증 불필요)
+# =========================
+@app.route("/health", methods=["GET"])
+@app.route("/api/health", methods=["GET"])
+def health_check():
+    """Railway healthcheck용 엔드포인트 - 인증 불필요"""
+    return "OK", 200
+
+# =========================
 # 총책임자 대시보드
 # =========================
 @app.route("/")
