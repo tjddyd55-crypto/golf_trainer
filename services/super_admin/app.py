@@ -33,16 +33,43 @@ if not os.path.exists(static_path):
 app = Flask(__name__, 
             template_folder='templates',
             static_folder=static_path)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_in_production")
+
+# =========================
+# 🔒 보안 설정
+# =========================
+# Secret Key: 환경 변수 필수 (프로덕션에서는 반드시 설정)
+FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY")
+if not FLASK_SECRET_KEY:
+    print("[WARNING] FLASK_SECRET_KEY 환경 변수가 설정되지 않았습니다. 프로덕션에서는 보안 위험이 있습니다.", flush=True)
+    FLASK_SECRET_KEY = "golf_app_secret_key_change_in_production"  # 개발용 기본값
+app.secret_key = FLASK_SECRET_KEY
+
+# 세션 보안 설정
+app.config['SESSION_COOKIE_SECURE'] = os.environ.get('RAILWAY_ENVIRONMENT') == 'production'  # HTTPS 강제 (프로덕션)
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # JavaScript 접근 차단
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF 보호
+app.config['PERMANENT_SESSION_LIFETIME'] = 1800  # 30분
+
+# 보안 헤더 추가
+@app.after_request
+def set_security_headers(response):
+    """모든 응답에 보안 헤더 추가"""
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'DENY'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'  # HTTPS 강제
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    return response
 
 # =========================
 # ✅ [2단계] Healthcheck 엔드포인트 (app 생성 직후 즉시 등록)
 # Railway Healthcheck용 - 무조건 200 OK 반환 (외부 의존성 체크 절대 금지)
+# 로그 최소화: Railway 헬스체크는 자주 호출되므로 로그 출력 제거
 # =========================
 @app.route("/health", methods=["GET"])
 def health():
     """Railway healthcheck용 엔드포인트 - 인증 불필요, DB 접근 불필요"""
-    print("### HEALTH HIT ###", flush=True)
+    # Railway 헬스체크는 자주 호출되므로 로그 출력 제거 (로그 폭주 방지)
     return "OK", 200
 
 # 데이터베이스 초기화 (healthcheck 이후)
