@@ -93,7 +93,7 @@ def setup_log_redirect():
 
 def load_config():
     """config.json 파일 로드 - 백업본과 동일"""
-    from client.app.collector.main import get_config_file
+    from client.shot_collector.main import get_config_file
     config_file = get_config_file()
     if os.path.exists(config_file):
         try:
@@ -105,7 +105,7 @@ def load_config():
 
 def save_config(config_data):
     """config.json 파일 저장 - 백업본과 동일"""
-    from client.app.collector.main import get_config_file, log
+    from client.shot_collector.main import get_config_file, log
     try:
         config_file = get_config_file()
         with open(config_file, 'w', encoding='utf-8') as f:
@@ -113,7 +113,7 @@ def save_config(config_data):
         log(f"✅ config.json 저장 완료: {config_file}")
     except Exception as e:
         try:
-            from client.app.collector.main import log
+            from client.shot_collector.main import log
             log(f"⚠️ config.json 저장 실패: {e}")
         except:
             pass
@@ -212,7 +212,7 @@ class ShotCollectorGUI:
         self.tray_icon = None
         
         # main.py의 gui_app 전역 변수 설정 (백업본의 init_gui()와 동일)
-        from client.app.collector import main
+        from client.shot_collector import main
         main.gui_app = self
         self.downloaded_regions = None
         self.main_thread = None
@@ -226,7 +226,7 @@ class ShotCollectorGUI:
         
         # main.py의 gui_app 전역 변수를 초기화 시점에 설정 (로그 전달용)
         try:
-            from client.app.collector import main
+            from client.shot_collector import main
             main.gui_app = self
         except Exception:
             pass
@@ -556,7 +556,7 @@ class ShotCollectorGUI:
                 pass
             
             # main.py의 gui_app 전역 변수를 설정하여 로그가 GUI로 전달되도록 함
-            from client.app.collector import main
+            from client.shot_collector import main
             main.gui_app = self
             main.root = self.root  # root도 설정 (update_gui_stats에서 필요)
             
@@ -671,7 +671,7 @@ class ShotCollectorGUI:
         """샷 수집 종료 - 백업본과 동일"""
         global should_exit
         try:
-            from client.app.collector import main
+            from client.shot_collector import main
             should_exit = True
             if hasattr(main, 'should_exit'):
                 main.should_exit = True
@@ -869,7 +869,7 @@ def auto_start_collection():
             gui_app_instance.selected_brand = auto_brand
             gui_app_instance.selected_filename = auto_filename
             # main.py의 gui_app도 설정 (로그 전달용)
-            from client.app.collector import main
+            from client.shot_collector import main
             main.gui_app = gui_app_instance
             # 자동으로 시작
             threading.Thread(target=gui_app_instance.start_collection, daemon=True).start()
@@ -877,7 +877,7 @@ def auto_start_collection():
             log("[AUTO_START] ⚠️ GUI가 초기화되지 않았습니다.")
     except Exception as e:
         try:
-            from client.app.collector.main import log
+            from client.shot_collector.main import log
             log(f"[AUTO_START] ⚠️ 자동 시작 실패: {e}")
             import traceback
             log(traceback.format_exc())
@@ -886,7 +886,7 @@ def auto_start_collection():
 
 def main():
     # 백업본과 동일: ensure_config_dirs()를 최우선으로 호출 (폴더 생성)
-    from client.app.collector.main import ensure_config_dirs
+    from client.shot_collector.main import ensure_config_dirs
     ensure_config_dirs()
     
     # 로그 파일 리다이렉트 설정
@@ -897,7 +897,7 @@ def main():
     gui_app_instance = ShotCollectorGUI(root)
     
     # main.py의 전역 변수 설정 (백업본의 init_gui()와 동일)
-    from client.app.collector import main
+    from client.shot_collector import main
     main.root = root  # root도 main.py에 설정 (update_gui_stats에서 사용)
     main.gui_app = gui_app_instance  # gui_app 설정
     

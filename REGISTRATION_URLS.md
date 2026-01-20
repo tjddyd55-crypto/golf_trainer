@@ -93,7 +93,7 @@ https://golf-store-admin-production.up.railway.app/login
 
 ### 프로덕션 환경
 - **API 서비스**: `https://golf-api-production-e675.up.railway.app`
-- **User 서비스**: `https://golf-user-production.up.railway.app`
+- **User 웹 서비스**: `https://golf-user-web-production.up.railway.app`
 - **Store Admin 서비스**: `https://golf-store-admin-production.up.railway.app`
 - **Super Admin 서비스**: `https://golf-super-admin-production.up.railway.app`
 

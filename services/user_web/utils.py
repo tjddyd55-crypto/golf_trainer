@@ -1,4 +1,4 @@
-# ===== services/user/utils.py (유저 서비스 유틸리티) =====
+# ===== services/user_web/utils.py (유저 웹 서비스 유틸리티) =====
 import json
 import os
 

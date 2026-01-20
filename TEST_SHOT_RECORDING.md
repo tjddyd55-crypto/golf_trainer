@@ -8,7 +8,7 @@
 ## 사전 준비
 
 ### 1. A유저 계정 생성
-1. 유저 서비스 접속: `https://golf-user-production-*.up.railway.app/signup`
+1. 유저 웹 서비스 접속: `https://golf-user-web-production-*.up.railway.app/signup`
 2. 회원가입 정보 입력:
    - 이름: A유저
    - 휴대폰번호: (자유 입력, 이게 user_id가 됨)
@@ -38,7 +38,7 @@
 ## 테스트 절차
 
 ### Step 1: 유저 로그인 및 타석 선택
-1. 유저 서비스 접속: `https://golf-user-production-*.up.railway.app/login`
+1. 유저 웹 서비스 접속: `https://golf-user-web-production-*.up.railway.app/login`
 2. A유저로 로그인 (휴대폰번호/비밀번호)
 3. 매장 선택: **TESTID**
 4. 타석 선택: **01번 타석**

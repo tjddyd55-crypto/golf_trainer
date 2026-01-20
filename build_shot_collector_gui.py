@@ -8,7 +8,7 @@ import shutil
 
 # 빌드 설정
 APP_NAME = "shot_collector_gui"
-MAIN_SCRIPT = "client/app/collector/shot_collector_gui.py"
+MAIN_SCRIPT = "client/shot_collector/shot_collector_gui.py"
 ICON_FILE = None  # 아이콘 파일이 있으면 경로 지정
 
 # 빌드 옵션
@@ -43,7 +43,7 @@ hidden_imports = [
     "PIL",
     "PIL.Image",
     "PIL.ImageDraw",
-    "client.app.collector.main",  # main.py를 import하므로 포함
+    "client.shot_collector.main",  # main.py를 import하므로 포함
     "client.core.pc_identifier",  # pc_identifier 포함
 ]
 

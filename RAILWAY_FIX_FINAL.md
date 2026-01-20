@@ -35,7 +35,7 @@ PYTHONPATH=/app
   - `FLASK_DEBUG=False`
   - `PYTHONPATH=/app` (추가)
 
-### User 서비스 (golf-user)
+### User 웹 서비스 (golf-user-web)
 - **Root Directory**: `.`
 - **Start Command**: `cd services/user && gunicorn app:app --bind 0.0.0.0:$PORT`
 - **Variables**: (동일하게 PYTHONPATH 추가)

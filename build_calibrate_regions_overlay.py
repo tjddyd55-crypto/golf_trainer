@@ -8,7 +8,7 @@ import os
 
 # 빌드 설정
 APP_NAME = "calibrate_regions_overlay"
-MAIN_SCRIPT = "calibrate_regions_overlay.py"
+MAIN_SCRIPT = "client/calibration/calibrate_regions_overlay.py"
 ICON_FILE = None  # 아이콘 파일이 있으면 경로 지정
 
 # 빌드 옵션

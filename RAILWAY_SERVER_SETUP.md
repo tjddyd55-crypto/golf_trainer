@@ -61,7 +61,7 @@ web: gunicorn app:app --bind 0.0.0.0:$PORT
 #### 서비스 생성
 1. 프로젝트에서 **New** → **GitHub Repo** 선택
 2. 같은 저장소(`golftrainer`) 선택
-3. 서비스 이름: `golf-user`
+3. 서비스 이름: `golf-user-web`
 
 #### 설정
 - **Root Directory**: `services/user`
@@ -164,7 +164,7 @@ SUPER_ADMIN_PASSWORD=<강력한 비밀번호>
 
 ### 옵션 1 (별도 서비스) - 권장
 - API: `https://golf-api.railway.app`
-- User: `https://golf-user.railway.app`
+- User 웹: `https://golf-user-web.railway.app`
 - Store Admin: `https://golf-store-admin.railway.app`
 - Super Admin: `https://golf-super-admin.railway.app`
 

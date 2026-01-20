@@ -9,7 +9,7 @@ import shutil
 
 # 빌드 설정
 APP_NAME = "shot_collector"
-MAIN_SCRIPT = "main.py"
+MAIN_SCRIPT = "client/shot_collector/main.py"
 ICON_FILE = None  # 아이콘 파일이 있으면 경로 지정
 
 # 빌드 옵션

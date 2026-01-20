@@ -2,10 +2,10 @@
 
 ## Railway 배포 URL
 
-유저 서비스는 `golf-user` 서비스로 배포됩니다.
+유저 웹 서비스는 `golf-user-web` 서비스로 배포됩니다.
 
 ### 기본 URL 확인 방법
-1. Railway 대시보드 > `golf-user` 서비스 선택
+1. Railway 대시보드 > `golf-user-web` 서비스 선택
 2. Settings 탭 > Domains 섹션에서 URL 확인
 3. 또는 Deployments 탭에서 최신 배포의 URL 확인
 

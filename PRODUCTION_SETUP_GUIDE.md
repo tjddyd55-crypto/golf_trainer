@@ -8,7 +8,7 @@
 
 ### 필요한 서비스 URL
 1. **API 서비스**: `https://golf-api-production-e675.up.railway.app`
-2. **유저 서비스**: Railway에서 확인 필요 (예: `https://golf-user-production-*.up.railway.app`)
+2. **유저 웹 서비스**: Railway에서 확인 필요 (예: `https://golf-user-web-production-*.up.railway.app`)
 3. **매장 관리자 서비스**: Railway에서 확인 필요
 4. **슈퍼 관리자 서비스**: Railway에서 확인 필요
 
@@ -110,7 +110,7 @@ DEFAULT_SERVER_URL = os.environ.get("SERVER_URL", "https://golf-api-production-e
 
 ### 유저 서비스 접속
 1. 핸드폰 브라우저에서 유저 서비스 URL 접속
-   - 예: `https://golf-user-production-*.up.railway.app`
+   - 예: `https://golf-user-web-production-*.up.railway.app`
 2. "회원가입" 클릭
 
 ### 회원가입 정보 입력

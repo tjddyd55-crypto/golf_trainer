@@ -26,7 +26,7 @@ Root Directory가 `services/api`로 설정되어 있어서 루트의 `shared/` �
 - **Root Directory**: `.` (루트)
 - **Start Command**: `cd services/api && gunicorn app:app --bind 0.0.0.0:$PORT`
 
-### 2. User 서비스 (golf-user)
+### 2. User 웹 서비스 (golf-user-web)
 - **Root Directory**: `.` (루트)
 - **Start Command**: `cd services/user && gunicorn app:app --bind 0.0.0.0:$PORT`
 

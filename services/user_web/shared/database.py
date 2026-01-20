@@ -584,9 +584,9 @@ def save_shot_to_db(data):
     try:
         import sys
         import os
-        # utils.py 경로 추가 (services/user/utils.py)
+        # utils.py 경로 추가 (services/user_web/utils.py)
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        user_dir = os.path.dirname(current_dir)  # services/user/
+        user_dir = os.path.dirname(current_dir)  # services/user_web/
         if user_dir not in sys.path:
             sys.path.insert(0, user_dir)
         from utils import evaluate_shot_by_criteria, get_criteria_key

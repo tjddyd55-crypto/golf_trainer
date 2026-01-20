@@ -23,7 +23,7 @@
 
 ## 테스트해야 할 주요 기능
 
-### 유저 서비스 (golf-user)
+### 유저 웹 서비스 (golf-user-web)
 1. **메인 페이지** (`/main`)
    - 회원가입/로그인 버튼 표시 확인
    
@@ -93,7 +93,7 @@
 ## 배포 확인
 
 모든 변경사항이 Railway에 배포되었는지 확인:
-- `golf-user` 서비스
+- `golf-user-web` 서비스
 - `golf-store-admin` 서비스
 - `golf-super-admin` 서비스
 - `golf-api` 서비스

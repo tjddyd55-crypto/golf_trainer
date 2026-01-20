@@ -1,6 +1,15 @@
-# ===== services/user/app.py (유저 서비스) =====
-from flask import render_template, request, jsonify, session, redirect, url_for
+# ===== services/user_web/app.py (유저 웹 서비스) =====
 import os
+import sys
+
+# 공유 모듈 경로 추가 (Railway 환경 대응)
+# 프로젝트 루트를 sys.path에 추가하여 shared 폴더를 찾을 수 있도록 함
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, '../..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+from flask import render_template, request, jsonify, session, redirect, url_for
 
 # 공통 Flask 유틸리티 사용
 from shared.flask_utils import create_flask_app
@@ -8,10 +17,25 @@ from shared import database
 from shared.auth import require_login
 
 # Flask 앱 생성 (공통 설정 포함)
-app = create_flask_app('user', __file__)
+app = create_flask_app('user_web', __file__)
 
-# 데이터베이스 초기화
-database.init_db()
+# =========================
+# ✅ Healthcheck 엔드포인트 (app 생성 직후 즉시 등록)
+# Railway Healthcheck용 - 무조건 200 OK 반환 (외부 의존성 체크 절대 금지)
+# 로그 최소화: Railway 헬스체크는 자주 호출되므로 로그 출력 제거
+# =========================
+@app.route("/health", methods=["GET"])
+def health():
+    """Railway healthcheck용 엔드포인트 - 인증 불필요, DB 접근 불필요"""
+    # Railway 헬스체크는 자주 호출되므로 로그 출력 제거 (로그 폭주 방지)
+    return "OK", 200
+
+# 데이터베이스 초기화 (healthcheck 이후)
+try:
+    database.init_db()
+except Exception as e:
+    print(f"[WARNING] Database initialization failed: {e}", flush=True)
+    # 데이터베이스 초기화 실패해도 애플리케이션은 기동 가능
 
 # =========================
 # 루트 경로 및 메인 페이지

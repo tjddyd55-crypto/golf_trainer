@@ -4,7 +4,7 @@
 
 이미지에서 확인된 이름:
 - ✅ `golf-api`
-- ✅ `golf-user`
+- ✅ `golf-user-web`
 - ✅ `golf-store-admin`
 - ✅ `golf-super-admin`
 - ⚠️ `Postgres` (PostgreSQL 서비스)
@@ -35,7 +35,7 @@ FLASK_SECRET_KEY = 344aa115c04a1e69f7c343e181e7e2c71738d0df9fc6a0b8081d263ad35e1
 FLASK_DEBUG = False
 ```
 
-### 2. User 서비스 (golf-user)
+### 2. User 웹 서비스 (golf-user-web)
 ```
 DATABASE_URL = ${{Postgres.DATABASE_URL}}
 FLASK_SECRET_KEY = a5b37e5c0224aba9e3e4c4fef0b47c5e766099d804b3b2dec90ecba9492d25c9

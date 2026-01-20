@@ -26,7 +26,7 @@ Railway UI에서 Start Command 변경이 안됨
 **API 서비스 (golf-api)**:
 - Root Directory: `.` (또는 비워둠)
 
-**User 서비스 (golf-user)**:
+**User 웹 서비스 (golf-user-web)**:
 - Root Directory: `.` (또는 비워둠)
 
 **Store Admin 서비스 (golf-store-admin)**:

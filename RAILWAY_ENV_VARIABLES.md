@@ -37,7 +37,7 @@ FLASK_DEBUG=False
 
 ---
 
-## 2. User 서비스 (golf-user)
+## 2. User 웹 서비스 (golf-user-web)
 
 ### 필수 환경 변수
 ```

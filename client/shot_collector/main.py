@@ -14,7 +14,7 @@ def early_log(msg):
     with open(DEBUG_LOG, "a", encoding="utf-8") as f:
         f.write(f"[{datetime.now()}] {msg}\n")
 
-early_log("=== main.py start ===")
+# early_log("=== main.py start ===")  # import 시 실행 방지 (main() 함수에서만 실행)
 
 LOG_DIR = Path.cwd() / "logs"
 LOG_DIR.mkdir(exist_ok=True)
@@ -116,14 +116,22 @@ BRANDS = [
 ]
 
 # 설정 파일 경로 (헬퍼 함수 사용)
+def get_runtime_base_dir():
+    """
+    exe 실행 시: exe가 있는 폴더
+    python 실행 시: main.py가 있는 폴더
+    """
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def get_base_path():
+    """실행 파일 기준 경로 반환 (onefile 환경 고려) - get_runtime_base_dir() 별칭"""
+    return get_runtime_base_dir()
+
 def get_config_file():
-    """config.json 파일 경로 반환 (config/config.json 우선, 없으면 루트의 config.json)"""
-    base_path = get_base_path()
-    config_path = os.path.join(base_path, "config", "config.json")
-    if os.path.exists(config_path):
-        return config_path
-    # fallback: 루트의 config.json
-    return os.path.join(base_path, "config.json")
+    """config.json 파일 경로 반환 - 백업본과 동일 (루트의 config.json)"""
+    return os.path.join(get_base_path(), "config.json")
 
 def load_config():
     """config.json 파일 로드"""
@@ -915,13 +923,19 @@ def log(*args):
     # 2. GUI 로그 브리지로 전달 (gui_app가 초기화된 경우에만)
     try:
         if GUI_AVAILABLE:
-            # gui_app가 전역 변수로 정의되어 있는지 확인
-            if 'gui_app' in globals() and gui_app and hasattr(gui_app, 'log_bridge'):
+            # gui_app가 전역 변수 또는 모듈 attribute로 존재하는지 확인
+            gui_app_ref = None
+            if 'gui_app' in globals():
+                gui_app_ref = gui_app
+            elif hasattr(sys.modules.get(__name__, None), 'gui_app'):
+                gui_app_ref = sys.modules[__name__].gui_app
+            
+            if gui_app_ref and hasattr(gui_app_ref, 'log_bridge'):
                 try:
-                    gui_app.log_bridge.append(message)
+                    gui_app_ref.log_bridge.append(message)
                 except Exception:
                     pass
-    except NameError:
+    except (NameError, AttributeError):
         # gui_app가 아직 정의되지 않은 경우 무시
         pass
     
@@ -935,20 +949,46 @@ SESSION_AUTO_LOGOUT_NO_SCREEN = 5 * 60  # 5분 동안 연습 화면이 아니면
 
 OCR_TIMEOUT_SEC = 1
 
-# 이 값들을 매장 PC에서 상황에 맞게 변경
-# config.json에서 store_id와 bay_id를 읽어오고, 없으면 기본값 사용
+# store_id, bay_number 결정 로직
+# 우선순위: 1) PC STATUS API 응답 2) 캐시된 값 3) config.json 4) None (에러)
 def get_store_id():
-    """config.json에서 store_id를 읽어오거나 기본값 반환"""
+    """store_id 반환 (PC STATUS API 응답 우선, 하드코딩된 기본값 사용 안함)"""
+    global _pc_status_cache
+    # 1) 캐시된 값 (PC STATUS API에서 가져온 값)
+    if _pc_status_cache.get("store_id"):
+        return _pc_status_cache["store_id"]
+    # 2) config.json (fallback)
     config = load_config()
-    return config.get("store_id") or "gaja"
+    store_id = config.get("store_id")
+    if store_id:
+        log(f"⚠️ store_id를 config.json에서 가져옴: {store_id} (PC STATUS API에서 가져온 값이 없음)")
+        return store_id
+    # 3) 에러 (하드코딩된 기본값 사용 안함)
+    log("❌ store_id를 찾을 수 없습니다. PC STATUS API 응답 또는 config.json을 확인하세요.")
+    return None
 
 def get_bay_id():
-    """config.json에서 bay_id를 읽어오거나 기본값 반환"""
+    """bay_number 반환 (PC STATUS API 응답 우선, 하드코딩된 기본값 사용 안함)
+    
+    주의: 함수명은 get_bay_id()이지만 bay_number를 반환합니다 (DB 스키마와 일치)
+    """
+    global _pc_status_cache
+    # 1) 캐시된 값 (PC STATUS API에서 가져온 값)
+    if _pc_status_cache.get("bay_number"):
+        return _pc_status_cache["bay_number"]
+    # 2) config.json (fallback)
     config = load_config()
-    return config.get("bay_id") or "01"
+    bay_number = config.get("bay_number") or config.get("bay_id")
+    if bay_number:
+        log(f"⚠️ bay_number를 config.json에서 가져옴: {bay_number} (PC STATUS API에서 가져온 값이 없음)")
+        return str(bay_number)
+    # 3) 에러 (하드코딩된 기본값 사용 안함)
+    log("❌ bay_number를 찾을 수 없습니다. PC STATUS API 응답 또는 config.json을 확인하세요.")
+    return None
 
-DEFAULT_STORE_ID = get_store_id()  # 동적으로 설정
-DEFAULT_BAY_ID   = get_bay_id()    # 동적으로 설정
+# 주의: DEFAULT_STORE_ID, DEFAULT_BAY_ID는 더 이상 사용하지 않음
+# PC STATUS API 응답에서 동적으로 가져와야 함 (check_pc_approval() 호출 후 캐시됨)
+# 초기화 시점에는 None이 될 수 있음
 DEFAULT_CLUB_ID  = "Driver"
 
 # PC 등록 관련 설정
@@ -959,7 +999,13 @@ PC_NAME = os.environ.get("PC_NAME", "")              # PC 이름 (등록 시 필
 
 # PC 고유번호 수집 모듈
 try:
-    from pc_identifier import get_pc_info
+    # 프로젝트 루트를 sys.path에 추가
+    import sys
+    _script_dir = os.path.dirname(os.path.abspath(__file__))
+    _project_root = os.path.abspath(os.path.join(_script_dir, '..', '..', '..'))
+    if _project_root not in sys.path:
+        sys.path.insert(0, _project_root)
+    from client.core.pc_identifier import get_pc_info
 except ImportError:
     # pc_identifier.py가 없으면 기본 함수 정의
     import platform
@@ -973,8 +1019,7 @@ except ImportError:
 # 매장별 좌표 파일 (매장마다 화면 레이아웃이 다를 수 있음)
 # 각 매장의 좌표 파일을 regions/ 폴더에 만들어서 사용
 # 예: regions/gaja.json, regions/sg_golf.json, regions/golfzone.json 등
-# resource_path는 나중에 정의되므로 상대 경로만 저장
-REGIONS_FILE_RELATIVE = os.path.join("regions", f"{DEFAULT_STORE_ID}.json")
+# 주의: DEFAULT_STORE_ID는 더 이상 사용하지 않으므로 fallback으로 test.json 사용
 REGIONS_FILE_FALLBACK = os.path.join("regions", "test.json")
 
 # 샷 기준표 파일 경로
@@ -1000,18 +1045,7 @@ def speak(text: str):
 # =========================
 # 경로 헬퍼 함수 (PyInstaller onefile 대응)
 # =========================
-def get_runtime_base_dir():
-    """
-    exe 실행 시: exe가 있는 폴더
-    python 실행 시: main.py가 있는 폴더
-    """
-    if getattr(sys, 'frozen', False):
-        return os.path.dirname(sys.executable)
-    return os.path.dirname(os.path.abspath(__file__))
-
-def get_base_path():
-    """실행 파일 기준 경로 반환 (onefile 환경 고려) - get_runtime_base_dir() 별칭"""
-    return get_runtime_base_dir()
+# get_runtime_base_dir()와 get_base_path()는 위쪽(get_config_file() 앞)에 정의됨
 
 def get_resource_path(relative_path):
     """리소스 파일 경로 반환 (onefile 환경 고려)
@@ -1141,45 +1175,62 @@ def load_feedback_messages():
         log(f"feedback messages load error: {e}")
         return {}
 
-# config/와 regions/ 폴더 자동 생성 (onefile 배포 대응)
-early_log("ensuring config/regions directories")
-ensure_config_dirs()
+# 초기화를 지연시키기 위해 전역 변수만 선언 (실제 초기화는 main() 또는 필요 시 호출)
+REGIONS = {}
+CRITERIA = {}
+FEEDBACK_MESSAGES = {}
 
-# 매장별 좌표 파일 로드
-early_log("before load_json")
-try:
-    # load_json() 함수가 자동으로 fallback 처리
-    regions_filename = f"{DEFAULT_STORE_ID}.json"
-    early_log(f"loading regions file: {regions_filename}")
-    REGIONS = load_json(regions_filename)["regions"]
-    log(f"✅ 좌표 파일 로드 완료: {regions_filename}")
-    early_log("regions file loaded successfully")
-except FileNotFoundError as e:
-    early_log(f"regions file load failed: {e}")
-    log(f"❌ 오류: {e}")
-    log(f"💡 regions/{DEFAULT_STORE_ID}.json 파일을 생성하거나 regions/test.json 파일을 확인하세요.")
-    raise
+def init_module_if_needed():
+    """모듈 초기화 (한 번만 실행) - GUI 모드에서는 필요 시에만 호출"""
+    global REGIONS, CRITERIA, FEEDBACK_MESSAGES
+    
+    # 이미 초기화되었으면 건너뜀
+    if hasattr(init_module_if_needed, '_initialized'):
+        return
+    init_module_if_needed._initialized = True
+    
+    # config/와 regions/ 폴더 자동 생성 (onefile 배포 대응)
+    early_log("ensuring config/regions directories")
+    ensure_config_dirs()
 
-# 샷 기준표 파일 로드
-early_log("before load criteria")
-try:
-    CRITERIA = load_config_json("criteria.json")
-    log(f"✅ 샷 기준표 로드 완료: criteria.json")
-    early_log("criteria file loaded")
-except FileNotFoundError as e:
-    log(f"⚠️ 샷 기준표 파일을 찾을 수 없습니다: {e}")
-    early_log(f"criteria file not found: {e}")
-    CRITERIA = {}
+    # 매장별 좌표 파일 로드
+    # 주의: PC STATUS API에서 store_id를 가져오기 전이므로 기본값 test.json 사용
+    # 실제 store_id는 check_pc_approval() 호출 후에 알 수 있음
+    early_log("before load_json")
+    try:
+        # 초기 로드는 test.json (fallback)
+        # 실제 store_id에 맞는 좌표 파일은 GUI에서 선택하거나 자동으로 다운로드됨
+        regions_filename = "test.json"
+        early_log(f"loading regions file: {regions_filename}")
+        REGIONS = load_json(regions_filename)["regions"]
+        log(f"✅ 좌표 파일 로드 완료: {regions_filename}")
+        early_log("regions file loaded successfully")
+    except FileNotFoundError as e:
+        early_log(f"regions file load failed: {e}")
+        log(f"❌ 오류: {e}")
+        log(f"💡 regions/test.json 파일을 확인하세요.")
+        raise
 
-# 피드백 메시지 파일 로드
-early_log("before load feedback messages")
-FEEDBACK_MESSAGES = load_feedback_messages()
-if FEEDBACK_MESSAGES:
-    log(f"✅ 피드백 메시지 로드 완료: feedback_messages.json")
-    early_log("feedback messages loaded")
-else:
-    log(f"⚠️ 피드백 메시지 파일이 없거나 비어있습니다.")
-    early_log("feedback messages file not found or empty")
+    # 샷 기준표 파일 로드
+    early_log("before load criteria")
+    try:
+        CRITERIA = load_config_json("criteria.json")
+        log(f"✅ 샷 기준표 로드 완료: criteria.json")
+        early_log("criteria file loaded")
+    except FileNotFoundError as e:
+        log(f"⚠️ 샷 기준표 파일을 찾을 수 없습니다: {e}")
+        early_log(f"criteria file not found: {e}")
+        CRITERIA = {}
+
+    # 피드백 메시지 파일 로드
+    early_log("before load feedback messages")
+    FEEDBACK_MESSAGES = load_feedback_messages()
+    if FEEDBACK_MESSAGES:
+        log(f"✅ 피드백 메시지 로드 완료: feedback_messages.json")
+        early_log("feedback messages loaded")
+    else:
+        log(f"⚠️ 피드백 메시지 파일이 없거나 비어있습니다.")
+        early_log("feedback messages file not found or empty")
 
 def capture_region_ratio(region):
     sw, sh = pyautogui.size()
@@ -2082,21 +2133,30 @@ def generate_voice_feedback(evaluations):
 # 서버 전송
 # =========================
 def send_to_server(payload):
-    """서버로 샷 데이터 전송 (상세 로그 포함)"""
+    """서버로 샷 데이터 전송 (상세 로그 포함)
+    
+    Returns:
+        bool: 전송 성공 여부 (200 응답 시 True, 그 외 False)
+    """
     try:
         headers = get_auth_headers()
         log(f"🌐 서버 전송 시도: {SERVER_URL}")
         r = requests.post(SERVER_URL, json=payload, headers=headers, timeout=2)
         if r.status_code == 200:
             log(f"✅ 서버 전송 성공: {r.status_code}, 응답={r.text[:200]}")
+            return True
         else:
             log(f"⚠️ 서버 전송 부분 실패: 상태코드={r.status_code}, 응답={r.text[:200]}")
+            return False
     except requests.exceptions.Timeout:
         log(f"❌ 서버 전송 실패: 타임아웃 (서버 응답 없음, URL={SERVER_URL})")
+        return False
     except requests.exceptions.ConnectionError:
         log(f"❌ 서버 전송 실패: 연결 오류 (서버에 연결할 수 없음, URL={SERVER_URL})")
+        return False
     except Exception as e:
         log(f"❌ 서버 전송 실패: {type(e).__name__}: {str(e)} (URL={SERVER_URL})")
+        return False
 
 # =========================
 # 활성 사용자 조회
@@ -2183,8 +2243,16 @@ def is_same_shot(shot_data):
 # =========================
 # 메인 루프 (런 텍스트 기반 샷 감지)
 # =========================
+# PC 상태 정보 캐시 (store_id, bay_number 저장용)
+_pc_status_cache = {
+    "store_id": None,
+    "bay_number": None,
+    "last_check": None
+}
+
 def check_pc_approval():
-    """PC 승인 상태 확인"""
+    """PC 승인 상태 확인 (store_id, bay_number 포함)"""
+    global _pc_status_cache
     try:
         pc_info = get_pc_info()
         pc_unique_id = pc_info.get("unique_id")
@@ -2212,6 +2280,16 @@ def check_pc_approval():
         if response.status_code == 200:
             data = response.json()
             if data.get("allowed"):
+                # store_id, bay_number 캐시 업데이트
+                store_id = data.get("store_id")
+                bay_number = data.get("bay_number")
+                if store_id:
+                    _pc_status_cache["store_id"] = store_id
+                    _pc_status_cache["last_check"] = time.time()
+                    log(f"✅ PC STATUS: store_id={store_id} (서버에서 가져옴)")
+                if bay_number:
+                    _pc_status_cache["bay_number"] = str(bay_number)  # 문자열로 변환
+                    log(f"✅ PC STATUS: bay_number={bay_number} (서버에서 가져옴)")
                 return True, data.get("reason", "승인됨")
             else:
                 reason = data.get("reason", "승인 대기 중이거나 사용기간이 만료되었습니다.")
@@ -2403,23 +2481,25 @@ def run(regions=None):
                         time_since_screen = now - last_screen_detected_time
                         if time_since_screen >= SESSION_AUTO_LOGOUT_NO_SCREEN:
                             current_store_id = get_store_id()
-                            current_bay_id = get_bay_id()
-                            active_user = get_active_user(current_store_id, current_bay_id)
-                            if active_user:
-                                log(f"⏰ {SESSION_AUTO_LOGOUT_NO_SCREEN//60}분 동안 연습 화면이 감지되지 않음 → 자동 세션 종료")
-                                clear_active_session(current_store_id, current_bay_id)
-                                last_screen_detected_time = now  # 재체크 방지
+                            current_bay_number = get_bay_id()  # 함수명은 bay_id지만 bay_number 반환
+                            if current_store_id and current_bay_number:
+                                active_user = get_active_user(current_store_id, current_bay_number)
+                                if active_user:
+                                    log(f"⏰ {SESSION_AUTO_LOGOUT_NO_SCREEN//60}분 동안 연습 화면이 감지되지 않음 → 자동 세션 종료")
+                                    clear_active_session(current_store_id, current_bay_number)
+                                    last_screen_detected_time = now  # 재체크 방지
                     
                     # 자동 세션 종료 체크 2: 20분 동안 샷이 없는 경우
                     time_since_last_shot = now - last_shot_time
                     if time_since_last_shot >= SESSION_AUTO_LOGOUT_NO_SHOT:
                         current_store_id = get_store_id()
-                        current_bay_id = get_bay_id()
-                        active_user = get_active_user(current_store_id, current_bay_id)
-                        if active_user:
-                            log(f"⏰ {SESSION_AUTO_LOGOUT_NO_SHOT//60}분 동안 샷이 없음 → 자동 세션 종료")
-                            clear_active_session(current_store_id, current_bay_id)
-                            last_shot_time = now  # 재체크 방지
+                        current_bay_number = get_bay_id()  # 함수명은 bay_id지만 bay_number 반환
+                        if current_store_id and current_bay_number:
+                            active_user = get_active_user(current_store_id, current_bay_number)
+                            if active_user:
+                                log(f"⏰ {SESSION_AUTO_LOGOUT_NO_SHOT//60}분 동안 샷이 없음 → 자동 세션 종료")
+                                clear_active_session(current_store_id, current_bay_number)
+                                last_shot_time = now  # 재체크 방지
                     
                     if has_text is None:
                         # 텍스트 영역이 없으면 기존 방식으로 동작
@@ -2494,14 +2574,28 @@ def run(regions=None):
                         metrics = read_metrics()
                         
                         # 현재 활성 사용자 조회 (OCR 읽기 후 즉시)
-                        # 동적으로 store_id와 bay_id 가져오기
+                        # 동적으로 store_id와 bay_number 가져오기
                         current_store_id = get_store_id()
-                        current_bay_id = get_bay_id()
-                        active_user = get_active_user(current_store_id, current_bay_id)
+                        current_bay_number = get_bay_id()  # 함수명은 bay_id지만 bay_number 반환
+                        
+                        # store_id 또는 bay_number가 없으면 샷 저장 차단 (PC STATUS API 확인 필요)
+                        if not current_store_id or not current_bay_number:
+                            log(f"⚠️ 샷 저장 차단: store_id={current_store_id}, bay_number={current_bay_number} (PC STATUS API 확인 필요)")
+                            state = "WAITING"
+                            prev_run_detected = has_text
+                            text_disappear_time = None
+                            prev_bs = None
+                            prev_cs = None
+                            time.sleep(POLL_INTERVAL)
+                            continue
+                        
+                        # 활성 사용자 조회 (bays 테이블에서 user_id 확인)
+                        active_user = get_active_user(current_store_id, current_bay_number)
+                        
+                        # user_id가 없으면 GUEST로 저장 (샷 저장 중단 안함)
                         if not active_user:
-                            # 로그인하지 않은 경우 게스트로 저장
                             active_user = "GUEST"
-                            log("👤 활성 사용자가 없습니다. 게스트로 기록합니다.")
+                            log(f"👤 활성 사용자가 없어 게스트로 샷을 저장합니다. (store_id={current_store_id}, bay_number={current_bay_number})")
                         
                         # 의미 없는 샷 스킵 (None 방어)
                         ball_speed = safe_number(metrics.get("ball_speed") if metrics else None)
@@ -2528,7 +2622,7 @@ def run(regions=None):
                         
                         payload = {
                             "store_id": current_store_id,
-                            "bay_id": current_bay_id,
+                            "bay_id": current_bay_number,  # bay_number 사용
                             "user_id": active_user,
                             "club_id": DEFAULT_CLUB_ID,
                             "pc_unique_id": pc_unique_id,  # 추가
@@ -2575,7 +2669,7 @@ def run(regions=None):
                         # (A) 샷 확정 시 로그 (운영용 - 문제 진단 핵심)
                         # GUI/트레이와 별도로 로그에 명확한 흔적 남기기
                         # → 나중에 현장 문제 생기면 이 한 줄이 생명줄임
-                        log(f"[SHOT CONFIRMED] count={shot_count}, time={global_last_shot_time}, user={active_user}")
+                        log(f"[SHOT CONFIRMED] count={shot_count}, time={global_last_shot_time}, store_id={current_store_id}, bay_number={current_bay_number}, user={active_user}")
                         log(f"📊 OCR 값: ball_speed={metrics.get('ball_speed')}, club_speed={metrics.get('club_speed')}, launch_angle={metrics.get('launch_angle')}")
                         log("📦 전송:", payload)
                         
@@ -2594,7 +2688,11 @@ def run(regions=None):
                         update_tray_notify()
                         
                         # 3️⃣ 서버 전송 (기존 로직 유지)
-                        send_to_server(payload)
+                        shot_saved = send_to_server(payload)
+                        if shot_saved:
+                            log(f"✅ Shot saved: store_id={current_store_id}, bay_number={current_bay_number}, user={active_user}")
+                        else:
+                            log(f"⚠️ Shot SKIPPED: store_id={current_store_id}, bay_number={current_bay_number}, user={active_user} (서버 전송 실패 또는 거부)")
                         
                         # 마지막 샷 시간 업데이트 (기존 변수)
                         last_screen_detected_time = time.time()
@@ -2644,9 +2742,10 @@ def run(regions=None):
         log("[RUN] run() terminated")
 
 # =========================
-# GUI 관련 전역 변수
+# GUI 관련 전역 변수 (백업본과 동일)
 # =========================
-gui_app = None
+gui_app = None  # GUI 인스턴스 (shot_collector_gui.py에서 설정)
+root = None     # Tk 루트 (shot_collector_gui.py에서 설정)
 shot_stats_lock = threading.Lock()  # 통계 업데이트용 락
 tray_thread = None
 main_thread = None
@@ -2687,15 +2786,28 @@ def tray_hide_gui(icon=None, item=None):
         root.after(0, hide_gui)
 
 def update_gui_stats():
-    """GUI 통계 업데이트 (run 스레드 → GUI)"""
-    global gui_app, root, shot_count
+    """GUI 통계 업데이트 (run 스레드 → GUI) - 백업본과 동일"""
+    global gui_app, root, shot_count, global_last_shot_time
     if gui_app and root:
         def _update():
             try:
                 with shot_stats_lock:
                     count = shot_count
+                    last_time = global_last_shot_time
+                # 백업본과 동일: shot_count_label만 직접 업데이트 (text=str(count))
                 if gui_app and hasattr(gui_app, 'shot_count_label'):
                     gui_app.shot_count_label.config(text=str(count))
+                # last_time도 업데이트 (백업본에는 없지만 추가)
+                if gui_app and hasattr(gui_app, 'last_shot_time_label'):
+                    if last_time:
+                        from datetime import datetime
+                        if isinstance(last_time, str):
+                            time_str = last_time
+                        else:
+                            time_str = datetime.fromtimestamp(last_time).strftime("%H:%M:%S")
+                        gui_app.last_shot_time_label.config(text=f"마지막 샷: {time_str}")
+                    else:
+                        gui_app.last_shot_time_label.config(text="마지막 샷: 없음")
             except Exception as e:
                 early_log(f"GUI 통계 업데이트 실패: {e}")
         root.after(0, _update)
@@ -2920,7 +3032,11 @@ def start_run_thread():
     main_thread.start()
 
 def main():
+    early_log("=== main.py start ===")
     log("[MAIN] start")
+    
+    # 모듈 초기화 (한 번만 실행)
+    init_module_if_needed()
     
     global run_entered
     run_entered = False   # ← 반드시 초기화

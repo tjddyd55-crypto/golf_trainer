@@ -90,7 +90,7 @@ def create_flask_app(service_name: str, current_file_path: str, template_folder:
     Flask 애플리케이션 생성 및 기본 설정
     
     Args:
-        service_name: 서비스 이름 (예: 'super_admin', 'user', 'store_admin')
+        service_name: 서비스 이름 (예: 'super_admin', 'user_web', 'store_admin')
         current_file_path: 현재 파일의 경로 (__file__)
         template_folder: 템플릿 폴더 이름 (기본값: 'templates')
     

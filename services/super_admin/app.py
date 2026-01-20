@@ -2,6 +2,14 @@
 # ✅ [1단계] 서비스 부팅 확인 로그 (가장 먼저 출력)
 import os
 import sys
+
+# 공유 모듈 경로 추가 (Railway 환경 대응)
+# 프로젝트 루트를 sys.path에 추가하여 shared 폴더를 찾을 수 있도록 함
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, '../..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 print("### SUPER_ADMIN BOOT START ###", flush=True)
 print("### SERVICE=super_admin ###", flush=True)
 print("### PORT env =", os.getenv("PORT"), flush=True)

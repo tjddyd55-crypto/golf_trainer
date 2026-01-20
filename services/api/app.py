@@ -1,7 +1,18 @@
 # ===== services/api/app.py (공통 API 서비스) =====
-from flask import Flask, request, jsonify
-import sys
 import os
+import sys
+
+# 공유 모듈 경로 추가 (Railway 환경 대응)
+# 프로젝트 루트를 sys.path에 추가하여 shared 폴더를 찾을 수 있도록 함
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, '../..'))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
+# shared 모듈 import (sys.path 설정 직후)
+from shared import database
+
+from flask import Flask, request, jsonify
 import json
 import re
 from datetime import datetime
@@ -91,19 +102,6 @@ def load_coordinate_file(brand: str, filename: str):
         cur.close()
         conn.close()
 
-# 공유 모듈 경로 추가
-# Railway에서 Root Directory가 services/api일 때를 대비
-current_dir = os.path.dirname(os.path.abspath(__file__))
-# 같은 디렉토리의 shared 폴더 우선 확인
-local_shared = os.path.join(current_dir, 'shared')
-if os.path.exists(local_shared):
-    sys.path.insert(0, current_dir)
-else:
-    # 루트의 shared 폴더 확인
-    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
-    sys.path.insert(0, project_root)
-from shared import database
-
 app = Flask(__name__)
 
 # 🔒 보안: Secret Key 환경 변수 필수
@@ -118,16 +116,22 @@ print("### APP BOOT COMPLETED ###", flush=True)
 
 # ✅ [2단계] 앱 기동만 되면 바로 200을 반환하도록 최소화
 @app.route("/")
+@app.route("/health")
 @app.route("/api/health")
 def root_ok():
     """Railway Healthcheck용 - 앱 기동만 되면 바로 200 반환"""
+    # Railway 헬스체크는 자주 호출되므로 로그 출력 제거 (로그 폭주 방지)
     return "OK", 200
 
 # 테스트 모드 스위치 (기본값: False)
 TEST_MODE = os.getenv("TEST_MODE", "false").lower() == "true"
 
-# 데이터베이스 초기화
-database.init_db()
+# 데이터베이스 초기화 (healthcheck 이후)
+try:
+    database.init_db()
+except Exception as e:
+    print(f"[WARNING] Database initialization failed: {e}", flush=True)
+    # 데이터베이스 초기화 실패해도 애플리케이션은 기동 가능
 
 # =========================
 # 샷 데이터 저장 API (main.py에서 사용)
@@ -942,7 +946,9 @@ def check_pc_status():
             "allowed": True,
             "status": "active",
             "expires_at": expires_at_str,
-            "pc_token": pc_data.get("pc_token")
+            "pc_token": pc_data.get("pc_token"),
+            "store_id": pc_data.get("store_id"),
+            "bay_number": pc_data.get("bay_number") or pc_data.get("bay_id"),  # bay_number 우선, 없으면 bay_id
         })
     except Exception as e:
         import traceback

@@ -6,7 +6,7 @@
 - **프로젝트**: `golf-trainer`
 - **데이터베이스**: `golf-trainer-db`
 - **API 서비스**: `golf-api`
-- **User 서비스**: `golf-user`
+- **User 웹 서비스**: `golf-user-web`
 - **Store Admin 서비스**: `golf-store-admin`
 - **Super Admin 서비스**: `golf-super-admin`
 
@@ -66,10 +66,10 @@ FLASK_DEBUG=False
 ### 서비스 생성
 1. **New** → **GitHub Repo** 선택
 2. 저장소: `golftrainer`
-3. 서비스 이름: `golf-user`
+3. 서비스 이름: `golf-user-web`
 
 ### 설정
-- **Root Directory**: `services/user`
+- **Root Directory**: `services/user_web`
 - **Start Command**: `gunicorn app:app --bind 0.0.0.0:$PORT`
 
 ### 환경 변수
@@ -82,7 +82,7 @@ SERVER_URL=${{golf-api.PUBLIC_URL}}
 ```
 
 ### 확인 사항
-- [ ] Root Directory: `services/user`
+- [ ] Root Directory: `services/user_web`
 - [ ] 환경 변수 설정 완료
 - [ ] 배포 성공 확인
 - [ ] 로그인 페이지 접속 확인
@@ -158,7 +158,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 
 각 서비스에 다른 키 사용 권장:
 - `golf-api`: `<키1>`
-- `golf-user`: `<키2>`
+- `golf-user-web`: `<키2>`
 - `golf-store-admin`: `<키3>`
 - `golf-super-admin`: `<키4>`
 
@@ -169,7 +169,7 @@ python -c "import secrets; print(secrets.token_hex(32))"
 배포 완료 후 각 서비스의 공개 URL 확인:
 
 - API: `https://golf-api.up.railway.app`
-- User: `https://golf-user.up.railway.app`
+- User 웹: `https://golf-user-web.up.railway.app`
 - Store Admin: `https://golf-store-admin.up.railway.app`
 - Super Admin: `https://golf-super-admin.up.railway.app`
 
@@ -192,7 +192,7 @@ python main.py
 ### register_pc.py
 PC 등록 시 서버 URL 입력:
 ```
-서버 URL: https://golf-user.up.railway.app
+서버 URL: https://golf-user-web.up.railway.app
 ```
 
 ---
@@ -205,7 +205,7 @@ curl https://golf-api.up.railway.app/api/health
 ```
 
 ### User 서비스 테스트
-1. 브라우저에서 `https://golf-user.up.railway.app` 접속
+1. 브라우저에서 `https://golf-user-web.up.railway.app` 접속
 2. 회원가입 테스트
 3. 로그인 테스트
 
