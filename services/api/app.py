@@ -107,7 +107,13 @@ else:
 from shared import database
 
 app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_in_production")
+
+# 🔒 보안: Secret Key 환경 변수 필수
+FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY")
+if not FLASK_SECRET_KEY:
+    print("[WARNING] FLASK_SECRET_KEY 환경 변수가 설정되지 않았습니다. 프로덕션에서는 보안 위험이 있습니다.", flush=True)
+    FLASK_SECRET_KEY = "golf_app_secret_key_change_in_production"  # 개발용 기본값
+app.secret_key = FLASK_SECRET_KEY
 
 # ✅ [4단계] 앱 기동 확인용 로그 강제 삽입
 print("### APP BOOT COMPLETED ###", flush=True)
@@ -953,9 +959,16 @@ def check_pc_status():
 # 관리자 API: 등록 코드 생성 (golf-super-admin에서 호출)
 # =========================
 def verify_admin_credentials(username, password):
-    """슈퍼 관리자 인증"""
+    """슈퍼 관리자 인증 (환경 변수 필수)"""
     super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "endolpin0!")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD")
+    if not super_admin_password:
+        print("[ERROR] SUPER_ADMIN_PASSWORD 환경 변수가 설정되지 않았습니다.", flush=True)
+        if os.environ.get("RAILWAY_ENVIRONMENT") == "production":
+            return False  # 프로덕션에서는 인증 실패
+        # 개발 환경 경고
+        print("[WARNING] 개발 환경: 인증 비활성화됨 - 프로덕션에서는 환경 변수 필수", flush=True)
+        return False
     return username == super_admin_username and password == super_admin_password
 
 @app.route("/api/admin/pc-registration-codes", methods=["POST"])

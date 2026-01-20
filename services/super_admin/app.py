@@ -114,9 +114,16 @@ def super_admin_login():
         username = request.form.get("username")
         password = request.form.get("password")
         
-        # 총책임자 인증 (환경 변수 또는 하드코딩)
+        # 총책임자 인증 (환경 변수 필수)
         super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-        super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "endolpin0!")
+        super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD")
+        if not super_admin_password:
+            print("[ERROR] SUPER_ADMIN_PASSWORD 환경 변수가 설정되지 않았습니다.", flush=True)
+            if os.environ.get("RAILWAY_ENVIRONMENT") == "production":
+                return render_template("super_admin_login.html", error="서버 설정 오류: 관리자 비밀번호가 설정되지 않았습니다.")
+            # 개발 환경에서만 기본값 사용 (경고)
+            super_admin_password = "CHANGE_ME_IN_PRODUCTION"  # 개발용 더미 값
+            print("[WARNING] 개발 환경 기본값 사용 중 - 프로덕션에서는 환경 변수 필수", flush=True)
         
         if username == super_admin_username and password == super_admin_password:
             session["role"] = "super_admin"
@@ -1195,9 +1202,15 @@ def create_registration_code():
     if not api_url.startswith("http"):
         api_url = f"https://{api_url}"
     
-    # 슈퍼 관리자 인증 정보
+    # 슈퍼 관리자 인증 정보 (환경 변수 필수)
     super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "endolpin0!")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD")
+    if not super_admin_password:
+        print("[ERROR] SUPER_ADMIN_PASSWORD 환경 변수가 설정되지 않았습니다.", flush=True)
+        return jsonify({
+            "success": False,
+            "message": "서버 설정 오류: 관리자 비밀번호가 설정되지 않았습니다."
+        }), 500
     
     # 요청 데이터 준비
     data = request.get_json() or {}
@@ -1239,9 +1252,15 @@ def get_registration_codes():
     if not api_url.startswith("http"):
         api_url = f"https://{api_url}"
     
-    # 슈퍼 관리자 인증 정보
+    # 슈퍼 관리자 인증 정보 (환경 변수 필수)
     super_admin_username = os.environ.get("SUPER_ADMIN_USERNAME", "admin")
-    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD", "endolpin0!")
+    super_admin_password = os.environ.get("SUPER_ADMIN_PASSWORD")
+    if not super_admin_password:
+        print("[ERROR] SUPER_ADMIN_PASSWORD 환경 변수가 설정되지 않았습니다.", flush=True)
+        return jsonify({
+            "success": False,
+            "message": "서버 설정 오류: 관리자 비밀번호가 설정되지 않았습니다."
+        }), 500
     
     try:
         # golf-api 호출

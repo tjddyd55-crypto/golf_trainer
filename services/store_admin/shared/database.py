@@ -9,16 +9,41 @@ import string
 import secrets
 import hashlib
 
-# PostgreSQL 연결 정보 (Railway 환경 변수 또는 로컬 설정)
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://user:password@localhost:5432/golf_data")
+# PostgreSQL 연결 정보 (Railway 환경 변수 필수)
+# 🔒 보안: 프로덕션에서는 DATABASE_URL 환경 변수가 반드시 설정되어야 함
+DATABASE_URL = os.environ.get("DATABASE_URL")
+if not DATABASE_URL:
+    print("[ERROR] DATABASE_URL 환경 변수가 설정되지 않았습니다.", flush=True)
+    print("[ERROR] Railway 환경 변수에서 DATABASE_URL을 설정하세요.", flush=True)
+    # 개발 환경에서만 기본값 사용 (프로덕션에서는 에러 발생)
+    if os.environ.get("RAILWAY_ENVIRONMENT") == "production":
+        raise ValueError("DATABASE_URL environment variable is required in production")
+    DATABASE_URL = "postgresql://user:password@localhost:5432/golf_data"
+    print("[WARNING] 개발 환경 기본값 사용 중 (프로덕션에서는 사용 금지)", flush=True)
 
 def get_db_connection():
     """PostgreSQL 데이터베이스 연결"""
     try:
+        # 🔒 보안: DATABASE_URL에 민감한 정보가 포함되어 있으므로 로그에 출력하지 않음
         conn = psycopg2.connect(DATABASE_URL, connect_timeout=30)
         return conn
     except psycopg2.OperationalError as e:
-        print(f"❌ 데이터베이스 연결 오류: {e}")
+        # 🔒 보안: 연결 오류 메시지에서 DATABASE_URL의 민감한 정보 제거
+        # psycopg2 오류 메시지에는 일반적으로 DB URL이 포함되지 않지만, 안전을 위해 처리
+        error_msg = str(e)
+        # DATABASE_URL의 민감한 부분을 오류 메시지에서 제거
+        if DATABASE_URL:
+            # 호스트:포트 부분 제거
+            if '@' in DATABASE_URL:
+                host_part = DATABASE_URL.split('@')[-1]
+                error_msg = error_msg.replace(host_part, '[REDACTED]')
+            # 사용자명:비밀번호 부분 제거
+            if '://' in DATABASE_URL and '@' in DATABASE_URL:
+                auth_part = DATABASE_URL.split('://')[-1].split('@')[0]
+                if ':' in auth_part:
+                    error_msg = error_msg.replace(auth_part.split(':')[0], '[REDACTED]')
+                    error_msg = error_msg.replace(auth_part.split(':')[1], '[REDACTED]')
+        print(f"❌ 데이터베이스 연결 오류 (민감 정보 제거됨): {error_msg}", flush=True)
         raise
 
 # ------------------------------------------------

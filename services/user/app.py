@@ -25,7 +25,13 @@ if not os.path.exists(static_path):
 app = Flask(__name__, 
             template_folder='templates',
             static_folder=static_path)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY", "golf_app_secret_key_change_in_production")
+
+# 🔒 보안: Secret Key 환경 변수 필수
+FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY")
+if not FLASK_SECRET_KEY:
+    print("[WARNING] FLASK_SECRET_KEY 환경 변수가 설정되지 않았습니다. 프로덕션에서는 보안 위험이 있습니다.", flush=True)
+    FLASK_SECRET_KEY = "golf_app_secret_key_change_in_production"  # 개발용 기본값
+app.secret_key = FLASK_SECRET_KEY
 
 # 데이터베이스 초기화
 database.init_db()
