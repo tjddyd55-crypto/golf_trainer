@@ -4,7 +4,6 @@ import sys
 import os
 import json
 import re
-from pathlib import Path
 from datetime import datetime
 
 # =========================
@@ -12,7 +11,6 @@ from datetime import datetime
 # =========================
 def save_coordinate_file(brand: str, filename: str, payload: dict):
     """좌표 파일 DB 저장"""
-    import json
     conn = database.get_db_connection()
     cur = conn.cursor()
     

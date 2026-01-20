@@ -6,60 +6,18 @@ print("### SUPER_ADMIN BOOT START ###", flush=True)
 print("### SERVICE=super_admin ###", flush=True)
 print("### PORT env =", os.getenv("PORT"), flush=True)
 
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
+from flask import render_template, request, jsonify, session, redirect, url_for
 import re
 import traceback
 from datetime import datetime
 
-# 공유 모듈 경로 추가
-current_dir = os.path.dirname(os.path.abspath(__file__))
-local_shared = os.path.join(current_dir, 'shared')
-if os.path.exists(local_shared):
-    sys.path.insert(0, current_dir)
-else:
-    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
-    sys.path.insert(0, project_root)
-
+# 공통 Flask 유틸리티 사용
+from shared.flask_utils import create_flask_app
 from shared import database
 from shared.auth import require_role
 
-# Static 폴더 경로: 로컬 static 폴더 우선, 없으면 상위 static 폴더
-static_path = os.path.join(current_dir, 'static')
-if not os.path.exists(static_path):
-    static_path = os.path.join(current_dir, '../../static')
-    if not os.path.exists(static_path):
-        static_path = 'static'  # 기본값
-
-app = Flask(__name__, 
-            template_folder='templates',
-            static_folder=static_path)
-
-# =========================
-# 🔒 보안 설정
-# =========================
-# Secret Key: 환경 변수 필수 (프로덕션에서는 반드시 설정)
-FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY")
-if not FLASK_SECRET_KEY:
-    print("[WARNING] FLASK_SECRET_KEY 환경 변수가 설정되지 않았습니다. 프로덕션에서는 보안 위험이 있습니다.", flush=True)
-    FLASK_SECRET_KEY = "golf_app_secret_key_change_in_production"  # 개발용 기본값
-app.secret_key = FLASK_SECRET_KEY
-
-# 세션 보안 설정
-app.config['SESSION_COOKIE_SECURE'] = os.environ.get('RAILWAY_ENVIRONMENT') == 'production'  # HTTPS 강제 (프로덕션)
-app.config['SESSION_COOKIE_HTTPONLY'] = True  # JavaScript 접근 차단
-app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF 보호
-app.config['PERMANENT_SESSION_LIFETIME'] = 1800  # 30분
-
-# 보안 헤더 추가
-@app.after_request
-def set_security_headers(response):
-    """모든 응답에 보안 헤더 추가"""
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'DENY'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
-    response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'  # HTTPS 강제
-    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
-    return response
+# Flask 앱 생성 (공통 설정 포함 - 보안 헤더, 세션 설정 등)
+app = create_flask_app('super_admin', __file__)
 
 # =========================
 # ✅ [2단계] Healthcheck 엔드포인트 (app 생성 직후 즉시 등록)

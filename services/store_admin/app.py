@@ -1,37 +1,14 @@
 # ===== services/store_admin/app.py (매장 관리자 서비스) =====
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-import sys
+from flask import render_template, request, jsonify, session, redirect, url_for
 import os
 
-# 공유 모듈 경로 추가
-current_dir = os.path.dirname(os.path.abspath(__file__))
-local_shared = os.path.join(current_dir, 'shared')
-if os.path.exists(local_shared):
-    sys.path.insert(0, current_dir)
-else:
-    project_root = os.path.abspath(os.path.join(current_dir, '../../'))
-    sys.path.insert(0, project_root)
-
+# 공통 Flask 유틸리티 사용
+from shared.flask_utils import create_flask_app
 from shared import database
 from shared.auth import require_role
 
-# Static 폴더 경로: 로컬 static 폴더 우선, 없으면 상위 static 폴더
-static_path = os.path.join(current_dir, 'static')
-if not os.path.exists(static_path):
-    static_path = os.path.join(current_dir, '../../static')
-    if not os.path.exists(static_path):
-        static_path = 'static'  # 기본값
-
-app = Flask(__name__, 
-            template_folder='templates',
-            static_folder=static_path)
-
-# 🔒 보안: Secret Key 환경 변수 필수
-FLASK_SECRET_KEY = os.environ.get("FLASK_SECRET_KEY")
-if not FLASK_SECRET_KEY:
-    print("[WARNING] FLASK_SECRET_KEY 환경 변수가 설정되지 않았습니다. 프로덕션에서는 보안 위험이 있습니다.", flush=True)
-    FLASK_SECRET_KEY = "golf_app_secret_key_change_in_production"  # 개발용 기본값
-app.secret_key = FLASK_SECRET_KEY
+# Flask 앱 생성 (공통 설정 포함)
+app = create_flask_app('store_admin', __file__)
 
 # 데이터베이스 초기화
 database.init_db()
