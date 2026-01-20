@@ -266,17 +266,18 @@ def init_db():
     for col in ["store_id", "bay_id", "pc_uuid", "mac_address", "pc_token"]:
         try:
             cur.execute(f"ALTER TABLE store_pcs ADD COLUMN IF NOT EXISTS {col} TEXT")
-        
-        # bay_number 컬럼 추가 (INTEGER)
-        try:
-            cur.execute("ALTER TABLE store_pcs ADD COLUMN IF NOT EXISTS bay_number INTEGER")
-            conn.commit()
-            print("[DB] store_pcs 테이블에 bay_number 컬럼 추가 완료")
         except Exception as e:
-            print(f"[WARNING] store_pcs bay_number 컬럼 추가 실패 (이미 존재할 수 있음): {e}")
+            print(f"[WARNING] store_pcs {col} 컬럼 추가 실패 (이미 존재할 수 있음): {e}")
             conn.rollback()
-        except Exception:
-            pass
+    
+    # bay_number 컬럼 추가 (INTEGER)
+    try:
+        cur.execute("ALTER TABLE store_pcs ADD COLUMN IF NOT EXISTS bay_number INTEGER")
+        conn.commit()
+        print("[DB] store_pcs 테이블에 bay_number 컬럼 추가 완료")
+    except Exception as e:
+        print(f"[WARNING] store_pcs bay_number 컬럼 추가 실패 (이미 존재할 수 있음): {e}")
+        conn.rollback()
     
     try:
         cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_pc_unique_id ON store_pcs(pc_unique_id)")
