@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "cd ../.. && PYTHONPATH=. gunicorn app:app --bind 0.0.0.0:$PORT",
+    "startCommand": "PYTHONPATH=. gunicorn app:app --bind 0.0.0.0:$PORT",
     "healthcheckPath": "/health",
     "restartPolicyType": "ON_FAILURE"
   }
