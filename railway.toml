@@ -5,9 +5,10 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "gunicorn services.api.app:app --bind 0.0.0.0:${PORT}"
+startCommand = "gunicorn services.api.app:app --bind 0.0.0.0:$PORT"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 10
 
 [env]
 PYTHONPATH = "."
+PORT = "8080"
