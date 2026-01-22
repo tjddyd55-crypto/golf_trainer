@@ -1143,52 +1143,6 @@ def extract_auth_from_header():
     
     return username, password
 
-@app.route("/api/coordinates/<brand>", methods=["GET"])
-def list_coordinates(brand):
-    """브랜드별 좌표 파일 목록 조회 API"""
-    try:
-        brand = brand.upper().strip()
-        files = list_coordinate_files(brand)
-        
-        return jsonify({
-            "success": True,
-            "files": files
-        }), 200
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            "success": False,
-            "error": "Internal server error"
-        }), 500
-
-@app.route("/api/coordinates/<brand>/<filename>", methods=["GET"])
-def download_coordinates(brand, filename):
-    """좌표 파일 다운로드 API"""
-    try:
-        brand = brand.upper().strip()
-        data = load_coordinate_file(brand, filename)
-        
-        return jsonify({
-            "success": True,
-            "data": data
-        }), 200
-        
-    except FileNotFoundError:
-        return jsonify({
-            "success": False,
-            "error": "File not found"
-        }), 404
-        
-    except Exception as e:
-        import traceback
-        traceback.print_exc()
-        return jsonify({
-            "success": False,
-            "error": "Internal server error"
-        }), 500
-
 @app.route("/api/coordinates/upload", methods=["POST"])
 def upload_coordinates():
     """좌표 파일 업로드 API (슈퍼 관리자 전용)"""
@@ -1289,6 +1243,223 @@ def upload_coordinates():
         return jsonify({
             "success": False,
             "error": "Internal server error"
+        }), 500
+
+@app.route("/api/coordinates", methods=["GET"])
+@app.route("/api/coordinates/<brand>", methods=["GET"])
+def list_coordinates(brand=None):
+    """브랜드별 좌표 파일 목록 조회 API
+    
+    지원 방식:
+    - GET /api/coordinates?brand=SGGOLF (쿼리 파라미터)
+    - GET /api/coordinates/SGGOLF (경로 파라미터)
+    """
+    try:
+        # 쿼리 파라미터에서 brand 가져오기 (경로 파라미터보다 우선)
+        if not brand:
+            brand = request.args.get("brand", "").strip()
+        
+        if not brand:
+            return jsonify({
+                "success": False,
+                "error": "brand parameter is required"
+            }), 400
+        
+        brand = brand.upper().strip()
+        files = list_coordinate_files(brand)
+        
+        return jsonify({
+            "success": True,
+            "files": files
+        }), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": "Internal server error"
+        }), 500
+
+@app.route("/api/coordinates/<brand>/<filename>", methods=["GET"])
+def download_coordinates(brand, filename):
+    """좌표 파일 다운로드 API"""
+    try:
+        brand = brand.upper().strip()
+        data = load_coordinate_file(brand, filename)
+        
+        return jsonify({
+            "success": True,
+            "data": data
+        }), 200
+        
+    except FileNotFoundError:
+        return jsonify({
+            "success": False,
+            "error": "File not found"
+        }), 404
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": "Internal server error"
+        }), 500
+
+@app.route('/api/coordinates/assign', methods=['POST'])
+def assign_coordinate():
+    """타석에 좌표 파일 할당 API"""
+    try:
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "success": False,
+                "error": "Request body is required"
+            }), 400
+        
+        store_id = data.get('store_id')
+        bay_number = data.get('bay_number')
+        brand = data.get('brand')
+        filename = data.get('filename')
+
+        if not all([store_id, bay_number, filename]):
+            return jsonify({
+                "success": False,
+                "error": "필수 데이터 누락: store_id, bay_number, filename은 필수입니다."
+            }), 400
+
+        # store_pcs 테이블에서 해당 매장의 해당 타석(bay_id/bay_number)을 찾아 업데이트
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        # bay_id는 문자열로 저장되므로 bay_number를 문자열로 변환
+        bay_id_str = str(bay_number)
+        
+        # store_pcs 테이블에서 해당 매장의 해당 타석을 찾아 좌표 파일명 업데이트
+        query = """
+            UPDATE store_pcs 
+            SET coordinate_filename = %s 
+            WHERE store_id = %s AND bay_id = %s AND status = 'active'
+        """
+        cur.execute(query, (filename, store_id, bay_id_str))
+        conn.commit()
+        
+        affected_rows = cur.rowcount
+        cur.close()
+        conn.close()
+
+        if affected_rows > 0:
+            return jsonify({
+                "success": True,
+                "message": "좌표 할당 완료",
+                "store_id": store_id,
+                "bay_number": bay_number,
+                "filename": filename
+            }), 200
+        else:
+            return jsonify({
+                "success": False,
+                "error": "해당 타석에 등록된 PC를 찾을 수 없습니다. 먼저 PC를 타석에 등록하세요."
+            }), 404
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": f"Internal server error: {str(e)}"
+        }), 500
+
+@app.route("/api/stores/<store_id>/bays/<int:bay_number>/coordinates", methods=["GET"])
+def get_bay_coordinates(store_id, bay_number):
+    """타석별 등록된 좌표 정보 조회 API"""
+    try:
+        conn = database.get_db_connection()
+        cur = conn.cursor()
+        
+        # bay_id는 문자열로 저장되므로 bay_number를 문자열로 변환
+        bay_id_str = str(bay_number)
+        
+        # store_pcs 테이블에서 해당 타석의 좌표 파일명 조회
+        cur.execute("""
+            SELECT coordinate_filename
+            FROM store_pcs
+            WHERE store_id = %s AND bay_id = %s AND status = 'active'
+            LIMIT 1
+        """, (store_id, bay_id_str))
+        
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        
+        if not row or not row[0]:
+            return jsonify({
+                "success": False,
+                "error": "좌표가 지정되지 않았습니다."
+            }), 404
+        
+        coordinate_filename = row[0]
+        
+        # 좌표 파일명에서 브랜드 추출 (예: "SGGOLF_1920x1080_v1.json")
+        # 또는 coordinates 테이블에서 조회하여 상세 정보 가져오기
+        try:
+            # filename에서 brand 추출 시도
+            brand_from_filename = coordinate_filename.split('_')[0] if '_' in coordinate_filename else None
+            
+            # coordinates 테이블에서 좌표 정보 조회
+            conn = database.get_db_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT brand, resolution, version, filename
+                FROM coordinates
+                WHERE filename = %s
+                LIMIT 1
+            """, (coordinate_filename,))
+            
+            coord_row = cur.fetchone()
+            cur.close()
+            conn.close()
+            
+            if coord_row:
+                brand, resolution, version, filename = coord_row
+                coordinate_id = f"{brand}-{resolution}-v{version}"
+                
+                return jsonify({
+                    "success": True,
+                    "coordinate": {
+                        "brand": brand,
+                        "resolution": resolution,
+                        "version": version,
+                        "filename": filename,
+                        "coordinate_id": coordinate_id
+                    }
+                }), 200
+            else:
+                # coordinates 테이블에 없으면 filename만 반환
+                return jsonify({
+                    "success": True,
+                    "coordinate": {
+                        "filename": coordinate_filename,
+                        "brand": brand_from_filename or "UNKNOWN"
+                    }
+                }), 200
+                
+        except Exception as e:
+            # 좌표 상세 정보 조회 실패 시 filename만 반환
+            return jsonify({
+                "success": True,
+                "coordinate": {
+                    "filename": coordinate_filename
+                }
+            }), 200
+        
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": f"Internal server error: {str(e)}"
         }), 500
 
 # ✅ [3단계] Flask/Gunicorn 포트 충돌 전면 제거

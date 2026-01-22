@@ -233,7 +233,7 @@ def init_db():
     """)
     
     # 기존 테이블에 새 컬럼 추가 (마이그레이션)
-    for col in ["store_id", "bay_id", "pc_uuid", "mac_address", "pc_token"]:
+    for col in ["store_id", "bay_id", "pc_uuid", "mac_address", "pc_token", "coordinate_filename"]:
         try:
             cur.execute(f"ALTER TABLE store_pcs ADD COLUMN IF NOT EXISTS {col} TEXT")
         except Exception:
