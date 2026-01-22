@@ -1307,7 +1307,8 @@ def download_coordinates(brand, filename):
             "error": "Internal server error"
         }), 500
 
-@app.route('/api/coordinates/assign', methods=['POST'])
+@app.route('/api/coordinates/assign', methods=['POST'], strict_slashes=False)
+@app.route('/api/coordinates/assign/', methods=['POST'], strict_slashes=False)
 def assign_coordinate():
     """타석에 좌표 파일 할당 API"""
     try:
