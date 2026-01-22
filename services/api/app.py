@@ -111,17 +111,6 @@ if not FLASK_SECRET_KEY:
     FLASK_SECRET_KEY = "golf_app_secret_key_change_in_production"  # 개발용 기본값
 app.secret_key = FLASK_SECRET_KEY
 
-# ✅ [4단계] Railway PORT 환경 변수 검증
-PORT = os.environ.get("PORT")
-if PORT:
-    try:
-        port_num = int(PORT)
-        print(f"[INFO] Railway PORT 환경 변수 확인: {port_num}", flush=True)
-    except ValueError:
-        print(f"[WARNING] PORT 환경 변수가 유효하지 않습니다: '{PORT}'", flush=True)
-else:
-    print("[INFO] PORT 환경 변수가 설정되지 않았습니다. gunicorn이 자동으로 처리합니다.", flush=True)
-
 # ✅ [4단계] 앱 기동 확인용 로그 강제 삽입
 print("### APP BOOT COMPLETED ###", flush=True)
 
@@ -1347,6 +1336,24 @@ def assign_coordinate():
         
         # bay_id는 문자열로 저장되므로 bay_number를 문자열로 변환
         bay_id_str = str(bay_number)
+        
+        # 데이터 일관성 확인: store_id와 bay_id가 정확히 일치하는 레코드 존재 여부 확인
+        check_query = """
+            SELECT id, store_id, bay_id 
+            FROM store_pcs 
+            WHERE store_id = %s AND bay_id = %s AND status = 'active'
+            LIMIT 1
+        """
+        cur.execute(check_query, (store_id, bay_id_str))
+        check_row = cur.fetchone()
+        
+        if not check_row:
+            cur.close()
+            conn.close()
+            return jsonify({
+                "success": False,
+                "error": f"해당 매장(store_id: {store_id})의 타석(bay_id: {bay_id_str})에 등록된 PC를 찾을 수 없습니다. 먼저 PC를 타석에 등록하세요."
+            }), 404
         
         # store_pcs 테이블에서 해당 매장의 해당 타석을 찾아 좌표 파일명 업데이트
         query = """
