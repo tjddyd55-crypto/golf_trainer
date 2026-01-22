@@ -347,7 +347,8 @@ def get_store_bays(store_id):
 # =========================
 # PC 등록 API (새로운 방식: bay_number 기반)
 # =========================
-@app.route("/api/pcs/register", methods=["POST"])
+@app.route("/api/pcs/register", methods=["POST"], strict_slashes=False)
+@app.route("/api/pcs/register/", methods=["POST"], strict_slashes=False)
 def register_pc_new():
     """
     PC 등록 API (bay_number 기반)
@@ -377,7 +378,20 @@ def register_pc_new():
     sys.stdout.flush()
     
     try:
+        # JSON 요청 검증
+        if not request.is_json:
+            return jsonify({
+                "ok": False,
+                "error": "Content-Type must be application/json"
+            }), 400
+        
         data = request.get_json()
+        if not data:
+            return jsonify({
+                "ok": False,
+                "error": "Request body is required"
+            }), 400
+        
         store_id = data.get("store_id")
         pc_unique_id = data.get("pc_unique_id")
         bay_number = data.get("bay_number")
@@ -1312,6 +1326,13 @@ def download_coordinates(brand, filename):
 def assign_coordinate():
     """타석에 좌표 파일 할당 API"""
     try:
+        # JSON 요청 검증
+        if not request.is_json:
+            return jsonify({
+                "success": False,
+                "error": "Content-Type must be application/json"
+            }), 400
+        
         data = request.get_json()
         if not data:
             return jsonify({
