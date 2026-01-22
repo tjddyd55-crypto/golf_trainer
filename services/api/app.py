@@ -111,6 +111,17 @@ if not FLASK_SECRET_KEY:
     FLASK_SECRET_KEY = "golf_app_secret_key_change_in_production"  # 개발용 기본값
 app.secret_key = FLASK_SECRET_KEY
 
+# ✅ [4단계] Railway PORT 환경 변수 검증
+PORT = os.environ.get("PORT")
+if PORT:
+    try:
+        port_num = int(PORT)
+        print(f"[INFO] Railway PORT 환경 변수 확인: {port_num}", flush=True)
+    except ValueError:
+        print(f"[WARNING] PORT 환경 변수가 유효하지 않습니다: '{PORT}'", flush=True)
+else:
+    print("[INFO] PORT 환경 변수가 설정되지 않았습니다. gunicorn이 자동으로 처리합니다.", flush=True)
+
 # ✅ [4단계] 앱 기동 확인용 로그 강제 삽입
 print("### APP BOOT COMPLETED ###", flush=True)
 
