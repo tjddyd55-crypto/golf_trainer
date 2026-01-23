@@ -1397,7 +1397,7 @@ def _assign_coordinate_to_bay(data: dict):
         check_query = """
             SELECT id, store_id, bay_id 
             FROM store_pcs 
-            WHERE store_id = %s AND bay_id = %s AND status = 'active'
+            WHERE store_id = %s AND bay_id = %s AND status IN ('active', 'pending')
             LIMIT 1
         """
         cur.execute(check_query, (store_id, bay_id_str))
@@ -1411,7 +1411,7 @@ def _assign_coordinate_to_bay(data: dict):
         query = """
             UPDATE store_pcs 
             SET coordinate_filename = %s 
-            WHERE store_id = %s AND bay_id = %s AND status = 'active'
+            WHERE store_id = %s AND bay_id = %s AND status IN ('active', 'pending')
         """
         cur.execute(query, (filename, store_id, bay_id_str))
         conn.commit()
@@ -1500,7 +1500,7 @@ def get_bay_coordinates(store_id, bay_number):
         cur.execute("""
             SELECT coordinate_filename
             FROM store_pcs
-            WHERE store_id = %s AND bay_id = %s AND status = 'active'
+            WHERE store_id = %s AND bay_id = %s AND status IN ('active', 'pending')
             LIMIT 1
         """, (store_id, bay_id_str))
         
