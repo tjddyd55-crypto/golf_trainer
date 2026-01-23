@@ -1321,6 +1321,117 @@ def download_coordinates(brand, filename):
             "error": "Internal server error"
         }), 500
 
+def _parse_coordinate_id(coordinate_id: str):
+    """coordinate_id를 파싱하여 조회 기준을 반환"""
+    if not coordinate_id:
+        return None
+    raw_id = str(coordinate_id).strip()
+    base, sep, version_str = raw_id.rpartition("-v")
+    if not sep or not version_str.isdigit():
+        return None
+    brand, brand_sep, rest = base.partition("-")
+    if not brand_sep or not brand.strip() or not rest.strip():
+        return None
+    version = int(version_str)
+    brand = brand.strip().upper()
+    rest = rest.strip()
+    if re.match(r"^\d+x\d+$", rest):
+        return {"brand": brand, "resolution": rest, "version": version}
+    return {"brand": brand, "filename": rest, "version": version}
+
+def _resolve_filename_from_coordinate_id(cur, coordinate_id: str):
+    parsed = _parse_coordinate_id(coordinate_id)
+    if not parsed:
+        return None
+    if "resolution" in parsed:
+        cur.execute("""
+            SELECT filename
+            FROM coordinates
+            WHERE brand = %s AND resolution = %s AND version = %s
+            LIMIT 1
+        """, (parsed["brand"], parsed["resolution"], parsed["version"]))
+    else:
+        cur.execute("""
+            SELECT filename
+            FROM coordinates
+            WHERE brand = %s AND filename = %s AND version = %s
+            LIMIT 1
+        """, (parsed["brand"], parsed["filename"], parsed["version"]))
+    row = cur.fetchone()
+    return row[0] if row else None
+
+def _assign_coordinate_to_bay(data: dict):
+    store_id = data.get("store_id")
+    bay_number = data.get("bay_number")
+    filename = data.get("filename")
+    coordinate_id = data.get("coordinate_id")
+
+    if not store_id or bay_number is None or (not filename and not coordinate_id):
+        return jsonify({
+            "success": False,
+            "error": "필수 데이터 누락: store_id, bay_number, filename/coordinate_id 중 하나는 필수입니다."
+        }), 400
+
+    try:
+        bay_number = int(bay_number)
+    except (TypeError, ValueError):
+        return jsonify({
+            "success": False,
+            "error": "bay_number는 정수여야 합니다."
+        }), 400
+
+    store_id = str(store_id).strip().upper()
+    bay_id_str = str(bay_number)
+
+    conn = database.get_db_connection()
+    cur = conn.cursor()
+    try:
+        if not filename:
+            filename = _resolve_filename_from_coordinate_id(cur, coordinate_id)
+            if not filename:
+                return jsonify({
+                    "success": False,
+                    "error": "coordinate_id에 해당하는 좌표 파일을 찾을 수 없습니다."
+                }), 404
+
+        check_query = """
+            SELECT id, store_id, bay_id 
+            FROM store_pcs 
+            WHERE store_id = %s AND bay_id = %s AND status = 'active'
+            LIMIT 1
+        """
+        cur.execute(check_query, (store_id, bay_id_str))
+        check_row = cur.fetchone()
+        if not check_row:
+            return jsonify({
+                "success": False,
+                "error": f"해당 매장(store_id: {store_id})의 타석(bay_id: {bay_id_str})에 등록된 PC를 찾을 수 없습니다. 먼저 PC를 타석에 등록하세요."
+            }), 404
+
+        query = """
+            UPDATE store_pcs 
+            SET coordinate_filename = %s 
+            WHERE store_id = %s AND bay_id = %s AND status = 'active'
+        """
+        cur.execute(query, (filename, store_id, bay_id_str))
+        conn.commit()
+
+        if cur.rowcount > 0:
+            return jsonify({
+                "success": True,
+                "message": "좌표 할당 완료",
+                "store_id": store_id,
+                "bay_number": bay_number,
+                "filename": filename
+            }), 200
+        return jsonify({
+            "success": False,
+            "error": "해당 타석에 등록된 PC를 찾을 수 없습니다. 먼저 PC를 타석에 등록하세요."
+        }), 404
+    finally:
+        cur.close()
+        conn.close()
+
 @app.route('/api/coordinates/assign', methods=['POST'], strict_slashes=False)
 @app.route('/api/coordinates/assign/', methods=['POST'], strict_slashes=False)
 def assign_coordinate():
@@ -1340,69 +1451,33 @@ def assign_coordinate():
                 "error": "Request body is required"
             }), 400
         
-        store_id = data.get('store_id')
-        bay_number = data.get('bay_number')
-        brand = data.get('brand')
-        filename = data.get('filename')
+        return _assign_coordinate_to_bay(data)
 
-        if not all([store_id, bay_number, filename]):
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "error": f"Internal server error: {str(e)}"
+        }), 500
+
+@app.route('/api/coordinates/assign-bay', methods=['POST'], strict_slashes=False)
+@app.route('/api/coordinates/assign-bay/', methods=['POST'], strict_slashes=False)
+def assign_coordinate_alias():
+    """좌표 할당 API 별칭 (좌표 목록과 경로 충돌 방지)"""
+    try:
+        if not request.is_json:
             return jsonify({
                 "success": False,
-                "error": "필수 데이터 누락: store_id, bay_number, filename은 필수입니다."
+                "error": "Content-Type must be application/json"
             }), 400
-
-        # store_pcs 테이블에서 해당 매장의 해당 타석(bay_id/bay_number)을 찾아 업데이트
-        conn = database.get_db_connection()
-        cur = conn.cursor()
-        
-        # bay_id는 문자열로 저장되므로 bay_number를 문자열로 변환
-        bay_id_str = str(bay_number)
-        
-        # 데이터 일관성 확인: store_id와 bay_id가 정확히 일치하는 레코드 존재 여부 확인
-        check_query = """
-            SELECT id, store_id, bay_id 
-            FROM store_pcs 
-            WHERE store_id = %s AND bay_id = %s AND status = 'active'
-            LIMIT 1
-        """
-        cur.execute(check_query, (store_id, bay_id_str))
-        check_row = cur.fetchone()
-        
-        if not check_row:
-            cur.close()
-            conn.close()
+        data = request.get_json()
+        if not data:
             return jsonify({
                 "success": False,
-                "error": f"해당 매장(store_id: {store_id})의 타석(bay_id: {bay_id_str})에 등록된 PC를 찾을 수 없습니다. 먼저 PC를 타석에 등록하세요."
-            }), 404
-        
-        # store_pcs 테이블에서 해당 매장의 해당 타석을 찾아 좌표 파일명 업데이트
-        query = """
-            UPDATE store_pcs 
-            SET coordinate_filename = %s 
-            WHERE store_id = %s AND bay_id = %s AND status = 'active'
-        """
-        cur.execute(query, (filename, store_id, bay_id_str))
-        conn.commit()
-        
-        affected_rows = cur.rowcount
-        cur.close()
-        conn.close()
-
-        if affected_rows > 0:
-            return jsonify({
-                "success": True,
-                "message": "좌표 할당 완료",
-                "store_id": store_id,
-                "bay_number": bay_number,
-                "filename": filename
-            }), 200
-        else:
-            return jsonify({
-                "success": False,
-                "error": "해당 타석에 등록된 PC를 찾을 수 없습니다. 먼저 PC를 타석에 등록하세요."
-            }), 404
-
+                "error": "Request body is required"
+            }), 400
+        return _assign_coordinate_to_bay(data)
     except Exception as e:
         import traceback
         traceback.print_exc()

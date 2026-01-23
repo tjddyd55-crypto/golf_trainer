@@ -20,7 +20,7 @@ build_options = [
     "--windowed",  # 콘솔 창 숨김 (GUI 전용)
     "--clean",
     "--noconfirm",
-    "--hidden-import", "pc_identifier",  # pc_identifier 모듈 명시적 포함
+    "--hidden-import", "client.core.pc_identifier",  # pc_identifier 모듈 명시적 포함
     "--hidden-import", "tkinter",  # tkinter 명시적 포함
     "--hidden-import", "requests",  # requests 라이브러리 포함
 ]

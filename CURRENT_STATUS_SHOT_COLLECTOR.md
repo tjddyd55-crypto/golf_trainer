@@ -38,11 +38,11 @@
 ### 🔍 현재 구현 방식
 
 ```
-shot_collector_gui.exe (GUI)
+shot_collector_gui.exe (GUI 전용)
   ↓ 시작 버튼 클릭
   ↓ 좌표 파일 다운로드 → temp_regions.json 저장
-  ↓ subprocess로 shot_collector.exe 실행
-  ↓ shot_collector.exe가 temp_regions.json 읽어서 실행
+  ↓ subprocess로 main.py 실행 (또는 내부 모듈로 직접 실행)
+  ↓ 샷 수집 루프 시작
   ↓ GUI는 트레이로 이동
 ```
 

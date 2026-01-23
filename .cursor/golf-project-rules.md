@@ -81,6 +81,34 @@ If data correctness cannot be explained or reproduced,
 the implementation is considered invalid.
 
 데이터가 설명·재현되지 않으면 실패한 구현이다.
+
+
+FILE MANAGEMENT POLICY (MANDATORY)
+The project maintains three core client programs:
+1. 좌표설정 (Calibration): calibrate_regions_gui.py
+2. PC등록 (Registration): register_pc_gui.py
+3. 샷 수집 (Shot Collector): shot_collector_gui.py
+
+File cleanup rules:
+- Delete unused/obsolete files immediately after refactoring
+- Remove duplicate files (e.g., "복사본", "backup", "old")
+- Remove CLI versions when GUI versions exist
+- Remove unused build scripts
+- Keep only one source file per program and its corresponding build script
+- Remove root-level duplicates when client/core versions exist
+
+Allowed files per program:
+- 좌표설정: client/calibration/calibrate_regions_gui.py + build_calibrate_regions_gui.py
+- PC등록: client/pc_register/register_pc_gui.py + build_register_pc_gui.py
+- 샷 수집: client/shot_collector/shot_collector_gui.py + main.py + build_shot_collector_gui.py
+
+Before committing or after major changes, verify:
+- No duplicate source files exist
+- No unused build scripts remain
+- No backup/copy files (복사본, backup, old) exist
+- Each program has exactly one source file and one build script
+
+파일 정리는 지속적으로 유지하며, 혼동을 방지하기 위해 미사용 파일은 즉시 삭제한다.
 ---
 name: golf-project-rules
 description: This is a new rule
