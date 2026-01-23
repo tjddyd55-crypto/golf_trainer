@@ -1395,12 +1395,14 @@ def _assign_coordinate_to_bay(data: dict):
                 }), 404
 
         check_query = """
-            SELECT id, store_id, bay_id 
+            SELECT id, store_id, bay_id, bay_number
             FROM store_pcs 
-            WHERE store_id = %s AND bay_id = %s AND status IN ('active', 'pending')
+            WHERE store_id = %s
+              AND status IN ('active', 'pending')
+              AND (bay_id = %s OR bay_number = %s)
             LIMIT 1
         """
-        cur.execute(check_query, (store_id, bay_id_str))
+        cur.execute(check_query, (store_id, bay_id_str, bay_number))
         check_row = cur.fetchone()
         if not check_row:
             return jsonify({
@@ -1411,9 +1413,11 @@ def _assign_coordinate_to_bay(data: dict):
         query = """
             UPDATE store_pcs 
             SET coordinate_filename = %s 
-            WHERE store_id = %s AND bay_id = %s AND status IN ('active', 'pending')
+            WHERE store_id = %s
+              AND status IN ('active', 'pending')
+              AND (bay_id = %s OR bay_number = %s)
         """
-        cur.execute(query, (filename, store_id, bay_id_str))
+        cur.execute(query, (filename, store_id, bay_id_str, bay_number))
         conn.commit()
 
         if cur.rowcount > 0:
@@ -1500,9 +1504,11 @@ def get_bay_coordinates(store_id, bay_number):
         cur.execute("""
             SELECT coordinate_filename
             FROM store_pcs
-            WHERE store_id = %s AND bay_id = %s AND status IN ('active', 'pending')
+            WHERE store_id = %s
+              AND status IN ('active', 'pending')
+              AND (bay_id = %s OR bay_number = %s)
             LIMIT 1
-        """, (store_id, bay_id_str))
+        """, (store_id, bay_id_str, bay_number))
         
         row = cur.fetchone()
         cur.close()
