@@ -171,7 +171,9 @@ class PCRegistrationGUI:
             self.update_status(f"좌표 할당 요청: {url}")
             response = requests.post(url, json=payload, timeout=5)
             last_response = response
-            if response.status_code in (404, 405):
+            content_type = response.headers.get("Content-Type", "")
+            is_json = content_type.startswith("application/json")
+            if response.status_code in (404, 405) and not is_json:
                 continue
             return response, url
         return last_response, f"{self.server_url}{endpoints[-1]}"
@@ -347,6 +349,12 @@ class PCRegistrationGUI:
 
             payload = self._build_coordinate_payload(bay_num, selected_filename, display_val)
             
+            payload_summary = (
+                f"store_id={payload.get('store_id')}, "
+                f"bay_number={payload.get('bay_number')}, "
+                f"filename={payload.get('filename')}"
+            )
+            self.update_status(f"좌표 할당 요청 데이터: {payload_summary}")
             self.update_status("좌표 할당 데이터 전송 중...")
             res, used_url = self._post_coordinate_assignment(payload)
 
@@ -374,10 +382,21 @@ class PCRegistrationGUI:
 
             else:
                 # 서버 에러 메시지(res.text)가 있다면 로그에 같이 찍어주는 것이 디버깅에 유리합니다.
-                error_preview = res.text[:50] if res.text.strip() else "(응답 없음)"
-                if res.status_code in (404, 405):
+                has_json = res.headers.get("Content-Type", "").startswith("application/json")
+                error_message = None
+                if res.text.strip() and has_json:
+                    try:
+                        data = res.json()
+                        error_message = data.get("error") or data.get("message")
+                    except ValueError:
+                        error_message = None
+                if res.status_code in (404, 405) and not has_json:
                     self.update_status("서버에 좌표 할당 API가 없습니다. 서버를 최신 버전으로 배포하세요.", is_error=True)
-                self.update_status(f"실패 (HTTP {res.status_code}): {error_preview}", is_error=True)
+                if error_message:
+                    self.update_status(f"실패 (HTTP {res.status_code}): {error_message}", is_error=True)
+                else:
+                    error_preview = res.text[:50] if res.text.strip() else "(응답 없음)"
+                    self.update_status(f"실패 (HTTP {res.status_code}): {error_preview}", is_error=True)
 
         except requests.exceptions.RequestException as e:
             self.update_status(f"네트워크 통신 오류: {str(e)}", is_error=True)
